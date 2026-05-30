@@ -191,10 +191,13 @@ async function apiFetch<T = unknown>(endpoint: string, options: RequestInit = {}
   return data as T
 }
 
-async function apiUpload<T = unknown>(endpoint: string, file: File): Promise<T> {
+async function apiUpload<T = unknown>(endpoint: string, file: File, category?: string): Promise<T> {
   const token = getToken()
   const formData = new FormData()
   formData.append('file', file)
+  if (category) {
+    formData.append('category', category)
+  }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     method: 'POST',
@@ -522,7 +525,7 @@ export const notificationsApi = {
 // ===== UPLOAD API =====
 
 export const uploadApi = {
-  upload: async (file: File): Promise<{ url: string }> => {
-    return apiUpload('/upload', file)
+  upload: async (file: File, category?: string): Promise<{ url: string }> => {
+    return apiUpload('/upload', file, category)
   },
 }

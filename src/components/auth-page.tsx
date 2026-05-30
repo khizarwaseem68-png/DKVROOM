@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, Fragment } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -30,6 +30,7 @@ import {
   Phone,
   Building2,
   ArrowRight,
+  ArrowLeft,
   Eye,
   EyeOff,
   Shield,
@@ -40,6 +41,7 @@ import {
   Upload,
   MessageCircle,
   AlertCircle,
+  X,
 } from 'lucide-react'
 
 // ============================================================
@@ -105,37 +107,93 @@ const dealerSchema = z.object({
 type DealerFormData = z.infer<typeof dealerSchema>
 
 // ============================================================
+// Step definitions
+// ============================================================
+
+const CUSTOMER_STEPS = [
+  { label: 'Personal Info', icon: User },
+  { label: 'Security', icon: Lock },
+  { label: 'Address & Docs', icon: FileText },
+  { label: 'Review', icon: CheckCircle },
+]
+
+const DEALER_STEPS = [
+  { label: 'Business', icon: Building2 },
+  { label: 'Contact & Account', icon: User },
+  { label: 'Banking & Docs', icon: CreditCard },
+  { label: 'Review', icon: CheckCircle },
+]
+
+// ============================================================
 // Sub-components
 // ============================================================
 
-function UploadBox({
+function Stepper({
+  steps,
+  currentStep,
+}: {
+  steps: typeof CUSTOMER_STEPS
+  currentStep: number
+}) {
+  return (
+    <div className="flex items-center justify-center gap-0 mb-8" role="navigation" aria-label="Registration steps">
+      {steps.map((step, i) => (
+        <Fragment key={i}>
+          {i > 0 && (
+            <div className={`h-0.5 w-8 sm:w-12 transition-colors duration-300 ${
+              i <= currentStep ? 'bg-gold' : 'bg-border'
+            }`} />
+          )}
+          <div className="flex flex-col items-center gap-1.5">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+              i < currentStep
+                ? 'bg-gold text-primary-foreground'
+                : i === currentStep
+                  ? 'bg-gold/20 text-gold border-2 border-gold'
+                  : 'bg-secondary text-muted-foreground border border-border'
+            }`}>
+              {i < currentStep ? <CheckCircle className="size-4" /> : i + 1}
+            </div>
+            <span className={`text-[10px] sm:text-xs text-center max-w-[60px] transition-colors duration-300 ${
+              i === currentStep ? 'text-gold font-medium' : 'text-muted-foreground'
+            }`}>{step.label}</span>
+          </div>
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+function FileUploadBox({
   label,
-  uploaded,
+  fileInfo,
   onUpload,
+  onRemove,
   fileInputRef,
+  uploading,
 }: {
   label: string
-  uploaded: boolean
+  fileInfo: { file: File; url: string } | null
   onUpload: (file: File) => void
+  onRemove: () => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
+  uploading?: boolean
 }) {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file && file.size <= 5 * 1024 * 1024) {
       onUpload(file)
     }
+    // Reset the input value so the same file can be re-selected
+    e.target.value = ''
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => fileInputRef.current?.click()}
-      className={`w-full p-4 rounded-lg border-2 border-dashed transition-all text-left ${
-        uploaded
-          ? 'border-success/40 bg-success/5'
-          : 'border-border bg-background hover:border-gold/50'
-      }`}
-    >
+    <div className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
+      fileInfo
+        ? 'border-success/40 bg-success/5'
+        : 'border-dashed border-border bg-background hover:border-gold/50'
+    }`}>
       <input
         ref={fileInputRef}
         type="file"
@@ -144,23 +202,55 @@ function UploadBox({
         onChange={handleFileChange}
       />
       <div className="flex items-center gap-3">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-          uploaded ? 'bg-success/10' : 'bg-muted'
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+          fileInfo ? 'bg-success/10' : 'bg-muted'
         }`}>
-          {uploaded ? (
+          {uploading ? (
+            <div className="size-5 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
+          ) : fileInfo ? (
             <CheckCircle className="size-5 text-success" />
           ) : (
             <Upload className="size-5 text-muted-foreground" />
           )}
         </div>
-        <div>
-          <p className={`text-body-sm font-medium ${uploaded ? 'text-success' : 'text-foreground'}`}>
-            {uploaded ? 'Uploaded' : label}
-          </p>
-          <p className="text-caption text-muted-foreground">JPG, PNG, PDF (max 5MB)</p>
+        <div className="flex-1 min-w-0">
+          {fileInfo ? (
+            <>
+              <p className="text-body-sm font-medium text-success truncate" title={fileInfo.file.name}>
+                {fileInfo.file.name}
+              </p>
+              <p className="text-caption text-muted-foreground">
+                {(fileInfo.file.size / 1024).toFixed(1)} KB
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-body-sm font-medium text-foreground">{label}</p>
+              <p className="text-caption text-muted-foreground">JPG, PNG, PDF (max 5MB)</p>
+            </>
+          )}
         </div>
+        {fileInfo && !uploading && (
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="px-2 py-1 text-caption text-gold hover:text-gold-light hover:bg-gold/10 rounded transition-colors"
+            >
+              Change
+            </button>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="p-1 text-muted-foreground hover:text-error hover:bg-error/10 rounded transition-colors"
+              aria-label="Remove file"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+        )}
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -191,6 +281,15 @@ function FormField({
   )
 }
 
+function ReviewRow({ label, value }: { label: string; value: string | undefined | null }) {
+  return (
+    <div className="flex justify-between items-start py-1.5 border-b border-border/50 last:border-0">
+      <span className="text-caption text-muted-foreground shrink-0">{label}</span>
+      <span className="text-body-sm text-foreground text-right ml-4 break-all">{value || '—'}</span>
+    </div>
+  )
+}
+
 // ============================================================
 // Main Component
 // ============================================================
@@ -205,15 +304,24 @@ export default function AuthPage() {
   const [regRole, setRegRole] = useState<'customer' | 'dealer'>('customer')
   const [loginRole, setLoginRole] = useState<'customer' | 'dealer' | 'admin'>('customer')
 
-  // File upload states
-  const [custICUploaded, setCustICUploaded] = useState(false)
-  const [custLicenseUploaded, setCustLicenseUploaded] = useState(false)
-  const [dealDocUploaded, setDealDocUploaded] = useState(false)
+  // Stepper state
+  const [custStep, setCustStep] = useState(0)
+  const [dealerStep, setDealerStep] = useState(0)
+
+  // File upload states — capture file + URL
+  const [custICFile, setCustICFile] = useState<{ file: File; url: string } | null>(null)
+  const [custLicenseFile, setCustLicenseFile] = useState<{ file: File; url: string } | null>(null)
+  const [dealerDocFile, setDealerDocFile] = useState<{ file: File; url: string } | null>(null)
+
+  // File upload loading states
+  const [custICUploading, setCustICUploading] = useState(false)
+  const [custLicenseUploading, setCustLicenseUploading] = useState(false)
+  const [dealerDocUploading, setDealerDocUploading] = useState(false)
 
   // File refs
   const custICRef = useRef<HTMLInputElement>(null)
   const custLicenseRef = useRef<HTMLInputElement>(null)
-  const dealDocRef = useRef<HTMLInputElement>(null)
+  const dealerDocRef = useRef<HTMLInputElement>(null)
 
   // ===== LOGIN FORM =====
   const loginForm = useForm<LoginFormData>({
@@ -259,21 +367,28 @@ export default function AuthPage() {
     setSuccess(null)
     customerForm.reset()
     dealerForm.reset()
-    setCustICUploaded(false)
-    setCustLicenseUploaded(false)
-    setDealDocUploaded(false)
+    setCustStep(0)
+    setDealerStep(0)
+    setCustICFile(null)
+    setCustLicenseFile(null)
+    setDealerDocFile(null)
   }, [customerForm, dealerForm])
 
   // ===== FILE UPLOAD HANDLER =====
-  const handleFileUpload = async (
+  const handleFileUploadWithUrl = async (
     file: File,
-    onUploaded: () => void,
+    category: string,
+    onUploaded: (file: File, url: string) => void,
+    setUploading: (v: boolean) => void,
   ) => {
+    setUploading(true)
     try {
-      await uploadApi.upload(file)
-      onUploaded()
+      const result = await uploadApi.upload(file, category)
+      onUploaded(file, result.url)
     } catch {
       setError('File upload failed. Please try again.')
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -337,6 +452,8 @@ export default function AuthPage() {
         address: data.address || undefined,
         icNumber: data.icNumber || undefined,
         licenseNumber: data.licenseNumber || undefined,
+        icDocumentUrl: custICFile?.url || undefined,
+        licenseDocumentUrl: custLicenseFile?.url || undefined,
       }
       const result = await authApi.register(userData)
       const userState = mapUserState(result.user)
@@ -370,6 +487,7 @@ export default function AuthPage() {
         bankName: data.bankName || undefined,
         bankAccount: data.bankAccount || undefined,
         bankHolder: data.bankHolder || undefined,
+        registrationDocUrl: dealerDocFile?.url || undefined,
       }
       const result = await authApi.register(userData)
       const userState = mapUserState(result.user)
@@ -383,12 +501,57 @@ export default function AuthPage() {
     }
   }
 
+  // ===== STEP NAVIGATION — CUSTOMER =====
+  const goCustNext = async () => {
+    setError(null)
+    if (custStep === 0) {
+      const valid = await customerForm.trigger(['name', 'phone', 'whatsapp', 'email'])
+      if (valid) setCustStep(1)
+    } else if (custStep === 1) {
+      const valid = await customerForm.trigger(['password', 'confirmPassword'])
+      if (valid) setCustStep(2)
+    } else if (custStep === 2) {
+      const valid = await customerForm.trigger(['address', 'icNumber', 'licenseNumber'])
+      if (valid) setCustStep(3)
+    }
+  }
+
+  const goCustBack = () => {
+    setError(null)
+    if (custStep > 0) setCustStep(custStep - 1)
+  }
+
+  // ===== STEP NAVIGATION — DEALER =====
+  const goDealerNext = async () => {
+    setError(null)
+    if (dealerStep === 0) {
+      const valid = await dealerForm.trigger(['companyName', 'dealerType', 'address', 'regNo', 'city'])
+      if (valid) setDealerStep(1)
+    } else if (dealerStep === 1) {
+      const valid = await dealerForm.trigger(['contactName', 'phone', 'whatsapp', 'email', 'password', 'confirmPassword'])
+      if (valid) setDealerStep(2)
+    } else if (dealerStep === 2) {
+      const valid = await dealerForm.trigger(['bankName', 'bankAccount', 'bankHolder'])
+      if (valid) setDealerStep(3)
+    }
+  }
+
+  const goDealerBack = () => {
+    setError(null)
+    if (dealerStep > 0) setDealerStep(dealerStep - 1)
+  }
+
   // ===== DEMO CREDS =====
   const demoCredentials = [
     { role: 'customer' as const, label: 'Customer', email: 'ahmad@dkvroom.com', password: 'Customer@123', color: 'bg-gold/10 text-gold border-gold/30 hover:bg-gold/20' },
     { role: 'dealer' as const, label: 'Dealer', email: 'prestige@dkvroom.com', password: 'Dealer@123', color: 'bg-info/10 text-info border-info/30 hover:bg-info/20' },
     { role: 'admin' as const, label: 'Admin', email: 'admin@dkvroom.com', password: 'Admin@123', color: 'bg-error/10 text-error border-error/30 hover:bg-error/20' },
   ]
+
+  // Helper to get dealer type label
+  const getDealerTypeLabel = (key: string) => {
+    return DEALER_TYPES.find((dt) => dt.key === key)?.label || key
+  }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-12">
@@ -398,7 +561,7 @@ export default function AuthPage() {
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gold/3 rounded-full blur-3xl" />
       </div>
 
-      <div className="relative z-10 w-full max-w-lg">
+      <div className="relative z-10 w-full max-w-2xl">
         {/* Logo */}
         <div className="text-center mb-8">
           <button onClick={() => navigate('home')} className="inline-flex items-center gap-2 mb-4" type="button">
@@ -581,377 +744,462 @@ export default function AuthPage() {
 
                 <Separator className="bg-border" />
 
-                {/* ===== CUSTOMER REGISTRATION ===== */}
+                {/* ===== CUSTOMER REGISTRATION — STEPPER ===== */}
                 {regRole === 'customer' && (
-                  <form onSubmit={customerForm.handleSubmit(handleCustomerRegister)} className="space-y-4" noValidate>
-                    <h3 className="text-body-sm font-semibold text-gold flex items-center gap-2">
+                  <div>
+                    <h3 className="text-body-sm font-semibold text-gold flex items-center gap-2 mb-4">
                       <User className="size-4" /> Customer Registration
                     </h3>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="Full Name" required error={customerForm.formState.errors.name?.message}>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Ahmad Razak"
-                            {...customerForm.register('name')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
+                    <Stepper steps={CUSTOMER_STEPS} currentStep={custStep} />
+
+                    {/* Step 1: Personal Information */}
+                    {custStep === 0 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Full Name" required error={customerForm.formState.errors.name?.message}>
+                            <div className="relative">
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Ahmad Razak"
+                                {...customerForm.register('name')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Phone Number" required error={customerForm.formState.errors.phone?.message}>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="+60 12-345 6789"
+                                {...customerForm.register('phone')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="WhatsApp Number" error={customerForm.formState.errors.whatsapp?.message}>
+                            <div className="relative">
+                              <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="+60 12-345 6789"
+                                {...customerForm.register('whatsapp')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Email" required error={customerForm.formState.errors.email?.message}>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type="email"
+                                placeholder="your@email.com"
+                                {...customerForm.register('email')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
                         </div>
-                      </FormField>
-
-                      <FormField label="Phone Number" required error={customerForm.formState.errors.phone?.message}>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="+60 12-345 6789"
-                            {...customerForm.register('phone')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-
-                      <FormField label="WhatsApp Number" error={customerForm.formState.errors.whatsapp?.message}>
-                        <div className="relative">
-                          <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="+60 12-345 6789"
-                            {...customerForm.register('whatsapp')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-
-                      <FormField label="Email" required error={customerForm.formState.errors.email?.message}>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type="email"
-                            placeholder="your@email.com"
-                            {...customerForm.register('email')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-                    </div>
-
-                    {/* Password fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="Password" required error={customerForm.formState.errors.password?.message}>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder="Min 8 chars, 1 uppercase, 1 number"
-                            {...customerForm.register('password')}
-                            className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
-                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          >
-                            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                          </button>
-                        </div>
-                      </FormField>
-
-                      <FormField label="Confirm Password" required error={customerForm.formState.errors.confirmPassword?.message}>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder="Re-enter your password"
-                            {...customerForm.register('confirmPassword')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-                    </div>
-
-                    <FormField label="Address" error={customerForm.formState.errors.address?.message}>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                        <Textarea
-                          placeholder="Your full address"
-                          {...customerForm.register('address')}
-                          className="pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold min-h-[60px]"
-                        />
-                      </div>
-                    </FormField>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="IC / Passport Number" error={customerForm.formState.errors.icNumber?.message}>
-                        <div className="relative">
-                          <FileText className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="e.g. 901234-56-7890"
-                            {...customerForm.register('icNumber')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-
-                      <FormField label="Driving License Number" error={customerForm.formState.errors.licenseNumber?.message}>
-                        <div className="relative">
-                          <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="License number"
-                            {...customerForm.register('licenseNumber')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <UploadBox
-                        label="Upload IC / Passport"
-                        uploaded={custICUploaded}
-                        onUpload={(file) => handleFileUpload(file, () => setCustICUploaded(true))}
-                        fileInputRef={custICRef}
-                      />
-                      <UploadBox
-                        label="Upload Driving License"
-                        uploaded={custLicenseUploaded}
-                        onUpload={(file) => handleFileUpload(file, () => setCustLicenseUploaded(true))}
-                        fileInputRef={custLicenseRef}
-                      />
-                    </div>
-
-                    {/* Agree to terms */}
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        id="cust-agree"
-                        checked={customerForm.watch('agree') as boolean}
-                        onCheckedChange={(v) => customerForm.setValue('agree', !!v as true)}
-                        className="border-border mt-1"
-                      />
-                      <label htmlFor="cust-agree" className="text-caption text-muted-foreground leading-relaxed cursor-pointer">
-                        I agree to the <span className="text-gold">Terms of Service</span> and <span className="text-gold">Privacy Policy</span>
-                      </label>
-                    </div>
-                    {customerForm.formState.errors.agree && (
-                      <p className="text-caption text-error -mt-2">{customerForm.formState.errors.agree.message}</p>
-                    )}
-
-                    {/* Global error */}
-                    {error && (
-                      <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-error text-body-sm flex items-center gap-2" role="alert">
-                        <AlertCircle className="size-4 shrink-0" />
-                        {error}
                       </div>
                     )}
 
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
-                    >
-                      {loading ? 'Creating Account...' : <>Create Account <ArrowRight className="size-4 ml-1" /></>}
-                    </Button>
-                  </form>
+                    {/* Step 2: Security */}
+                    {custStep === 1 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Password" required error={customerForm.formState.errors.password?.message}>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Min 8 chars, 1 uppercase, 1 number"
+                                {...customerForm.register('password')}
+                                className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                              </button>
+                            </div>
+                          </FormField>
+
+                          <FormField label="Confirm Password" required error={customerForm.formState.errors.confirmPassword?.message}>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Re-enter your password"
+                                {...customerForm.register('confirmPassword')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+                        </div>
+                        <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                          <p className="text-caption text-muted-foreground">Password must contain at least 8 characters, 1 uppercase letter, and 1 number.</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Address & Documents */}
+                    {custStep === 2 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <FormField label="Address" error={customerForm.formState.errors.address?.message}>
+                          <div className="relative">
+                            <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                            <Textarea
+                              placeholder="Your full address"
+                              {...customerForm.register('address')}
+                              className="pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold min-h-[60px]"
+                            />
+                          </div>
+                        </FormField>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="IC / Passport Number" error={customerForm.formState.errors.icNumber?.message}>
+                            <div className="relative">
+                              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="e.g. 901234-56-7890"
+                                {...customerForm.register('icNumber')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Driving License Number" error={customerForm.formState.errors.licenseNumber?.message}>
+                            <div className="relative">
+                              <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="License number"
+                                {...customerForm.register('licenseNumber')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FileUploadBox
+                            label="Upload IC / Passport"
+                            fileInfo={custICFile}
+                            onUpload={(file) => handleFileUploadWithUrl(file, 'ic', (f, url) => setCustICFile({ file: f, url }), setCustICUploading)}
+                            onRemove={() => setCustICFile(null)}
+                            fileInputRef={custICRef}
+                            uploading={custICUploading}
+                          />
+                          <FileUploadBox
+                            label="Upload Driving License"
+                            fileInfo={custLicenseFile}
+                            onUpload={(file) => handleFileUploadWithUrl(file, 'license', (f, url) => setCustLicenseFile({ file: f, url }), setCustLicenseUploading)}
+                            onRemove={() => setCustLicenseFile(null)}
+                            fileInputRef={custLicenseRef}
+                            uploading={custLicenseUploading}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 4: Review & Submit */}
+                    {custStep === 3 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <User className="size-4 text-gold" /> Personal Information
+                          </h4>
+                          <ReviewRow label="Full Name" value={customerForm.getValues('name')} />
+                          <ReviewRow label="Phone" value={customerForm.getValues('phone')} />
+                          <ReviewRow label="WhatsApp" value={customerForm.getValues('whatsapp')} />
+                          <ReviewRow label="Email" value={customerForm.getValues('email')} />
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <Lock className="size-4 text-gold" /> Security
+                          </h4>
+                          <ReviewRow label="Password" value="••••••••" />
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <FileText className="size-4 text-gold" /> Address & Documents
+                          </h4>
+                          <ReviewRow label="Address" value={customerForm.getValues('address')} />
+                          <ReviewRow label="IC Number" value={customerForm.getValues('icNumber')} />
+                          <ReviewRow label="License Number" value={customerForm.getValues('licenseNumber')} />
+                          <ReviewRow label="IC Document" value={custICFile?.file.name || 'Not uploaded'} />
+                          <ReviewRow label="License Document" value={custLicenseFile?.file.name || 'Not uploaded'} />
+                        </div>
+
+                        {/* Agree to terms */}
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="cust-agree"
+                            checked={customerForm.watch('agree') as boolean}
+                            onCheckedChange={(v) => customerForm.setValue('agree', !!v as true)}
+                            className="border-border mt-1"
+                          />
+                          <label htmlFor="cust-agree" className="text-caption text-muted-foreground leading-relaxed cursor-pointer">
+                            I agree to the <span className="text-gold">Terms of Service</span> and <span className="text-gold">Privacy Policy</span>
+                          </label>
+                        </div>
+                        {customerForm.formState.errors.agree && (
+                          <p className="text-caption text-error">{customerForm.formState.errors.agree.message}</p>
+                        )}
+
+                        {/* Global error */}
+                        {error && (
+                          <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-error text-body-sm flex items-center gap-2" role="alert">
+                            <AlertCircle className="size-4 shrink-0" />
+                            {error}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Navigation buttons */}
+                    <div className="flex gap-3 mt-6">
+                      {custStep > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={goCustBack}
+                          className="flex-1 h-11 border-border text-foreground hover:bg-muted"
+                        >
+                          <ArrowLeft className="size-4 mr-1" /> Back
+                        </Button>
+                      )}
+                      {custStep < 3 ? (
+                        <Button
+                          type="button"
+                          onClick={goCustNext}
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg"
+                        >
+                          Next <ArrowRight className="size-4 ml-1" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          disabled={loading}
+                          onClick={customerForm.handleSubmit(handleCustomerRegister)}
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
+                        >
+                          {loading ? 'Creating Account...' : <>Create Account <ArrowRight className="size-4 ml-1" /></>}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 )}
 
-                {/* ===== DEALER REGISTRATION ===== */}
+                {/* ===== DEALER REGISTRATION — STEPPER ===== */}
                 {regRole === 'dealer' && (
-                  <form onSubmit={dealerForm.handleSubmit(handleDealerRegister)} className="space-y-4" noValidate>
-                    <h3 className="text-body-sm font-semibold text-gold flex items-center gap-2">
+                  <div>
+                    <h3 className="text-body-sm font-semibold text-gold flex items-center gap-2 mb-4">
                       <Building2 className="size-4" /> Dealer Registration
                     </h3>
 
-                    {/* Verification notice */}
-                    <div className="p-3 rounded-lg bg-gold/5 border border-gold/20">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="size-4 text-gold mt-0.5 shrink-0" />
-                        <p className="text-caption text-muted-foreground">Your dealer account will be reviewed and verified by our admin team within 24-48 hours.</p>
+                    <Stepper steps={DEALER_STEPS} currentStep={dealerStep} />
+
+                    {/* Step 1: Business Details */}
+                    {dealerStep === 0 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        {/* Verification notice */}
+                        <div className="p-3 rounded-lg bg-gold/5 border border-gold/20">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="size-4 text-gold mt-0.5 shrink-0" />
+                            <p className="text-caption text-muted-foreground">Your dealer account will be reviewed and verified by our admin team within 24-48 hours.</p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Business Name" required error={dealerForm.formState.errors.companyName?.message}>
+                            <div className="relative">
+                              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Your Auto Sdn Bhd"
+                                {...dealerForm.register('companyName')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Dealer Type" required error={dealerForm.formState.errors.dealerType?.message}>
+                            <Select value={dealerForm.watch('dealerType') || ''} onValueChange={(v) => dealerForm.setValue('dealerType', v)}>
+                              <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {DEALER_TYPES.map((dt) => (
+                                  <SelectItem key={dt.key} value={dt.key} className="text-foreground focus:bg-muted">
+                                    {dt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormField>
+
+                          <FormField label="IC / SSM Registration No." error={dealerForm.formState.errors.regNo?.message}>
+                            <div className="relative">
+                              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Registration number"
+                                {...dealerForm.register('regNo')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="City" error={dealerForm.formState.errors.city?.message}>
+                            <Select value={dealerForm.watch('city') || ''} onValueChange={(v) => dealerForm.setValue('city', v)}>
+                              <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
+                                <SelectValue placeholder="Select city" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {CITIES.filter((c) => c !== 'All Cities').map((city) => (
+                                  <SelectItem key={city} value={city} className="text-foreground focus:bg-muted">
+                                    {city}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormField>
+                        </div>
+
+                        <FormField label="Business Address" error={dealerForm.formState.errors.address?.message}>
+                          <div className="relative">
+                            <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
+                            <Textarea
+                              placeholder="Full business address"
+                              {...dealerForm.register('address')}
+                              className="pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold min-h-[60px]"
+                            />
+                          </div>
+                        </FormField>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="Business Name" required error={dealerForm.formState.errors.companyName?.message}>
-                        <div className="relative">
-                          <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Your Auto Sdn Bhd"
-                            {...dealerForm.register('companyName')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
+                    {/* Step 2: Contact & Account */}
+                    {dealerStep === 1 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Contact Person" required error={dealerForm.formState.errors.contactName?.message}>
+                            <div className="relative">
+                              <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Contact person name"
+                                {...dealerForm.register('contactName')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Phone Number" required error={dealerForm.formState.errors.phone?.message}>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="+60 12-345 6789"
+                                {...dealerForm.register('phone')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="WhatsApp Number" error={dealerForm.formState.errors.whatsapp?.message}>
+                            <div className="relative">
+                              <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                placeholder="+60 12-345 6789"
+                                {...dealerForm.register('whatsapp')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
+
+                          <FormField label="Email" required error={dealerForm.formState.errors.email?.message}>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type="email"
+                                placeholder="dealer@company.com"
+                                {...dealerForm.register('email')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
                         </div>
-                      </FormField>
 
-                      <FormField label="Dealer Type" required error={dealerForm.formState.errors.dealerType?.message}>
-                        <Select value={dealerForm.watch('dealerType') || ''} onValueChange={(v) => dealerForm.setValue('dealerType', v)}>
-                          <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card border-border">
-                            {DEALER_TYPES.map((dt) => (
-                              <SelectItem key={dt.key} value={dt.key} className="text-foreground focus:bg-muted">
-                                {dt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormField>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Password" required error={dealerForm.formState.errors.password?.message}>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Min 8 chars, 1 uppercase, 1 number"
+                                {...dealerForm.register('password')}
+                                className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                              </button>
+                            </div>
+                          </FormField>
 
-                      <FormField label="Contact Person" required error={dealerForm.formState.errors.contactName?.message}>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Contact person name"
-                            {...dealerForm.register('contactName')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
+                          <FormField label="Confirm Password" required error={dealerForm.formState.errors.confirmPassword?.message}>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                              <Input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Re-enter your password"
+                                {...dealerForm.register('confirmPassword')}
+                                className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                              />
+                            </div>
+                          </FormField>
                         </div>
-                      </FormField>
 
-                      <FormField label="Phone Number" required error={dealerForm.formState.errors.phone?.message}>
-                        <div className="relative">
-                          <Phone className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="+60 12-345 6789"
-                            {...dealerForm.register('phone')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
+                        <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                          <p className="text-caption text-muted-foreground">Password must contain at least 8 characters, 1 uppercase letter, and 1 number.</p>
                         </div>
-                      </FormField>
-
-                      <FormField label="WhatsApp Number" error={dealerForm.formState.errors.whatsapp?.message}>
-                        <div className="relative">
-                          <MessageCircle className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="+60 12-345 6789"
-                            {...dealerForm.register('whatsapp')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-
-                      <FormField label="Email" required error={dealerForm.formState.errors.email?.message}>
-                        <div className="relative">
-                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type="email"
-                            placeholder="dealer@company.com"
-                            {...dealerForm.register('email')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-                    </div>
-
-                    {/* Password fields */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="Password" required error={dealerForm.formState.errors.password?.message}>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder="Min 8 chars, 1 uppercase, 1 number"
-                            {...dealerForm.register('password')}
-                            className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
-                            aria-label={showPassword ? 'Hide password' : 'Show password'}
-                          >
-                            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                          </button>
-                        </div>
-                      </FormField>
-
-                      <FormField label="Confirm Password" required error={dealerForm.formState.errors.confirmPassword?.message}>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder="Re-enter your password"
-                            {...dealerForm.register('confirmPassword')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
-                        </div>
-                      </FormField>
-                    </div>
-
-                    <FormField label="Business Address" error={dealerForm.formState.errors.address?.message}>
-                      <div className="relative">
-                        <MapPin className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                        <Textarea
-                          placeholder="Full business address"
-                          {...dealerForm.register('address')}
-                          className="pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold min-h-[60px]"
-                        />
                       </div>
-                    </FormField>
+                    )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="IC / SSM Registration No." error={dealerForm.formState.errors.regNo?.message}>
-                        <div className="relative">
-                          <FileText className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Registration number"
-                            {...dealerForm.register('regNo')}
-                            className="h-10 pl-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                          />
+                    {/* Step 3: Banking & Documents */}
+                    {dealerStep === 2 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <FormField label="Bank Name" error={dealerForm.formState.errors.bankName?.message}>
+                            <Select value={dealerForm.watch('bankName') || ''} onValueChange={(v) => dealerForm.setValue('bankName', v)}>
+                              <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
+                                <SelectValue placeholder="Select bank" />
+                              </SelectTrigger>
+                              <SelectContent className="bg-card border-border">
+                                {['Maybank', 'CIMB', 'Hong Leong Bank', 'Public Bank', 'RHB', 'AmBank', 'Bank Islam', 'Bank Rakyat'].map((b) => (
+                                  <SelectItem key={b} value={b} className="text-foreground focus:bg-muted">{b}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormField>
+
+                          <FormField label="Account Number" error={dealerForm.formState.errors.bankAccount?.message}>
+                            <Input
+                              placeholder="Bank account number"
+                              {...dealerForm.register('bankAccount')}
+                              className="h-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
+                            />
+                          </FormField>
                         </div>
-                      </FormField>
 
-                      <FormField label="City" error={dealerForm.formState.errors.city?.message}>
-                        <Select value={dealerForm.watch('city') || ''} onValueChange={(v) => dealerForm.setValue('city', v)}>
-                          <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
-                            <SelectValue placeholder="Select city" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card border-border">
-                            {CITIES.filter((c) => c !== 'All Cities').map((city) => (
-                              <SelectItem key={city} value={city} className="text-foreground focus:bg-muted">
-                                {city}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <UploadBox
-                        label="Upload IC / SSM Document"
-                        uploaded={dealDocUploaded}
-                        onUpload={(file) => handleFileUpload(file, () => setDealDocUploaded(true))}
-                        fileInputRef={dealDocRef}
-                      />
-                    </div>
-
-                    <Separator className="bg-border" />
-                    <h4 className="text-caption font-semibold text-gold flex items-center gap-2">
-                      <CreditCard className="size-3.5" /> Bank Details
-                    </h4>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <FormField label="Bank Name" error={dealerForm.formState.errors.bankName?.message}>
-                        <Select value={dealerForm.watch('bankName') || ''} onValueChange={(v) => dealerForm.setValue('bankName', v)}>
-                          <SelectTrigger className="h-10 bg-background border-border text-foreground text-body-sm">
-                            <SelectValue placeholder="Select bank" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card border-border">
-                            {['Maybank', 'CIMB', 'Hong Leong Bank', 'Public Bank', 'RHB', 'AmBank', 'Bank Islam', 'Bank Rakyat'].map((b) => (
-                              <SelectItem key={b} value={b} className="text-foreground focus:bg-muted">{b}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </FormField>
-
-                      <FormField label="Account Number" error={dealerForm.formState.errors.bankAccount?.message}>
-                        <Input
-                          placeholder="Bank account number"
-                          {...dealerForm.register('bankAccount')}
-                          className="h-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
-                        />
-                      </FormField>
-
-                      <div className="sm:col-span-2">
                         <FormField label="Account Holder Name" error={dealerForm.formState.errors.bankHolder?.message}>
                           <Input
                             placeholder="Name as per bank account"
@@ -959,41 +1207,119 @@ export default function AuthPage() {
                             className="h-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
                           />
                         </FormField>
-                      </div>
-                    </div>
 
-                    {/* Agree to terms */}
-                    <div className="flex items-start gap-2">
-                      <Checkbox
-                        id="deal-agree"
-                        checked={dealerForm.watch('agree') as boolean}
-                        onCheckedChange={(v) => dealerForm.setValue('agree', !!v as true)}
-                        className="border-border mt-1"
-                      />
-                      <label htmlFor="deal-agree" className="text-caption text-muted-foreground leading-relaxed cursor-pointer">
-                        I agree to the <span className="text-gold">Terms of Service</span>, <span className="text-gold">Privacy Policy</span>, and <span className="text-gold">Dealer Agreement</span>
-                      </label>
-                    </div>
-                    {dealerForm.formState.errors.agree && (
-                      <p className="text-caption text-error -mt-2">{dealerForm.formState.errors.agree.message}</p>
-                    )}
-
-                    {/* Global error */}
-                    {error && (
-                      <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-error text-body-sm flex items-center gap-2" role="alert">
-                        <AlertCircle className="size-4 shrink-0" />
-                        {error}
+                        <FileUploadBox
+                          label="Upload SSM / Registration Document"
+                          fileInfo={dealerDocFile}
+                          onUpload={(file) => handleFileUploadWithUrl(file, 'documents', (f, url) => setDealerDocFile({ file: f, url }), setDealerDocUploading)}
+                          onRemove={() => setDealerDocFile(null)}
+                          fileInputRef={dealerDocRef}
+                          uploading={dealerDocUploading}
+                        />
                       </div>
                     )}
 
-                    <Button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
-                    >
-                      {loading ? 'Registering...' : <>Register as Dealer <ArrowRight className="size-4 ml-1" /></>}
-                    </Button>
-                  </form>
+                    {/* Step 4: Review & Submit */}
+                    {dealerStep === 3 && (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        {/* Verification notice */}
+                        <div className="p-3 rounded-lg bg-gold/5 border border-gold/20">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="size-4 text-gold mt-0.5 shrink-0" />
+                            <p className="text-caption text-muted-foreground">Your dealer account will be reviewed and verified by our admin team within 24-48 hours.</p>
+                          </div>
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <Building2 className="size-4 text-gold" /> Business Details
+                          </h4>
+                          <ReviewRow label="Business Name" value={dealerForm.getValues('companyName')} />
+                          <ReviewRow label="Dealer Type" value={getDealerTypeLabel(dealerForm.getValues('dealerType'))} />
+                          <ReviewRow label="Registration No." value={dealerForm.getValues('regNo')} />
+                          <ReviewRow label="City" value={dealerForm.getValues('city')} />
+                          <ReviewRow label="Address" value={dealerForm.getValues('address')} />
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <User className="size-4 text-gold" /> Contact & Account
+                          </h4>
+                          <ReviewRow label="Contact Person" value={dealerForm.getValues('contactName')} />
+                          <ReviewRow label="Phone" value={dealerForm.getValues('phone')} />
+                          <ReviewRow label="WhatsApp" value={dealerForm.getValues('whatsapp')} />
+                          <ReviewRow label="Email" value={dealerForm.getValues('email')} />
+                          <ReviewRow label="Password" value="••••••••" />
+                        </div>
+
+                        <div className="p-4 rounded-lg bg-background border border-border">
+                          <h4 className="text-body-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                            <CreditCard className="size-4 text-gold" /> Banking & Documents
+                          </h4>
+                          <ReviewRow label="Bank Name" value={dealerForm.getValues('bankName')} />
+                          <ReviewRow label="Account Number" value={dealerForm.getValues('bankAccount')} />
+                          <ReviewRow label="Account Holder" value={dealerForm.getValues('bankHolder')} />
+                          <ReviewRow label="SSM / Reg. Doc" value={dealerDocFile?.file.name || 'Not uploaded'} />
+                        </div>
+
+                        {/* Agree to terms */}
+                        <div className="flex items-start gap-2">
+                          <Checkbox
+                            id="deal-agree"
+                            checked={dealerForm.watch('agree') as boolean}
+                            onCheckedChange={(v) => dealerForm.setValue('agree', !!v as true)}
+                            className="border-border mt-1"
+                          />
+                          <label htmlFor="deal-agree" className="text-caption text-muted-foreground leading-relaxed cursor-pointer">
+                            I agree to the <span className="text-gold">Terms of Service</span>, <span className="text-gold">Privacy Policy</span>, and <span className="text-gold">Dealer Agreement</span>
+                          </label>
+                        </div>
+                        {dealerForm.formState.errors.agree && (
+                          <p className="text-caption text-error">{dealerForm.formState.errors.agree.message}</p>
+                        )}
+
+                        {/* Global error */}
+                        {error && (
+                          <div className="p-3 rounded-lg bg-error/10 border border-error/30 text-error text-body-sm flex items-center gap-2" role="alert">
+                            <AlertCircle className="size-4 shrink-0" />
+                            {error}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Navigation buttons */}
+                    <div className="flex gap-3 mt-6">
+                      {dealerStep > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={goDealerBack}
+                          className="flex-1 h-11 border-border text-foreground hover:bg-muted"
+                        >
+                          <ArrowLeft className="size-4 mr-1" /> Back
+                        </Button>
+                      )}
+                      {dealerStep < 3 ? (
+                        <Button
+                          type="button"
+                          onClick={goDealerNext}
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg"
+                        >
+                          Next <ArrowRight className="size-4 ml-1" />
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          disabled={loading}
+                          onClick={dealerForm.handleSubmit(handleDealerRegister)}
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
+                        >
+                          {loading ? 'Registering...' : <>Register as Dealer <ArrowRight className="size-4 ml-1" /></>}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             )}

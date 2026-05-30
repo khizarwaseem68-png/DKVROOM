@@ -18,6 +18,8 @@ export async function POST(request: NextRequest) {
       // Dealer-specific fields
       companyName, dealerType, contactPerson, registrationNo,
       bankName, bankAccountNumber, bankAccountHolder,
+      // Document URLs
+      icDocumentUrl, licenseDocumentUrl, registrationDocUrl,
     } = body
 
     // Validate required fields
@@ -69,6 +71,8 @@ export async function POST(request: NextRequest) {
         address: address ? sanitizeInput(address) : null,
         icNumber: icNumber ? sanitizeInput(icNumber) : null,
         drivingLicense: drivingLicense ? sanitizeInput(drivingLicense) : null,
+        icDocumentUrl: icDocumentUrl || null,
+        licenseDocumentUrl: licenseDocumentUrl || null,
         role: userRole,
         verified: false,
       }
@@ -94,6 +98,7 @@ export async function POST(request: NextRequest) {
           bankName: bankName ? sanitizeInput(bankName) : null,
           bankAccountNumber: bankAccountNumber ? sanitizeInput(bankAccountNumber) : null,
           bankAccountHolder: bankAccountHolder ? sanitizeInput(bankAccountHolder) : null,
+          registrationDocUrl: registrationDocUrl || null,
           verified: false,
         }
       })

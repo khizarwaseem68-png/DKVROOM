@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAppStore } from '@/lib/store'
-import { dealerApi, carsApi } from '@/lib/api'
+import { dealerApi, carsApi, uploadApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
@@ -25,6 +25,8 @@ import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import {
   Select,
   SelectContent,
@@ -70,6 +72,7 @@ import {
   Gavel,
   Handshake,
   Loader2,
+  MoreVertical,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -215,7 +218,10 @@ export default function DealerDashboard() {
   const [carYear, setCarYear] = useState('')
   const [carLocation, setCarLocation] = useState('')
   const [carDescription, setCarDescription] = useState('')
-  const [carPhotos, setCarPhotos] = useState<string[]>([])
+  const [carPhotos, setCarPhotos] = useState<Array<{ url: string; name: string }>>([])
+  const [uploadingPhotos, setUploadingPhotos] = useState(false)
+  const [deleteCarId, setDeleteCarId] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Rental specific
   const [carDailyPrice, setCarDailyPrice] = useState('')
@@ -257,7 +263,7 @@ export default function DealerDashboard() {
   // Reset form helper
   const resetForm = () => {
     setCarBrand(''); setCarModel(''); setCarYear(''); setCarLocation('')
-    setCarDescription(''); setCarPhotos([])
+    setCarDescription(''); setCarPhotos([]); setUploadingPhotos(false)
     setCarDailyPrice(''); setCarWeeklyPrice(''); setCarMonthlyPrice('')
     setCarRentDeposit(''); setCarRentalTerms('')
     setCarSalePrice(''); setCarBookingFee(''); setCarSaleCondition('')
@@ -280,7 +286,7 @@ export default function DealerDashboard() {
         description: carDescription,
         location: carLocation,
         city: carLocation,
-        photos: JSON.stringify(carPhotos),
+        photos: JSON.stringify(carPhotos.map(p => p.url)),
         features: carFeatures ? JSON.stringify(carFeatures.split(',').map(f => f.trim())) : undefined,
       }
 
@@ -336,6 +342,60 @@ export default function DealerDashboard() {
       // silent
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // Handle photo upload
+  const handlePhotoUpload = async (files: FileList) => {
+    const remaining = 10 - carPhotos.length
+    const filesToUpload = Array.from(files).slice(0, remaining)
+    if (filesToUpload.length === 0) return
+
+    setUploadingPhotos(true)
+    try {
+      const uploadedPhotos: Array<{ url: string; name: string }> = []
+      for (const file of filesToUpload) {
+        try {
+          const result = await uploadApi.upload(file, 'vehicle_photos')
+          const url = (result as { url?: string }).url || ''
+          if (url) {
+            uploadedPhotos.push({ url, name: file.name })
+          }
+        } catch {
+          // Skip failed uploads
+        }
+      }
+      setCarPhotos(prev => [...prev, ...uploadedPhotos])
+    } finally {
+      setUploadingPhotos(false)
+    }
+  }
+
+  // Set a photo as cover (move to index 0)
+  const setAsCover = (idx: number) => {
+    setCarPhotos(prev => {
+      const photo = prev[idx]
+      const rest = prev.filter((_, i) => i !== idx)
+      return [photo, ...rest]
+    })
+  }
+
+  // Remove a photo
+  const removePhoto = (idx: number) => {
+    setCarPhotos(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  // Handle delete car
+  const handleDeleteCar = async () => {
+    if (!deleteCarId) return
+    try {
+      await carsApi.delete(deleteCarId)
+      fetchListings()
+      fetchStats()
+    } catch {
+      // silent
+    } finally {
+      setDeleteCarId(null)
     }
   }
 
@@ -655,7 +715,7 @@ export default function DealerDashboard() {
                                   <td className="py-3 px-4">
                                     <div className="flex items-center gap-1">
                                       <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-gold"><Edit className="size-3.5" /></Button>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400"><Trash2 className="size-3.5" /></Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteCarId(car.id)}><Trash2 className="size-3.5" /></Button>
                                       <Button variant="ghost" size="icon" className={`h-7 w-7 ${car.featured ? 'text-gold' : 'text-muted-foreground'} hover:text-gold`}>
                                         {car.featured ? <Star className="size-3.5" /> : <StarOff className="size-3.5" />}
                                       </Button>
@@ -699,7 +759,7 @@ export default function DealerDashboard() {
                                 </div>
                                 <div className="flex items-center gap-1 mt-2">
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-gold"><Edit className="size-3.5" /></Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400"><Trash2 className="size-3.5" /></Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteCarId(car.id)}><Trash2 className="size-3.5" /></Button>
                                 </div>
                               </div>
                             </div>
@@ -749,17 +809,40 @@ export default function DealerDashboard() {
                       <ImagePlus className="size-4 text-gold" />
                       Car Photos
                     </Label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handlePhotoUpload(e.target.files)
+                          e.target.value = ''
+                        }
+                      }}
+                    />
                     <div
-                      className="border-2 border-dashed border-border rounded-xl p-6 sm:p-8 text-center hover:border-gold/50 transition-colors cursor-pointer group"
+                      className={`border-2 border-dashed border-border rounded-xl p-6 sm:p-8 text-center hover:border-gold/50 transition-colors cursor-pointer group ${uploadingPhotos ? 'pointer-events-none opacity-60' : ''}`}
                       onClick={() => {
-                        if (carPhotos.length < 10) {
-                          setCarPhotos([...carPhotos, `photo_${carPhotos.length + 1}_image.jpg`])
+                        if (!uploadingPhotos && carPhotos.length < 10) {
+                          fileInputRef.current?.click()
                         }
                       }}
                     >
-                      <Upload className="size-8 text-muted-foreground mx-auto mb-2 group-hover:text-gold transition-colors" />
-                      <p className="text-body-sm text-muted-foreground">Drag & drop photos here or click to upload</p>
-                      <p className="text-caption text-muted-foreground/50 mt-1">PNG, JPG up to 5MB each. Max 10 photos.</p>
+                      {uploadingPhotos ? (
+                        <>
+                          <Loader2 className="size-8 text-gold mx-auto mb-2 animate-spin" />
+                          <p className="text-body-sm text-muted-foreground">Uploading photos...</p>
+                          <p className="text-caption text-muted-foreground/50 mt-1">Please wait while your photos are being uploaded</p>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-8 text-muted-foreground mx-auto mb-2 group-hover:text-gold transition-colors" />
+                          <p className="text-body-sm text-muted-foreground">Click to upload photos</p>
+                          <p className="text-caption text-muted-foreground/50 mt-1">PNG, JPG, WebP up to 5MB each. Max 10 photos.</p>
+                        </>
+                      )}
                       {carPhotos.length > 0 && (
                         <Badge className="mt-2 bg-gold/20 text-gold border-gold/30 text-xs">
                           {carPhotos.length}/10 photos added
@@ -770,24 +853,38 @@ export default function DealerDashboard() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {carPhotos.map((photo, idx) => (
                           <div key={idx} className="relative group/photo bg-secondary border border-border rounded-lg overflow-hidden">
-                            <div className="aspect-video flex items-center justify-center">
-                              <Car className="size-6 text-muted-foreground/30" />
+                            <div className="aspect-video flex items-center justify-center overflow-hidden">
+                              <img src={photo.url} alt={photo.name} className="w-full h-full object-cover" />
                             </div>
-                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-400/10"
-                                onClick={(e) => { e.stopPropagation(); setCarPhotos(carPhotos.filter((_, i) => i !== idx)) }}>
-                                <X className="size-4" />
-                              </Button>
+                            {/* Three-dot menu on hover */}
+                            <div className="absolute top-1 right-1 opacity-0 group-hover/photo:opacity-100 transition-opacity z-10">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6 bg-black/60 hover:bg-black/80 text-white rounded-full">
+                                    <MoreVertical className="size-3" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent className="bg-card border-border">
+                                  {idx !== 0 && (
+                                    <DropdownMenuItem onClick={() => setAsCover(idx)} className="text-foreground focus:bg-gold/10 focus:text-gold">
+                                      <Star className="size-3 mr-2" /> Set as Cover
+                                    </DropdownMenuItem>
+                                  )}
+                                  <DropdownMenuItem onClick={() => removePhoto(idx)} className="text-red-400 focus:bg-red-500/10">
+                                    <Trash2 className="size-3 mr-2" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             </div>
                             {idx === 0 && (
                               <Badge className="absolute top-1 left-1 bg-gold text-primary-foreground text-[9px] px-1.5 py-0">Cover</Badge>
                             )}
                           </div>
                         ))}
-                        {carPhotos.length < 10 && (
+                        {carPhotos.length < 10 && !uploadingPhotos && (
                           <div
                             className="aspect-video border-2 border-dashed border-border rounded-lg flex items-center justify-center cursor-pointer hover:border-gold/50 transition-colors"
-                            onClick={() => setCarPhotos([...carPhotos, `photo_${carPhotos.length + 1}_image.jpg`])}
+                            onClick={() => fileInputRef.current?.click()}
                           >
                             <PlusCircle className="size-5 text-muted-foreground/30" />
                           </div>
@@ -1393,6 +1490,24 @@ export default function DealerDashboard() {
           )}
         </main>
       </div>
+
+      {/* Delete Car Confirmation Dialog */}
+      <AlertDialog open={!!deleteCarId} onOpenChange={(open) => { if (!open) setDeleteCarId(null) }}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-foreground">Delete Car Listing</AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground">
+              Are you sure you want to delete this car listing? This action cannot be undone and the listing will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border text-muted-foreground hover:bg-secondary hover:text-foreground">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCar} className="bg-red-500 hover:bg-red-600 text-white">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
