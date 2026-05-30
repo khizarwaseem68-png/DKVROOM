@@ -7,112 +7,551 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================
+// USER & AUTH
+// ============================================================
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  phone     String?
-  role      String   @default("customer") // customer, dealer, admin
-  avatar    String?
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String    // bcrypt hashed
+  name            String
+  phone           String?
+  whatsapp        String?
+  address         String?
+  icNumber        String?   // IC / Passport number
+  drivingLicense  String?   // Driving license number
+  icDocumentUrl   String?   // Uploaded IC/Passport document
+  licenseDocumentUrl String? // Uploaded driving license document
+  role            String    @default("customer") // customer, dealer, admin
+  avatar          String?
+  verified        Boolean   @default(false)
+  active          Boolean   @default(true)
+  lastLoginAt     DateTime?
+  loginAttempts   Int       @default(0)
+  lockedUntil     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  dealer          Dealer?
+  cars            Car[]     @relation("DealerCars")
+  bookings        Booking[] @relation("UserBookings")
+  loanApplications LoanApplication[] @relation("UserLoans")
+  payments        Payment[] @relation("UserPayments")
+  sentMessages    ChatMessage[] @relation("SentMessages")
+  receivedMessages ChatMessage[] @relation("ReceivedMessages")
+  notifications   Notification[]
+  reviews         Review[]
+  continueLoanEnquiries ContinueLoanEnquiry[] @relation("CustomerEnquiries")
+  workshopAppointments WorkshopAppointment[]
+  insuranceEnquiries InsuranceEnquiry[]
+  auctionBids     AuctionBid[]
+  auditLogs       AuditLog[]
+
+  @@index([email])
+  @@index([role])
 }
 
 model Dealer {
-  id              String   @id @default(cuid())
-  userId          String   @unique
-  companyName     String
-  registrationNo  String?
-  address         String?
-  city            String?
-  state           String?
-  phone           String?
-  whatsapp        String?
-  logo            String?
-  verified        Boolean  @default(false)
-  subscriptionTier String  @default("basic") // basic, premium, enterprise
-  rating          Float    @default(0)
-  totalListings   Int      @default(0)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyName       String
+  dealerType        String   @default("used_car") // used_car, rental, workshop, insurance, auction, loan
+  registrationNo    String?  // SSM / Business registration number
+  registrationDocUrl String? // Uploaded SSM document
+  contactPerson     String?
+  address           String?
+  city              String?
+  state             String?
+  phone             String?
+  whatsapp          String?
+  logo              String?
+  description       String?
+  verified          Boolean  @default(false)
+  subscriptionTier  String   @default("basic") // basic, premium, enterprise
+  subscriptionExpiry DateTime?
+  rating            Float    @default(0)
+  totalListings     Int      @default(0)
+  totalSales        Int      @default(0)
+  // Bank details for payouts
+  bankName          String?
+  bankAccountNumber String?
+  bankAccountHolder String?
+  // Operating hours
+  operatingHours    String?  // JSON: { mon: "9-6", tue: "9-6", ... }
+  // Verification
+  verifiedAt        DateTime?
+  verifiedBy        String?  // Admin user ID
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  cars              Car[]    @relation("DealerListedCars")
+  bookings          Booking[] @relation("DealerBookings")
+  loanApplications  LoanApplication[] @relation("DealerLoans")
+  payments          Payment[] @relation("DealerPayments")
+  continueLoanEnquiries ContinueLoanEnquiry[] @relation("DealerEnquiries")
+  workshopAppointments WorkshopAppointment[] @relation("DealerWorkshopAppointments")
+  insuranceEnquiries InsuranceEnquiry[] @relation("DealerInsuranceEnquiries")
+
+  @@index([verified])
+  @@index([city])
 }
+
+// ============================================================
+// VEHICLES / CARS
+// ============================================================
 
 model Car {
-  id              String   @id @default(cuid())
-  dealerId        String
-  type            String   // rent, sale, auction, continueLoan
-  brand           String
-  model           String
-  year            Int
-  color           String?
-  mileage         Int?
-  fuelType        String?  // petrol, diesel, electric, hybrid
-  transmission    String?  // auto, manual
-  seats           Int?
-  condition       String?  // new, used, certified
-  price           Float
-  deposit         Float?
+  id                String   @id @default(cuid())
+  dealerId          String
+  dealer            Dealer   @relation("DealerListedCars", fields: [dealerId], references: [id], onDelete: Cascade)
+  dealerUser        User     @relation("DealerCars", fields: [dealerId], references: [id], onDelete: Cascade)
+  type              String   // rent, sale, auction, continueLoan
+  brand             String
+  model             String
+  year              Int
+  color             String?
+  mileage           Int?
+  fuelType          String?  // petrol, diesel, electric, hybrid
+  transmission      String?  // auto, manual
+  seats             Int?
+  condition         String?  // new, used, certified
+  // Pricing
+  price             Float    // Main price (rent: daily, sale: total, continueLoan: monthly installment)
+  weeklyPrice       Float?
+  monthlyPrice      Float?
+  deposit           Float?
+  bookingFee        Float?   // For buy & sell enquiry fee
+  // Continue Loan specific
   monthlyInstallment Float?
-  remainingMonths Int?
-  remainingBalance Float?
-  bankName        String?
-  location        String?
-  city            String?
-  description     String?
-  features        String?
-  photos          String?  // JSON array of URLs
-  featured        Boolean  @default(false)
-  status          String   @default("available") // available, booked, sold, pending
-  auctionEnd      DateTime?
-  auctionStartBid Float?
-  currentBid      Float?
-  vehicleCondition String?
-  requiredDocs    String?  // JSON array
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  remainingMonths   Int?
+  remainingBalance  Float?
+  takeoverAmount    Float?
+  bankName          String?
+  vehicleCondition  String?  // Detailed condition description
+  requiredDocs      String?  // JSON array of required documents
+  // Auction specific
+  auctionStartBid   Float?
+  auctionReserve    Float?
+  currentBid        Float?
+  auctionEnd        DateTime?
+  auctionActive     Boolean  @default(false)
+  // Rental specific
+  rentalTerms       String?  // JSON: terms and conditions
+  pickupAvailable   Boolean  @default(true)
+  deliveryAvailable Boolean  @default(false)
+  deliveryFee       Float?
+  availableFrom     DateTime?
+  availableTo       DateTime?
+  // Location
+  location          String?
+  city              String?
+  state             String?
+  // Media & Description
+  description       String?
+  features          String?  // JSON array of features
+  photos            String?  // JSON array of photo URLs
+  videoUrl          String?
+  featured          Boolean  @default(false)
+  // Status & Moderation
+  status            String   @default("pending") // pending, approved, rejected, available, booked, sold, inactive
+  approvedAt        DateTime?
+  approvedBy        String?  // Admin user ID
+  rejectedAt        DateTime?
+  rejectionReason   String?
+  views             Int      @default(0)
+  enquiries         Int      @default(0)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  bookings          Booking[]
+  loanApplications  LoanApplication[]
+  auctionBids       AuctionBid[]
+  reviews           Review[]
+  continueLoanEnquiries ContinueLoanEnquiry[]
+
+  @@index([type])
+  @@index([status])
+  @@index([city])
+  @@index([brand])
+  @@index([featured])
+  @@index([dealerId])
 }
 
+// ============================================================
+// BOOKINGS
+// ============================================================
+
 model Booking {
-  id          String   @id @default(cuid())
-  carId       String
-  userId      String
-  dealerId    String
-  type        String   // rent, purchase, continueLoan
-  startDate   DateTime?
-  endDate     DateTime?
-  status      String   @default("pending") // pending, approved, rejected, completed, cancelled
-  totalAmount Float?
-  notes       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation("UserBookings", fields: [userId], references: [id], onDelete: Cascade)
+  dealerId        String
+  dealer          Dealer   @relation("DealerBookings", fields: [dealerId], references: [id], onDelete: Cascade)
+  type            String   // rent, purchase, continueLoan, auction, insurance, workshop
+  // Rental dates
+  startDate       DateTime?
+  endDate         DateTime?
+  // Status tracking
+  status          String   @default("pending") // pending, payment_pending, payment_uploaded, confirmed, active, completed, cancelled, disputed
+  // Payment
+  totalAmount     Float?
+  platformFee     Float?   // DK Vroom commission
+  // Contact unlock
+  contactUnlocked Boolean  @default(false)
+  unlockedAt      DateTime?
+  // Notes
+  notes           String?
+  cancellationReason String?
+  // Completion
+  completedAt     DateTime?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  payments        Payment[]
+
+  @@index([userId])
+  @@index([dealerId])
+  @@index([status])
+  @@index([type])
 }
+
+// ============================================================
+// CONTINUE LOAN (SAMBUNG BAYAR) ENQUIRIES
+// ============================================================
+
+model ContinueLoanEnquiry {
+  id              String   @id @default(cuid())
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        User     @relation("CustomerEnquiries", fields: [customerId], references: [id], onDelete: Cascade)
+  dealerId        String
+  dealer          Dealer   @relation("DealerEnquiries", fields: [dealerId], references: [id], onDelete: Cascade)
+  // Agreement details
+  agreementStatus String   @default("pending") // pending, agreement_sent, agreement_signed, deposit_paid, handover_complete, completed, cancelled
+  depositAmount   Float?
+  // Documents uploaded by customer
+  customerIcUrl   String?
+  customerLicenseUrl String?
+  paymentReceiptUrl String?
+  policeReportUrl String?  // Optional
+  agreementDocUrl String?  // Signed agreement
+  // Documents uploaded by dealer/owner
+  ownerIcUrl      String?
+  ownerAgreementUrl String?
+  // Status
+  contactUnlocked Boolean  @default(false)
+  unlockedAt      DateTime?
+  notes           String?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([dealerId])
+  @@index([agreementStatus])
+}
+
+// ============================================================
+// LOAN APPLICATIONS
+// ============================================================
 
 model LoanApplication {
   id              String   @id @default(cuid())
   userId          String
+  user            User     @relation("UserLoans", fields: [userId], references: [id], onDelete: Cascade)
   carId           String?
+  car             Car?     @relation(fields: [carId], references: [id], onDelete: SetNull)
   dealerId        String?
-  type            String   // loan, continueLoan
+  dealer          Dealer?  @relation("DealerLoans", fields: [dealerId], references: [id], onDelete: SetNull)
+  type            String   @default("loan") // loan, continueLoan
   amount          Float?
-  tenure          Int?
-  status          String   @default("pending") // pending, reviewing, approved, rejected
+  tenure          Int?     // months
+  monthlyIncome   Float?
+  employmentType  String?  // employed, self-employed, government
+  employerName    String?
+  // Documents
   documents       String?  // JSON array of document URLs
+  payslipUrls     String?  // JSON array
+  bankStatementUrls String? // JSON array
+  epfStatementUrl String?
+  // Status
+  status          String   @default("pending") // pending, reviewing, approved, rejected, disbursed
+  reviewedAt      DateTime?
+  reviewedBy      String?  // Admin user ID
+  // Bank response
+  bankName        String?
   bankResponse    String?
   approvedAmount  Float?
+  approvedTenure  Int?
+  interestRate    Float?
+  monthlyRepayment Float?
+  rejectionReason String?
+  // Timestamps
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([type])
 }
 
+// ============================================================
+// AUCTION BIDS
+// ============================================================
+
+model AuctionBid {
+  id              String   @id @default(cuid())
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  status          String   @default("active") // active, outbid, winning, won, lost
+  isWinning       Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([carId])
+  @@index([userId])
+}
+
+// ============================================================
+// PAYMENTS
+// ============================================================
+
 model Payment {
-  id          String   @id @default(cuid())
-  userId      String
-  dealerId    String?
-  bookingId   String?
-  amount      Float
-  method      String?  // fpx, tng, billplz, stripe
-  status      String   @default("pending") // pending, verified, failed, refunded
-  receiptUrl  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("UserPayments", fields: [userId], references: [id], onDelete: Cascade)
+  dealerId        String?
+  dealer          Dealer?  @relation("DealerPayments", fields: [dealerId], references: [id], onDelete: SetNull)
+  bookingId       String?
+  booking         Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  continueLoanEnquiryId String?
+  continueLoanEnquiry ContinueLoanEnquiry? @relation(fields: [continueLoanEnquiryId], references: [id], onDelete: SetNull)
+  workshopAppointmentId String?
+  workshopAppointment WorkshopAppointment? @relation(fields: [workshopAppointmentId], references: [id], onDelete: SetNull)
+  insuranceEnquiryId String?
+  insuranceEnquiry InsuranceEnquiry? @relation(fields: [insuranceEnquiryId], references: [id], onDelete: SetNull)
+  // Payment details
+  amount          Float
+  platformFee     Float    @default(0)
+  dealerPayout    Float    @default(0)
+  method          String   @default("qr_manual") // qr_manual, fpx, tng, billplz, stripe, bank_transfer
+  paymentType     String   @default("booking") // booking, enquiry_fee, deposit, auction_deposit, insurance, workshop, subscription
+  // QR Code / Manual payment
+  qrReference     String?  // Unique QR payment reference
+  qrGeneratedAt   DateTime?
+  // Receipt
+  receiptUrl      String?
+  receiptUploadedAt DateTime?
+  // Verification
+  status          String   @default("pending") // pending, uploaded, verified, failed, rejected, refunded
+  verifiedAt      DateTime?
+  verifiedBy      String?  // Admin user ID
+  rejectionReason String?
+  refundReason    String?
+  refundedAt      DateTime?
+  // Contact unlock
+  contactUnlocked Boolean  @default(false)
+  unlockedAt      DateTime?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([dealerId])
+  @@index([status])
+  @@index([paymentType])
+}
+
+// ============================================================
+// WORKSHOP / REPAIR APPOINTMENTS
+// ============================================================
+
+model WorkshopAppointment {
+  id              String   @id @default(cuid())
+  customerId      String
+  customer        User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dealerId        String
+  dealer          Dealer   @relation("DealerWorkshopAppointments", fields: [dealerId], references: [id], onDelete: Cascade)
+  // Service details
+  serviceType     String   // general_service, engine_repair, bodywork, electrical, tire_battery, ac_service, others
+  vehicleBrand    String?
+  vehicleModel    String?
+  vehicleYear     Int?
+  registrationNo  String?
+  issueDescription String?
+  photos          String?  // JSON array of issue photo URLs
+  // Appointment
+  preferredDate   DateTime?
+  preferredTime   String?
+  // Status
+  status          String   @default("pending") // pending, confirmed, in_progress, completed, cancelled
+  estimatedCost   Float?
+  confirmedAt     DateTime?
+  completedAt     DateTime?
+  notes           String?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([dealerId])
+  @@index([status])
+}
+
+// ============================================================
+// INSURANCE ENQUIRIES
+// ============================================================
+
+model InsuranceEnquiry {
+  id              String   @id @default(cuid())
+  customerId      String
+  customer        User     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dealerId        String?
+  dealer          Dealer?  @relation("DealerInsuranceEnquiries", fields: [dealerId], references: [id], onDelete: SetNull)
+  // Vehicle details
+  vehicleBrand    String?
+  vehicleModel    String?
+  vehicleYear     Int?
+  registrationNo  String?
+  // Insurance details
+  coverageType    String?  // comprehensive, third_party, third_party_fire_theft
+  currentInsurer  String?
+  ncdPercentage   Float?   // No Claim Discount
+  // Customer details
+  age             Int?
+  drivingExperience Int?   // years
+  claimsHistory   String?  // JSON
+  // Quote
+  status          String   @default("pending") // pending, quoted, accepted, rejected, expired
+  quotedPremium   Float?
+  quotedBy        String?  // Dealer/Agent ID
+  quotedAt        DateTime?
+  quoteExpiry     DateTime?
+  policyType      String?
+  // Timestamps
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  payments        Payment[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+// ============================================================
+// REVIEWS & RATINGS
+// ============================================================
+
+model Review {
+  id              String   @id @default(cuid())
+  carId           String
+  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating          Int      // 1-5
+  comment         String?
+  status          String   @default("published") // published, hidden, flagged
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([carId])
+  @@index([userId])
+}
+
+// ============================================================
+// CHAT MESSAGES
+// ============================================================
+
+model ChatMessage {
+  id              String   @id @default(cuid())
+  senderId        String
+  sender          User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId      String
+  receiver        User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  bookingId       String?
+  message         String
+  type            String   @default("text") // text, image, document
+  fileUrl         String?
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([bookingId])
+}
+
+// ============================================================
+// NOTIFICATIONS
+// ============================================================
+
+model Notification {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  message         String
+  type            String   @default("info") // info, success, warning, error, payment, booking
+  link            String?  // URL to relevant page
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([read])
+}
+
+// ============================================================
+// AUDIT LOG (Security)
+// ============================================================
+
+model AuditLog {
+  id              String   @id @default(cuid())
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action          String   // e.g., "login", "register", "payment_verified", "car_approved", "dealer_verified"
+  resource        String?  // e.g., "user", "car", "payment", "booking"
+  resourceId      String?
+  details         String?  // JSON with additional details
+  ipAddress       String?
+  userAgent       String?
+  severity        String   @default("info") // info, warning, critical
+  createdAt       DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// ============================================================
+// PLATFORM SETTINGS
+// ============================================================
+
+model PlatformSetting {
+  id              String   @id @default(cuid())
+  key             String   @unique
+  value           String   // JSON value
+  description     String?
+  updatedAt       DateTime @updatedAt
+
+  @@index([key])
 }
