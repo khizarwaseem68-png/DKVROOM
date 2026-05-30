@@ -13,6 +13,8 @@ import LoanApplication from '@/components/loan-application'
 import DealerDashboard from '@/components/dealer-dashboard'
 import AdminDashboard from '@/components/admin-dashboard'
 import AuthPage from '@/components/auth-page'
+import PaymentPage from '@/components/payment-page'
+import ContinueLoanEnquiry from '@/components/continue-loan-enquiry'
 
 function ViewRenderer() {
   const { currentView } = useAppStore()
@@ -48,6 +50,10 @@ function ViewRenderer() {
       return <AuthPage />
     case 'profile':
       return <AuthPage />
+    case 'payment':
+      return <PaymentPage />
+    case 'continueLoanEnquiry':
+      return <ContinueLoanEnquiry />
     default:
       return <HomePage />
   }

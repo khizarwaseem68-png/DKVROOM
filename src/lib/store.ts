@@ -17,6 +17,19 @@ export type View =
   | 'profile'
   | 'applyLoan'
   | 'trackStatus'
+  | 'payment'
+  | 'continueLoanEnquiry'
+
+export type PaymentStatus = 'none' | 'pending' | 'uploaded' | 'verified' | 'rejected'
+
+interface BookingState {
+  bookingId: string | null
+  bookingType: 'rent' | 'sale' | 'continueLoan' | 'auction' | 'insurance' | 'workshop' | null
+  amount: number
+  paymentStatus: PaymentStatus
+  receiptUploaded: boolean
+  contactUnlocked: boolean
+}
 
 interface AppState {
   currentView: View
@@ -30,6 +43,7 @@ interface AppState {
   userRole: 'customer' | 'dealer' | 'admin' | null
   userName: string | null
   showMobileMenu: boolean
+  booking: BookingState
   
   navigate: (view: View) => void
   goBack: () => void
@@ -40,6 +54,20 @@ interface AppState {
   login: (role: 'customer' | 'dealer' | 'admin', name: string) => void
   logout: () => void
   toggleMobileMenu: () => void
+  startBooking: (type: BookingState['bookingType'], amount: number) => void
+  uploadReceipt: () => void
+  verifyPayment: () => void
+  rejectPayment: () => void
+  resetBooking: () => void
+}
+
+const initialBooking: BookingState = {
+  bookingId: null,
+  bookingType: null,
+  amount: 0,
+  paymentStatus: 'none',
+  receiptUploaded: false,
+  contactUnlocked: false,
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -54,6 +82,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   userRole: null,
   userName: null,
   showMobileMenu: false,
+  booking: { ...initialBooking },
 
   navigate: (view) => set({ previousView: get().currentView, currentView: view, showMobileMenu: false }),
   goBack: () => set((state) => ({ currentView: state.previousView || 'home', previousView: null })),
@@ -62,6 +91,33 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCity: (city) => set({ selectedCity: city }),
   setFilter: (type) => set({ filterType: type }),
   login: (role, name) => set({ isLoggedIn: true, userRole: role, userName: name }),
-  logout: () => set({ isLoggedIn: false, userRole: null, userName: null, currentView: 'home' }),
+  logout: () => set({ isLoggedIn: false, userRole: null, userName: null, currentView: 'home', booking: { ...initialBooking } }),
   toggleMobileMenu: () => set((state) => ({ showMobileMenu: !state.showMobileMenu })),
+  
+  startBooking: (type, amount) => set({
+    booking: {
+      bookingId: 'BK' + Date.now().toString(36).toUpperCase(),
+      bookingType: type,
+      amount,
+      paymentStatus: 'pending',
+      receiptUploaded: false,
+      contactUnlocked: false,
+    },
+    currentView: 'payment',
+    previousView: get().currentView,
+  }),
+  
+  uploadReceipt: () => set((state) => ({
+    booking: { ...state.booking, receiptUploaded: true, paymentStatus: 'uploaded' as PaymentStatus },
+  })),
+  
+  verifyPayment: () => set((state) => ({
+    booking: { ...state.booking, paymentStatus: 'verified' as PaymentStatus, contactUnlocked: true },
+  })),
+  
+  rejectPayment: () => set((state) => ({
+    booking: { ...state.booking, paymentStatus: 'rejected' as PaymentStatus, receiptUploaded: false },
+  })),
+  
+  resetBooking: () => set({ booking: { ...initialBooking } }),
 }))

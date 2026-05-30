@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -49,6 +51,13 @@ import {
   Filter,
   Menu,
   Phone,
+  ImagePlus,
+  MapPin,
+  Truck,
+  Info,
+  AlertTriangle,
+  Gavel,
+  Handshake,
 } from 'lucide-react'
 
 // Mock data
@@ -128,29 +137,46 @@ export default function DealerDashboard() {
   const [listingFilter, setListingFilter] = useState('all')
   const [bookingFilter, setBookingFilter] = useState('all')
 
-  // Add car form state
+  // Add car form state — common fields
   const [carType, setCarType] = useState('rent')
   const [carBrand, setCarBrand] = useState('')
   const [carModel, setCarModel] = useState('')
   const [carYear, setCarYear] = useState('')
-  const [carColor, setCarColor] = useState('')
-  const [carPrice, setCarPrice] = useState('')
-  const [carDeposit, setCarDeposit] = useState('')
-  const [carMonthly, setCarMonthly] = useState('')
-  const [carRemaining, setCarRemaining] = useState('')
-  const [carRemainingMonths, setCarRemainingMonths] = useState('')
-  const [carBankName, setCarBankName] = useState('')
-  const [carMileage, setCarMileage] = useState('')
-  const [carFuel, setCarFuel] = useState('')
-  const [carTransmission, setCarTransmission] = useState('')
-  const [carSeats, setCarSeats] = useState('')
-  const [carCondition, setCarCondition] = useState('')
   const [carLocation, setCarLocation] = useState('')
-  const [carCity, setCarCity] = useState('')
   const [carDescription, setCarDescription] = useState('')
+  const [carPhotos, setCarPhotos] = useState<string[]>([])
+
+  // Rental specific
+  const [carDailyPrice, setCarDailyPrice] = useState('')
+  const [carWeeklyPrice, setCarWeeklyPrice] = useState('')
+  const [carMonthlyPrice, setCarMonthlyPrice] = useState('')
+  const [carRentDeposit, setCarRentDeposit] = useState('')
+  const [carAvailability, setCarAvailability] = useState(true)
+  const [carRentalTerms, setCarRentalTerms] = useState('')
+  const [carSelfPickup, setCarSelfPickup] = useState(true)
+  const [carDeliveryAvailable, setCarDeliveryAvailable] = useState(false)
+  const [carPickupLocation, setCarPickupLocation] = useState('')
+  const [carDeliveryFee, setCarDeliveryFee] = useState('')
+
+  // Sale specific
+  const [carSalePrice, setCarSalePrice] = useState('')
+  const [carBookingFee, setCarBookingFee] = useState('')
+  const [carSaleCondition, setCarSaleCondition] = useState('')
+  const [carMileage, setCarMileage] = useState('')
   const [carFeatures, setCarFeatures] = useState('')
-  const [carRequiredDocs, setCarRequiredDocs] = useState('')
+
+  // Continue Loan specific
+  const [carMonthlyInstallment, setCarMonthlyInstallment] = useState('')
+  const [carRemainingMonths, setCarRemainingMonths] = useState('')
+  const [carTakeoverAmount, setCarTakeoverAmount] = useState('')
   const [carVehicleCondition, setCarVehicleCondition] = useState('')
+  const [carBankName, setCarBankName] = useState('')
+
+  // Auction specific
+  const [carStartingBid, setCarStartingBid] = useState('')
+  const [carAuctionEndDate, setCarAuctionEndDate] = useState('')
+  const [carReservePrice, setCarReservePrice] = useState('')
+  const [carAuctionCondition, setCarAuctionCondition] = useState('')
 
   const filteredListings = listingFilter === 'all'
     ? mockListings
@@ -513,7 +539,8 @@ export default function DealerDashboard() {
 
           {/* ===== ADD CAR TAB ===== */}
           {activeTab === 'addCar' && (
-            <div className="max-w-3xl mx-auto">
+            <div className="max-w-3xl mx-auto space-y-6">
+              {/* Header Card */}
               <Card className="bg-[#111111] border-[#2a2a2a]">
                 <CardHeader>
                   <CardTitle className="text-xl font-bold">
@@ -521,21 +548,27 @@ export default function DealerDashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-6">
-                  {/* Car Type */}
+                  {/* Listing Type */}
                   <div className="space-y-2">
-                    <Label className="text-[#8a8578]">Listing Type</Label>
+                    <Label className="text-[#8a8578] text-sm font-medium">Listing Type</Label>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      {['rent', 'sale', 'continueLoan', 'auction'].map((type) => (
+                      {[
+                        { type: 'rent', icon: Car, label: 'For Rent' },
+                        { type: 'sale', icon: DollarSign, label: 'For Sale' },
+                        { type: 'continueLoan', icon: Handshake, label: 'Continue Loan' },
+                        { type: 'auction', icon: Gavel, label: 'Auction' },
+                      ].map(({ type, icon: TypeIcon, label }) => (
                         <Button
                           key={type}
                           variant={carType === type ? 'default' : 'outline'}
                           onClick={() => setCarType(type)}
                           className={carType === type
-                            ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#b8963e]'
-                            : 'border-[#2a2a2a] text-[#8a8578] hover:border-[#c9a84c]/50 hover:text-[#c9a84c]'
+                            ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#b8963e] h-auto py-3 flex flex-col gap-1'
+                            : 'border-[#2a2a2a] text-[#8a8578] hover:border-[#c9a84c]/50 hover:text-[#c9a84c] h-auto py-3 flex flex-col gap-1'
                           }
                         >
-                          {getTypeLabel(type)}
+                          <TypeIcon className="size-4" />
+                          <span className="text-xs">{label}</span>
                         </Button>
                       ))}
                     </div>
@@ -543,110 +576,395 @@ export default function DealerDashboard() {
 
                   <Separator className="bg-[#2a2a2a]" />
 
-                  {/* Basic Info */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Brand</Label>
-                      <Input
-                        value={carBrand}
-                        onChange={(e) => setCarBrand(e.target.value)}
-                        placeholder="e.g. BMW"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
+                  {/* ===== CAR PHOTOS — ALL TYPES ===== */}
+                  <div className="space-y-3">
+                    <Label className="text-[#8a8578] text-sm font-medium flex items-center gap-2">
+                      <ImagePlus className="size-4 text-[#c9a84c]" />
+                      Car Photos
+                    </Label>
+                    <div
+                      className="border-2 border-dashed border-[#2a2a2a] rounded-xl p-6 sm:p-8 text-center hover:border-[#c9a84c]/50 transition-colors cursor-pointer group"
+                      onClick={() => {
+                        if (carPhotos.length < 10) {
+                          const mockNames = ['exterior_front.jpg', 'exterior_rear.jpg', 'interior_dash.jpg', 'interior_seats.jpg', 'side_profile.jpg', 'engine_bay.jpg', 'wheel_closeup.jpg', 'trunk_space.jpg', 'dashboard_screen.jpg', 'rear_lights.jpg']
+                          const nextName = mockNames[carPhotos.length % mockNames.length]
+                          setCarPhotos([...carPhotos, `photo_${carPhotos.length + 1}_${nextName}`])
+                        }
+                      }}
+                    >
+                      <Upload className="size-8 text-[#8a8578] mx-auto mb-2 group-hover:text-[#c9a84c] transition-colors" />
+                      <p className="text-sm text-[#8a8578]">Drag & drop photos here or click to upload</p>
+                      <p className="text-xs text-[#4a4535] mt-1">PNG, JPG up to 5MB each. Max 10 photos.</p>
+                      {carPhotos.length > 0 && (
+                        <Badge className="mt-2 bg-[#c9a84c]/20 text-[#c9a84c] border-[#c9a84c]/30 text-xs">
+                          {carPhotos.length}/10 photos added
+                        </Badge>
+                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Model</Label>
-                      <Input
-                        value={carModel}
-                        onChange={(e) => setCarModel(e.target.value)}
-                        placeholder="e.g. M4 Competition"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
+                    {carPhotos.length > 0 && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {carPhotos.map((photo, idx) => (
+                          <div key={idx} className="relative group/photo bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden">
+                            <div className="aspect-video flex items-center justify-center">
+                              <Car className="size-6 text-[#4a4535]" />
+                            </div>
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-400/10"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCarPhotos(carPhotos.filter((_, i) => i !== idx))
+                                }}
+                              >
+                                <X className="size-4" />
+                              </Button>
+                            </div>
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5">
+                              <p className="text-[10px] text-[#8a8578] truncate">{photo}</p>
+                            </div>
+                            {idx === 0 && (
+                              <Badge className="absolute top-1 left-1 bg-[#c9a84c] text-[#0a0a0a] text-[9px] px-1.5 py-0">Cover</Badge>
+                            )}
+                          </div>
+                        ))}
+                        {carPhotos.length < 10 && (
+                          <div
+                            className="aspect-video border-2 border-dashed border-[#2a2a2a] rounded-lg flex items-center justify-center cursor-pointer hover:border-[#c9a84c]/50 transition-colors"
+                            onClick={() => {
+                              const mockNames = ['exterior_front.jpg', 'exterior_rear.jpg', 'interior_dash.jpg', 'interior_seats.jpg', 'side_profile.jpg', 'engine_bay.jpg', 'wheel_closeup.jpg', 'trunk_space.jpg', 'dashboard_screen.jpg', 'rear_lights.jpg']
+                              const nextName = mockNames[carPhotos.length % mockNames.length]
+                              setCarPhotos([...carPhotos, `photo_${carPhotos.length + 1}_${nextName}`])
+                            }}
+                          >
+                            <PlusCircle className="size-5 text-[#4a4535]" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator className="bg-[#2a2a2a]" />
+
+                  {/* ===== BASIC INFO — ALL TYPES ===== */}
+                  <div className="space-y-4">
+                    <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                      <Car className="size-4" />
+                      Vehicle Details
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[#8a8578] text-xs">Brand</Label>
+                        <Input
+                          value={carBrand}
+                          onChange={(e) => setCarBrand(e.target.value)}
+                          placeholder="e.g. BMW"
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[#8a8578] text-xs">Model</Label>
+                        <Input
+                          value={carModel}
+                          onChange={(e) => setCarModel(e.target.value)}
+                          placeholder="e.g. M4 Competition"
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[#8a8578] text-xs">Year</Label>
+                        <Input
+                          value={carYear}
+                          onChange={(e) => setCarYear(e.target.value)}
+                          placeholder="e.g. 2024"
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                        />
+                      </div>
                     </div>
+                  </div>
+
+                  <Separator className="bg-[#2a2a2a]" />
+
+                  {/* ===== LOCATION — ALL TYPES ===== */}
+                  <div className="space-y-4">
+                    <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                      <MapPin className="size-4" />
+                      Location
+                    </p>
                     <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Year</Label>
+                      <Label className="text-[#8a8578] text-xs">Location</Label>
                       <Input
-                        value={carYear}
-                        onChange={(e) => setCarYear(e.target.value)}
-                        placeholder="e.g. 2024"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Color</Label>
-                      <Input
-                        value={carColor}
-                        onChange={(e) => setCarColor(e.target.value)}
-                        placeholder="e.g. Alpine White"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                        value={carLocation}
+                        onChange={(e) => setCarLocation(e.target.value)}
+                        placeholder="e.g. KLCC, Kuala Lumpur"
+                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
                       />
                     </div>
                   </div>
 
-                  {/* Pricing */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Price (RM)</Label>
-                      <Input
-                        value={carPrice}
-                        onChange={(e) => setCarPrice(e.target.value)}
-                        placeholder="e.g. 680"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Deposit (RM)</Label>
-                      <Input
-                        value={carDeposit}
-                        onChange={(e) => setCarDeposit(e.target.value)}
-                        placeholder="e.g. 5000"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                  </div>
+                  <Separator className="bg-[#2a2a2a]" />
 
-                  {/* Continue Loan Specific Fields */}
+                  {/* ===== RENTAL SPECIFIC FIELDS ===== */}
+                  {carType === 'rent' && (
+                    <div className="p-4 rounded-lg bg-[#c9a84c]/5 border border-[#c9a84c]/20 space-y-4">
+                      <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                        <Car className="size-4" />
+                        Rental Pricing & Details
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Daily Price (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carDailyPrice}
+                            onChange={(e) => setCarDailyPrice(e.target.value)}
+                            placeholder="e.g. 680"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Weekly Price (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carWeeklyPrice}
+                            onChange={(e) => setCarWeeklyPrice(e.target.value)}
+                            placeholder="e.g. 4200"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Monthly Price (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carMonthlyPrice}
+                            onChange={(e) => setCarMonthlyPrice(e.target.value)}
+                            placeholder="e.g. 15000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Deposit (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carRentDeposit}
+                            onChange={(e) => setCarRentDeposit(e.target.value)}
+                            placeholder="e.g. 5000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Availability</Label>
+                          <div className="flex items-center gap-3 h-10">
+                            <Switch
+                              checked={carAvailability}
+                              onCheckedChange={setCarAvailability}
+                              className="data-[state=checked]:bg-[#c9a84c]"
+                            />
+                            <span className={`text-sm font-medium ${carAvailability ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {carAvailability ? 'Available' : 'Unavailable'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <Separator className="bg-[#2a2a2a]/50" />
+
+                      {/* Rental Terms */}
+                      <div className="space-y-2">
+                        <Label className="text-[#8a8578] text-xs">Rental Terms & Conditions</Label>
+                        <Textarea
+                          value={carRentalTerms}
+                          onChange={(e) => setCarRentalTerms(e.target.value)}
+                          placeholder="Enter rental terms and conditions, e.g. minimum rental period, fuel policy, late return charges..."
+                          rows={4}
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                        />
+                      </div>
+
+                      <Separator className="bg-[#2a2a2a]/50" />
+
+                      {/* Pickup / Delivery Options */}
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium text-[#8a8578] flex items-center gap-2">
+                          <Truck className="size-3.5" />
+                          Pickup / Delivery Options
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                            <Checkbox
+                              checked={carSelfPickup}
+                              onCheckedChange={(checked) => setCarSelfPickup(checked === true)}
+                              className="data-[state=checked]:bg-[#c9a84c] data-[state=checked]:border-[#c9a84c]"
+                            />
+                            <Label className="text-sm text-[#f5f0e8] cursor-pointer">Self Pickup</Label>
+                          </div>
+                          <div className="flex items-center gap-3 p-3 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                            <Checkbox
+                              checked={carDeliveryAvailable}
+                              onCheckedChange={(checked) => setCarDeliveryAvailable(checked === true)}
+                              className="data-[state=checked]:bg-[#c9a84c] data-[state=checked]:border-[#c9a84c]"
+                            />
+                            <Label className="text-sm text-[#f5f0e8] cursor-pointer">Delivery Available</Label>
+                          </div>
+                        </div>
+                        {carSelfPickup && (
+                          <div className="space-y-2">
+                            <Label className="text-[#8a8578] text-xs">Pickup Location</Label>
+                            <Input
+                              value={carPickupLocation}
+                              onChange={(e) => setCarPickupLocation(e.target.value)}
+                              placeholder="e.g. DK Vroom Hub, Jalan Ampang, KL"
+                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                            />
+                          </div>
+                        )}
+                        {carDeliveryAvailable && (
+                          <div className="space-y-2">
+                            <Label className="text-[#8a8578] text-xs">Delivery Fee (RM)</Label>
+                            <Input
+                              type="number"
+                              value={carDeliveryFee}
+                              onChange={(e) => setCarDeliveryFee(e.target.value)}
+                              placeholder="e.g. 50"
+                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ===== SALE SPECIFIC FIELDS ===== */}
+                  {carType === 'sale' && (
+                    <div className="p-4 rounded-lg bg-[#c9a84c]/5 border border-[#c9a84c]/20 space-y-4">
+                      <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                        <DollarSign className="size-4" />
+                        Sale Pricing & Details
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Sale Price (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carSalePrice}
+                            onChange={(e) => setCarSalePrice(e.target.value)}
+                            placeholder="e.g. 298000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Deposit / Booking Fee (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carBookingFee}
+                            onChange={(e) => setCarBookingFee(e.target.value)}
+                            placeholder="e.g. 5000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Condition</Label>
+                          <Select value={carSaleCondition} onValueChange={setCarSaleCondition}>
+                            <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] h-10">
+                              <SelectValue placeholder="Select Condition" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#111111] border-[#2a2a2a]">
+                              {['New', 'Certified Pre-Owned', 'Used'].map((c) => (
+                                <SelectItem key={c} value={c.toLowerCase().replace(/\s+/g, '_')} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
+                                  {c}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Mileage (km)</Label>
+                          <Input
+                            type="number"
+                            value={carMileage}
+                            onChange={(e) => setCarMileage(e.target.value)}
+                            placeholder="e.g. 12000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[#8a8578] text-xs">Features (comma-separated)</Label>
+                        <Input
+                          value={carFeatures}
+                          onChange={(e) => setCarFeatures(e.target.value)}
+                          placeholder="e.g. M Sport Package, Harman Kardon, Head-Up Display, Sunroof"
+                          className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ===== CONTINUE LOAN SPECIFIC FIELDS ===== */}
                   {carType === 'continueLoan' && (
-                    <>
-                      <Separator className="bg-[#2a2a2a]" />
-                      <div className="p-4 rounded-lg bg-[#c9a84c]/5 border border-[#c9a84c]/20">
-                        <p className="text-sm font-medium text-[#c9a84c] mb-3">Continue Loan Details</p>
+                    <div className="space-y-4">
+                      {/* Marketplace Notice */}
+                      <div className="p-4 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                        <div className="flex items-start gap-3">
+                          <AlertTriangle className="size-5 text-amber-400 shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium text-amber-300 mb-1">Continue Loan / Sambung Bayar</p>
+                            <p className="text-xs text-amber-200/80 leading-relaxed">
+                              You are listing a vehicle with an existing loan for takeover. The customer will submit an enquiry. After agreement, both parties complete the transaction with document upload and admin verification. DK Vroom acts as marketplace platform only.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-[#c9a84c]/5 border border-[#c9a84c]/20 space-y-4">
+                        <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                          <Handshake className="size-4" />
+                          Loan Transfer Details
+                        </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div className="space-y-2">
-                            <Label className="text-[#8a8578]">Monthly Installment (RM)</Label>
+                            <Label className="text-[#8a8578] text-xs">Monthly Installment (RM)</Label>
                             <Input
-                              value={carMonthly}
-                              onChange={(e) => setCarMonthly(e.target.value)}
+                              type="number"
+                              value={carMonthlyInstallment}
+                              onChange={(e) => setCarMonthlyInstallment(e.target.value)}
                               placeholder="e.g. 698"
-                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-[#8a8578]">Remaining Balance (RM)</Label>
+                            <Label className="text-[#8a8578] text-xs">Remaining Loan Period (months)</Label>
                             <Input
-                              value={carRemaining}
-                              onChange={(e) => setCarRemaining(e.target.value)}
-                              placeholder="e.g. 41880"
-                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label className="text-[#8a8578]">Remaining Months</Label>
-                            <Input
+                              type="number"
                               value={carRemainingMonths}
                               onChange={(e) => setCarRemainingMonths(e.target.value)}
                               placeholder="e.g. 60"
-                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
                             />
                           </div>
                           <div className="space-y-2">
-                            <Label className="text-[#8a8578]">Bank Name</Label>
+                            <Label className="text-[#8a8578] text-xs">Deposit / Takeover Amount (RM)</Label>
+                            <Input
+                              type="number"
+                              value={carTakeoverAmount}
+                              onChange={(e) => setCarTakeoverAmount(e.target.value)}
+                              placeholder="e.g. 5000"
+                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-[#8a8578] text-xs">Bank Name</Label>
                             <Select value={carBankName} onValueChange={setCarBankName}>
-                              <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8]">
+                              <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] h-10">
                                 <SelectValue placeholder="Select Bank" />
                               </SelectTrigger>
                               <SelectContent className="bg-[#111111] border-[#2a2a2a]">
-                                {['Maybank', 'CIMB', 'Hong Leong Bank', 'Public Bank', 'RHB', 'AmBank'].map((bank) => (
+                                {['Maybank', 'CIMB', 'Hong Leong Bank', 'Public Bank', 'RHB', 'AmBank', 'Bank Islam', 'Bank Rakyat', 'BSN', 'UOB'].map((bank) => (
                                   <SelectItem key={bank} value={bank} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
                                     {bank}
                                   </SelectItem>
@@ -654,163 +972,102 @@ export default function DealerDashboard() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="sm:col-span-2 space-y-2">
-                            <Label className="text-[#8a8578]">Required Documents</Label>
-                            <Input
-                              value={carRequiredDocs}
-                              onChange={(e) => setCarRequiredDocs(e.target.value)}
-                              placeholder="e.g. IC, Payslip, Bank Statement (comma separated)"
-                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                            />
-                          </div>
-                          <div className="sm:col-span-2 space-y-2">
-                            <Label className="text-[#8a8578]">Vehicle Condition</Label>
-                            <Textarea
-                              value={carVehicleCondition}
-                              onChange={(e) => setCarVehicleCondition(e.target.value)}
-                              placeholder="e.g. Excellent — No scratches, full service history"
-                              className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                            />
-                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Vehicle Condition</Label>
+                          <Textarea
+                            value={carVehicleCondition}
+                            onChange={(e) => setCarVehicleCondition(e.target.value)}
+                            placeholder="Provide detailed description of the vehicle condition, e.g. Excellent — No scratches, full service history, accident-free..."
+                            rows={4}
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                          />
                         </div>
                       </div>
-                    </>
+                    </div>
+                  )}
+
+                  {/* ===== AUCTION SPECIFIC FIELDS ===== */}
+                  {carType === 'auction' && (
+                    <div className="p-4 rounded-lg bg-[#c9a84c]/5 border border-[#c9a84c]/20 space-y-4">
+                      <p className="text-sm font-medium text-[#c9a84c] flex items-center gap-2">
+                        <Gavel className="size-4" />
+                        Auction Details
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Starting Bid Price (RM)</Label>
+                          <Input
+                            type="number"
+                            value={carStartingBid}
+                            onChange={(e) => setCarStartingBid(e.target.value)}
+                            placeholder="e.g. 880000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Auction End Date/Time</Label>
+                          <Input
+                            type="datetime-local"
+                            value={carAuctionEndDate}
+                            onChange={(e) => setCarAuctionEndDate(e.target.value)}
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10 [color-scheme:dark]"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Reserve Price (RM) <span className="text-[#4a4535]">— optional</span></Label>
+                          <Input
+                            type="number"
+                            value={carReservePrice}
+                            onChange={(e) => setCarReservePrice(e.target.value)}
+                            placeholder="e.g. 950000"
+                            className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c] h-10"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-[#8a8578] text-xs">Condition</Label>
+                          <Select value={carAuctionCondition} onValueChange={setCarAuctionCondition}>
+                            <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] h-10">
+                              <SelectValue placeholder="Select Condition" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-[#111111] border-[#2a2a2a]">
+                              {['New', 'Certified Pre-Owned', 'Used'].map((c) => (
+                                <SelectItem key={c} value={c.toLowerCase().replace(/\s+/g, '_')} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
+                                  {c}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
                   )}
 
                   <Separator className="bg-[#2a2a2a]" />
 
-                  {/* Specs */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Mileage (km)</Label>
-                      <Input
-                        value={carMileage}
-                        onChange={(e) => setCarMileage(e.target.value)}
-                        placeholder="e.g. 12000"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Fuel Type</Label>
-                      <Select value={carFuel} onValueChange={setCarFuel}>
-                        <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8]">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#111111] border-[#2a2a2a]">
-                          {['Petrol', 'Diesel', 'Hybrid', 'Electric'].map((f) => (
-                            <SelectItem key={f} value={f.toLowerCase()} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
-                              {f}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Transmission</Label>
-                      <Select value={carTransmission} onValueChange={setCarTransmission}>
-                        <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8]">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#111111] border-[#2a2a2a]">
-                          {['Automatic', 'Manual'].map((t) => (
-                            <SelectItem key={t} value={t.toLowerCase()} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
-                              {t}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Seats</Label>
-                      <Input
-                        value={carSeats}
-                        onChange={(e) => setCarSeats(e.target.value)}
-                        placeholder="e.g. 5"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Condition</Label>
-                      <Select value={carCondition} onValueChange={setCarCondition}>
-                        <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8]">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#111111] border-[#2a2a2a]">
-                          {['New', 'Certified', 'Used'].map((c) => (
-                            <SelectItem key={c} value={c.toLowerCase()} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
-                              {c}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Location */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">Location</Label>
-                      <Input
-                        value={carLocation}
-                        onChange={(e) => setCarLocation(e.target.value)}
-                        placeholder="e.g. KLCC, Kuala Lumpur"
-                        className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-[#8a8578]">City</Label>
-                      <Select value={carCity} onValueChange={setCarCity}>
-                        <SelectTrigger className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8]">
-                          <SelectValue placeholder="Select City" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#111111] border-[#2a2a2a]">
-                          {['Kuala Lumpur', 'Selangor', 'Penang', 'Johor', 'Melaka', 'Perak'].map((c) => (
-                            <SelectItem key={c} value={c} className="text-[#f5f0e8] focus:bg-[#1a1a1a] focus:text-[#c9a84c]">
-                              {c}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  {/* Description */}
+                  {/* ===== DESCRIPTION — ALL TYPES ===== */}
                   <div className="space-y-2">
-                    <Label className="text-[#8a8578]">Description</Label>
+                    <Label className="text-[#8a8578] text-sm font-medium">Description</Label>
                     <Textarea
                       value={carDescription}
                       onChange={(e) => setCarDescription(e.target.value)}
-                      placeholder="Describe the vehicle..."
+                      placeholder={carType === 'continueLoan'
+                        ? 'Describe the vehicle, reason for loan transfer, and any additional terms...'
+                        : carType === 'rent'
+                        ? 'Describe the vehicle, rental inclusions, and any special notes...'
+                        : carType === 'auction'
+                        ? 'Describe the vehicle, its history, and auction terms...'
+                        : 'Describe the vehicle, its features, and any special notes...'
+                      }
                       rows={4}
                       className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
                     />
                   </div>
 
-                  {/* Features */}
-                  <div className="space-y-2">
-                    <Label className="text-[#8a8578]">Features (comma-separated)</Label>
-                    <Input
-                      value={carFeatures}
-                      onChange={(e) => setCarFeatures(e.target.value)}
-                      placeholder="e.g. M Sport Package, Harman Kardon, Head-Up Display"
-                      className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
-                    />
-                  </div>
-
-                  {/* Photo Upload */}
-                  <div className="space-y-2">
-                    <Label className="text-[#8a8578]">Photos</Label>
-                    <div className="border-2 border-dashed border-[#2a2a2a] rounded-xl p-8 text-center hover:border-[#c9a84c]/50 transition-colors cursor-pointer">
-                      <Upload className="size-10 text-[#8a8578] mx-auto mb-3" />
-                      <p className="text-sm text-[#8a8578]">Drag & drop photos here or click to upload</p>
-                      <p className="text-xs text-[#4a4535] mt-1">PNG, JPG up to 5MB each. Max 10 photos.</p>
-                    </div>
-                  </div>
-
                   {/* Submit */}
                   <Button className="w-full bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-12 text-base">
                     <PlusCircle className="size-5 mr-2" />
-                    Add Car Listing
+                    Add {getTypeLabel(carType)} Listing
                   </Button>
                 </CardContent>
               </Card>
