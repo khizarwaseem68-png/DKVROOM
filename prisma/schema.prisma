@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  phone     String?
+  role      String   @default("customer") // customer, dealer, admin
+  avatar    String?
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Dealer {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  companyName     String
+  registrationNo  String?
+  address         String?
+  city            String?
+  state           String?
+  phone           String?
+  whatsapp        String?
+  logo            String?
+  verified        Boolean  @default(false)
+  subscriptionTier String  @default("basic") // basic, premium, enterprise
+  rating          Float    @default(0)
+  totalListings   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Car {
+  id              String   @id @default(cuid())
+  dealerId        String
+  type            String   // rent, sale, auction, continueLoan
+  brand           String
+  model           String
+  year            Int
+  color           String?
+  mileage         Int?
+  fuelType        String?  // petrol, diesel, electric, hybrid
+  transmission    String?  // auto, manual
+  seats           Int?
+  condition       String?  // new, used, certified
+  price           Float
+  deposit         Float?
+  monthlyInstallment Float?
+  remainingMonths Int?
+  remainingBalance Float?
+  bankName        String?
+  location        String?
+  city            String?
+  description     String?
+  features        String?
+  photos          String?  // JSON array of URLs
+  featured        Boolean  @default(false)
+  status          String   @default("available") // available, booked, sold, pending
+  auctionEnd      DateTime?
+  auctionStartBid Float?
+  currentBid      Float?
+  vehicleCondition String?
+  requiredDocs    String?  // JSON array
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Booking {
+  id          String   @id @default(cuid())
+  carId       String
+  userId      String
+  dealerId    String
+  type        String   // rent, purchase, continueLoan
+  startDate   DateTime?
+  endDate     DateTime?
+  status      String   @default("pending") // pending, approved, rejected, completed, cancelled
+  totalAmount Float?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model LoanApplication {
+  id              String   @id @default(cuid())
+  userId          String
+  carId           String?
+  dealerId        String?
+  type            String   // loan, continueLoan
+  amount          Float?
+  tenure          Int?
+  status          String   @default("pending") // pending, reviewing, approved, rejected
+  documents       String?  // JSON array of document URLs
+  bankResponse    String?
+  approvedAmount  Float?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  userId      String
+  dealerId    String?
+  bookingId   String?
+  amount      Float
+  method      String?  // fpx, tng, billplz, stripe
+  status      String   @default("pending") // pending, verified, failed, refunded
+  receiptUrl  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
