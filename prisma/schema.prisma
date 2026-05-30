@@ -143,6 +143,12 @@ model Car {
   currentBid        Float?
   auctionEnd        DateTime?
   auctionActive     Boolean  @default(false)
+  // Auction vehicle condition (for all auction types including salvage/rebuild)
+  conditionCategory String?  // running, used, wreck, accident, salvage, insurance_writeoff, rebuild_project
+  damageDescription String?  // Detailed damage description for non-running vehicles
+  runningStatus     String?  // running, non_running
+  salvageStatus     String?  // clean, salvage, rebuilt
+  repairEstimate    Float?   // Estimated repair cost (RM)
   // Rental specific
   rentalTerms       String?  // JSON: terms and conditions
   pickupAvailable   Boolean  @default(true)

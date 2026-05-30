@@ -156,6 +156,12 @@ export async function PUT(
     if (sanitized.auctionReserve !== undefined) updateData.auctionReserve = parseFloat(sanitized.auctionReserve) || null
     if (sanitized.auctionEnd !== undefined) updateData.auctionEnd = sanitized.auctionEnd ? new Date(sanitized.auctionEnd) : null
     if (sanitized.auctionActive !== undefined) updateData.auctionActive = sanitized.auctionActive
+    // Auction vehicle condition fields
+    if (sanitized.conditionCategory !== undefined) updateData.conditionCategory = sanitized.conditionCategory || null
+    if (sanitized.damageDescription !== undefined) updateData.damageDescription = sanitizeInput(sanitized.damageDescription) || null
+    if (sanitized.runningStatus !== undefined) updateData.runningStatus = sanitized.runningStatus || null
+    if (sanitized.salvageStatus !== undefined) updateData.salvageStatus = sanitized.salvageStatus || null
+    if (sanitized.repairEstimate !== undefined) updateData.repairEstimate = parseFloat(sanitized.repairEstimate) || null
 
     // Rental
     if (sanitized.rentalTerms !== undefined) updateData.rentalTerms = sanitized.rentalTerms || null

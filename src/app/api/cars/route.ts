@@ -29,6 +29,9 @@ export async function GET(request: NextRequest) {
     const maxPrice = searchParams.get('maxPrice') ? parseFloat(searchParams.get('maxPrice')!) : undefined
     const featured = searchParams.get('featured') === 'true' ? true : undefined
     const status = searchParams.get('status') || 'approved' // default 'approved'
+    const conditionCategory = searchParams.get('conditionCategory') || undefined
+    const runningStatus = searchParams.get('runningStatus') || undefined
+    const salvageStatus = searchParams.get('salvageStatus') || undefined
     const sort = searchParams.get('sort') || 'createdAt'
     const order = searchParams.get('order') || 'desc'
     const search = searchParams.get('search') || undefined
@@ -43,6 +46,9 @@ export async function GET(request: NextRequest) {
     if (brand) where.brand = { contains: brand }
     if (city) where.city = { contains: city }
     if (featured !== undefined) where.featured = featured
+    if (conditionCategory) where.conditionCategory = conditionCategory
+    if (runningStatus) where.runningStatus = runningStatus
+    if (salvageStatus) where.salvageStatus = salvageStatus
     if (minPrice !== undefined || maxPrice !== undefined) {
       where.price = {}
       if (minPrice !== undefined) where.price.gte = minPrice
@@ -186,6 +192,12 @@ export async function POST(request: NextRequest) {
       auctionReserve: sanitized.auctionReserve ? parseFloat(sanitized.auctionReserve) : undefined,
       auctionEnd: sanitized.auctionEnd ? new Date(sanitized.auctionEnd) : undefined,
       auctionActive: sanitized.auctionActive || false,
+      // Auction vehicle condition fields
+      conditionCategory: sanitized.conditionCategory || undefined,
+      damageDescription: sanitized.damageDescription ? sanitizeInput(sanitized.damageDescription) : undefined,
+      runningStatus: sanitized.runningStatus || undefined,
+      salvageStatus: sanitized.salvageStatus || undefined,
+      repairEstimate: sanitized.repairEstimate ? parseFloat(sanitized.repairEstimate) : undefined,
       // Rental specific
       rentalTerms: sanitized.rentalTerms || undefined,
       pickupAvailable: sanitized.pickupAvailable !== undefined ? sanitized.pickupAvailable : true,

@@ -30,10 +30,16 @@ import {
   Fuel,
   Car,
   X,
+  AlertTriangle,
+  Wrench,
+  ShieldAlert,
+  Recycle,
+  FileWarning,
 } from 'lucide-react'
 
 interface CarListingProps {
   type: 'rent' | 'sale' | 'auction' | 'continueLoan' | 'all'
+  conditionCategory?: string // Auction vehicle condition filter
 }
 
 const PAGE_SIZE = 6
@@ -118,6 +124,11 @@ function normalizeCar(apiCar: any): CarData {
     auctionEnd: apiCar.auctionEnd ? new Date(apiCar.auctionEnd).toISOString() : undefined,
     auctionStartBid: apiCar.auctionStartBid ?? undefined,
     currentBid: apiCar.currentBid ?? undefined,
+    conditionCategory: apiCar.conditionCategory ?? undefined,
+    damageDescription: apiCar.damageDescription ?? undefined,
+    runningStatus: apiCar.runningStatus ?? undefined,
+    salvageStatus: apiCar.salvageStatus ?? undefined,
+    repairEstimate: apiCar.repairEstimate ?? undefined,
   }
 }
 
@@ -194,6 +205,10 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
   const { selectCar } = useAppStore()
   const isContinueLoan = car.type === 'continueLoan'
   const isAuction = car.type === 'auction'
+  // Get condition category info for auction cars
+  const conditionInfo = isAuction && (car as any).conditionCategory
+    ? conditionCategoryConfig[(car as any).conditionCategory]
+    : null
 
   return (
     <Card
@@ -208,8 +223,15 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
           className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
         />
         {/* Type badge overlay */}
-        <div className="absolute top-3 left-3">
+        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
           <TypeBadge type={car.type} />
+          {/* Condition category badge for auction */}
+          {conditionInfo && (
+            <Badge className={`${conditionInfo.bgColor} border text-[10px] gap-1`}>
+              <conditionInfo.icon className="size-3" />
+              {conditionInfo.label}
+            </Badge>
+          )}
         </div>
         {/* Featured badge */}
         {car.featured && (
@@ -292,6 +314,36 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
               <Gavel className="size-4" />
               Place Bid
             </Button>
+            {/* Vehicle condition details for auction */}
+            {conditionInfo && (
+              <div className="space-y-1 mt-1 p-2 rounded border border-[#2a2a2a] bg-[#0a0a0a]/50 text-[10px]">
+                {(car as any).runningStatus && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Status</span>
+                    <span className={(car as any).runningStatus === 'running' ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
+                      {(car as any).runningStatus === 'running' ? 'Running' : 'Non-Running'}
+                    </span>
+                  </div>
+                )}
+                {(car as any).salvageStatus && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Title</span>
+                    <span className="text-muted-foreground capitalize">{(car as any).salvageStatus}</span>
+                  </div>
+                )}
+                {(car as any).repairEstimate && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Repair Est.</span>
+                    <span className="text-orange-400 font-medium">RM {(car as any).repairEstimate.toLocaleString()}</span>
+                  </div>
+                )}
+                {(car as any).damageDescription && (
+                  <p className="text-muted-foreground line-clamp-2 pt-1 border-t border-[#2a2a2a]">
+                    {(car as any).damageDescription}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex items-baseline gap-1">
@@ -327,7 +379,18 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
   )
 }
 
-export default function CarListing({ type }: CarListingProps) {
+// Condition category badge config
+const conditionCategoryConfig: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
+  running: { label: 'Running', icon: Car, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
+  used: { label: 'Used', icon: Clock, color: 'text-blue-400', bgColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  accident: { label: 'Accident', icon: AlertTriangle, color: 'text-orange-400', bgColor: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
+  wreck: { label: 'Wreck', icon: ShieldAlert, color: 'text-red-400', bgColor: 'bg-red-500/20 text-red-400 border-red-500/30' },
+  salvage: { label: 'Salvage', icon: FileWarning, color: 'text-purple-400', bgColor: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
+  insurance_writeoff: { label: 'Insurance Write-off', icon: ShieldAlert, color: 'text-pink-400', bgColor: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
+  rebuild_project: { label: 'Rebuild Project', icon: Recycle, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+}
+
+export default function CarListing({ type, conditionCategory }: CarListingProps) {
   const { searchQuery, selectedCity, selectCar } = useAppStore()
   const [brandFilter, setBrandFilter] = useState('All Brands')
   const [cityFilter, setCityFilter] = useState('All Cities')
@@ -352,6 +415,7 @@ export default function CarListing({ type }: CarListingProps) {
         status: 'approved',
       }
       if (type !== 'all') params.type = type
+      if (conditionCategory) params.conditionCategory = conditionCategory
       if (brandFilter !== 'All Brands') params.brand = brandFilter
       if (cityFilter !== 'All Cities') params.city = cityFilter
       if (searchQuery) params.search = searchQuery
@@ -387,7 +451,7 @@ export default function CarListing({ type }: CarListingProps) {
     } finally {
       setLoading(false)
     }
-  }, [type, currentPage, brandFilter, cityFilter, searchQuery, priceRange, transmissionFilter, fuelFilter])
+  }, [type, currentPage, brandFilter, cityFilter, searchQuery, priceRange, transmissionFilter, fuelFilter, conditionCategory])
 
   useEffect(() => {
     fetchCars()

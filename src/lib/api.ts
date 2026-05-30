@@ -280,6 +280,10 @@ export const auctionsApi = {
       body: JSON.stringify(data),
     })
   },
+
+  getCategories: async () => {
+    return apiFetch('/auctions?limit=1&groupBy=conditionCategory')
+  },
 }
 
 // ========================

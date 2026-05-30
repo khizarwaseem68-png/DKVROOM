@@ -34,6 +34,11 @@ export interface CarData {
   auctionEnd?: string
   auctionStartBid?: number
   currentBid?: number
+  conditionCategory?: string
+  damageDescription?: string
+  runningStatus?: string
+  salvageStatus?: string
+  repairEstimate?: number
 }
 
 export interface DealerData {

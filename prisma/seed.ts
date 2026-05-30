@@ -181,9 +181,21 @@ async function main() {
     { dealerIdx: 10, type: 'continueLoan', brand: 'Mazda', model: 'CX-5 Turbo', year: 2023, color: 'Soul Red Crystal', mileage: 18000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 165000, monthlyInstallment: 1850, remainingMonths: 54, remainingBalance: 99900, takeoverAmount: 8000, bankName: 'Hong Leong Bank', deposit: 8000, location: 'Subang Jaya', city: 'Selangor', state: 'Selangor', features: ['i-Activ AWD', 'Bose Sound', 'Head-Up Display', 'Leather Seats', 'Power Liftgate', 'Apple CarPlay / Android Auto'], photos: [7, 8], description: 'Stunning Mazda CX-5 Turbo in Soul Red Crystal. Continue loan available with easy approval process. Well-maintained with full service record.', featured: false, vehicleCondition: 'Excellent - Like new, no modifications, original paint', requiredDocs: JSON.stringify(['IC (MyKad)', '3 months payslip', 'Bank statement (3 months)', 'EPF statement', 'Utility bill', 'Driving license']) },
     { dealerIdx: 5, type: 'continueLoan', brand: 'Toyota', model: 'Vios 1.5G', year: 2021, color: 'Silver Metallic', mileage: 48000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 75000, monthlyInstallment: 880, remainingMonths: 42, remainingBalance: 36960, takeoverAmount: 2000, bankName: 'Public Bank', deposit: 2000, location: 'Shah Alam', city: 'Selangor', state: 'Selangor', features: ['Toyota Safety Sense', 'LED Headlamps', 'Smart Entry', 'Push Start', '9" Touchscreen', 'Reverse Camera'], photos: [6, 9], description: 'Reliable Toyota Vios 1.5G available for continue loan. Low monthly commitment, perfect for first-time buyers.', featured: false, vehicleCondition: 'Good - Regular maintenance, minor scratch on rear bumper', requiredDocs: JSON.stringify(['IC (MyKad)', '3 months payslip', 'Bank statement (3 months)', 'EPF statement', 'Utility bill', 'Driving license']) },
 
-    // AUCTION CARS
-    { dealerIdx: 7, type: 'auction', brand: 'Lamborghini', model: 'Huracan EVO', year: 2021, color: 'Verde Mantis', mileage: 6000, fuelType: 'petrol', transmission: 'auto', seats: 2, condition: 'certified', price: 880000, auctionStartBid: 750000, auctionReserve: 820000, currentBid: 810000, location: 'Mont Kiara', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['LDVI System', 'Carbon Ceramic Brakes', 'Lifting System', 'ALA 2.0 Aero', 'Bang & Olufsen', 'Full LED Lighting'], photos: [5, 4], description: 'Rare opportunity to own a Lamborghini Huracan EVO in striking Verde Mantis. 631hp V10 with LDVI system. Full dealer service history, ceramic brakes, and lifting system.', featured: true, auctionEnd: new Date('2026-06-15T18:00:00Z'), auctionActive: true },
-    { dealerIdx: 8, type: 'auction', brand: 'Nissan', model: 'GT-R NISMO', year: 2020, color: 'Vibrant Red', mileage: 12000, fuelType: 'petrol', transmission: 'auto', seats: 2, condition: 'certified', price: 1200000, auctionStartBid: 980000, auctionReserve: 1050000, currentBid: 1050000, location: 'Bukit Jalil', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['NISMO Suspension', 'Carbon Fibre Aero', 'Rays Forged Wheels', 'NISMO Exhaust', 'Brembo Brakes', 'Track Package'], photos: [9, 6], description: 'Legendary Godzilla. GT-R NISMO with 600hp hand-assembled VR38DETT. NISMO-tuned suspension, carbon fibre aero, and race-bred engineering.', featured: true, auctionEnd: new Date('2026-06-20T20:00:00Z'), auctionActive: true },
+    // AUCTION CARS - Running vehicles
+    { dealerIdx: 7, type: 'auction', brand: 'Lamborghini', model: 'Huracan EVO', year: 2021, color: 'Verde Mantis', mileage: 6000, fuelType: 'petrol', transmission: 'auto', seats: 2, condition: 'certified', price: 880000, auctionStartBid: 750000, auctionReserve: 820000, currentBid: 810000, location: 'Mont Kiara', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['LDVI System', 'Carbon Ceramic Brakes', 'Lifting System', 'ALA 2.0 Aero', 'Bang & Olufsen', 'Full LED Lighting'], photos: [5, 4], description: 'Rare opportunity to own a Lamborghini Huracan EVO in striking Verde Mantis. 631hp V10 with LDVI system. Full dealer service history, ceramic brakes, and lifting system.', featured: true, auctionEnd: new Date('2026-06-15T18:00:00Z'), auctionActive: true, conditionCategory: 'running', runningStatus: 'running', salvageStatus: 'clean' },
+    { dealerIdx: 8, type: 'auction', brand: 'Nissan', model: 'GT-R NISMO', year: 2020, color: 'Vibrant Red', mileage: 12000, fuelType: 'petrol', transmission: 'auto', seats: 2, condition: 'certified', price: 1200000, auctionStartBid: 980000, auctionReserve: 1050000, currentBid: 1050000, location: 'Bukit Jalil', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['NISMO Suspension', 'Carbon Fibre Aero', 'Rays Forged Wheels', 'NISMO Exhaust', 'Brembo Brakes', 'Track Package'], photos: [9, 6], description: 'Legendary Godzilla. GT-R NISMO with 600hp hand-assembled VR38DETT. NISMO-tuned suspension, carbon fibre aero, and race-bred engineering.', featured: true, auctionEnd: new Date('2026-06-20T20:00:00Z'), auctionActive: true, conditionCategory: 'running', runningStatus: 'running', salvageStatus: 'clean' },
+    // AUCTION - Used vehicle
+    { dealerIdx: 7, type: 'auction', brand: 'Toyota', model: 'Hilux 2.4V', year: 2021, color: 'Emotional Red', mileage: 68000, fuelType: 'diesel', transmission: 'auto', seats: 5, condition: 'used', price: 98000, auctionStartBid: 72000, auctionReserve: 80000, currentBid: 78000, location: 'Shah Alam', city: 'Selangor', state: 'Selangor', features: ['Toyota Safety Sense', '4x4', 'Roll Bar', 'Side Step', 'Alloy Wheels', 'Multi-Information Display'], photos: [6, 9], description: 'Well-used Toyota Hilux 2.4V, perfect for work or off-road. Regular maintenance done, minor cosmetic wear. Engine and transmission in great condition.', featured: false, auctionEnd: new Date('2026-06-25T18:00:00Z'), auctionActive: true, conditionCategory: 'used', runningStatus: 'running', salvageStatus: 'clean' },
+    // AUCTION - Accident vehicle
+    { dealerIdx: 8, type: 'auction', brand: 'Honda', model: 'Civic 1.5 TC', year: 2022, color: 'Rallye Red', mileage: 32000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 45000, auctionStartBid: 28000, auctionReserve: 35000, currentBid: 32000, location: 'Petaling Jaya', city: 'Selangor', state: 'Selangor', features: ['Honda Sensing', 'Turbo Engine', 'LED Headlights', 'Smart Entry', 'Push Start', 'Dual Zone Climate'], photos: [8, 6], description: 'Honda Civic 1.5 TC involved in front-end collision. Airbags deployed. Front bumper, headlights, radiator support, and bonnet need replacement. Engine and transmission are intact. Great project for body shop repair.', featured: false, auctionEnd: new Date('2026-06-22T18:00:00Z'), auctionActive: true, conditionCategory: 'accident', damageDescription: 'Front-end collision damage. Airbags deployed. Front bumper, both headlights, radiator support, and bonnet need replacement. Engine bay intact, no frame damage detected.', runningStatus: 'non_running', salvageStatus: 'clean', repairEstimate: 18000 },
+    // AUCTION - Wreck vehicle
+    { dealerIdx: 8, type: 'auction', brand: 'Perodua', model: 'Myvi 1.5 AV', year: 2022, color: 'Granite Grey', mileage: 18000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 22000, auctionStartBid: 8000, auctionReserve: 12000, currentBid: 10500, location: 'Subang Jaya', city: 'Selangor', state: 'Selangor', features: ['ASA 3.0 Safety', 'LED Headlamps', 'Smart Infotainment', 'Push Start Button'], photos: [10, 11], description: 'Perodua Myvi 1.5 AV - Major wreck damage from side impact. Both doors on the left side need replacement. B-pillar has structural damage. Interior is clean, engine runs fine. Good for parts or major rebuild project.', featured: false, auctionEnd: new Date('2026-06-28T18:00:00Z'), auctionActive: true, conditionCategory: 'wreck', damageDescription: 'Severe side impact damage on left side. Both left doors crushed, B-pillar structural damage. Left sill panel damaged. Engine and drivetrain are operational. Interior clean except left door panels.', runningStatus: 'non_running', salvageStatus: 'salvage', repairEstimate: 25000 },
+    // AUCTION - Salvage vehicle
+    { dealerIdx: 7, type: 'auction', brand: 'BMW', model: '320i M Sport', year: 2021, color: 'Portimao Blue', mileage: 45000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 58000, auctionStartBid: 35000, auctionReserve: 42000, currentBid: 39000, location: 'Mont Kiara', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['M Sport Package', 'BMW Live Cockpit', 'Harman Kardon', 'Parking Assistant', 'Digital Key', 'Ambient Lighting'], photos: [1, 0], description: 'BMW 320i M Sport - Salvage title due to flood damage. Water entered cabin up to floor level. Electrical systems partially affected. Engine was NOT submerged. Needs full interior restoration and electrical diagnosis. Excellent rebuild opportunity for specialists.', featured: false, auctionEnd: new Date('2026-07-05T18:00:00Z'), auctionActive: true, conditionCategory: 'salvage', damageDescription: 'Flood damage - water entered cabin up to floor level. Carpet, underpadding, and lower electrical harnesses affected. Engine was NOT submerged and turns over. All electronics above floor level appear functional. Needs full interior strip and electrical diagnostic.', runningStatus: 'non_running', salvageStatus: 'salvage', repairEstimate: 35000 },
+    // AUCTION - Insurance write-off
+    { dealerIdx: 8, type: 'auction', brand: 'Mercedes-Benz', model: 'C200 AMG Line', year: 2022, color: 'Polar White', mileage: 28000, fuelType: 'petrol', transmission: 'auto', seats: 5, condition: 'used', price: 48000, auctionStartBid: 22000, auctionReserve: 30000, currentBid: 27000, location: 'Klang', city: 'Selangor', state: 'Selangor', features: ['AMG Line Package', 'MBUX System', 'Burmester Sound', '360 Camera', 'Digital Cockpit', 'Ambient Lighting'], photos: [2, 3], description: 'Mercedes C200 AMG Line - Insurance write-off due to theft recovery. Vehicle was recovered after 3 months. Missing: front seats, steering wheel airbag, infotainment screen, and alloys replaced with steel wheels. Engine, transmission, and chassis are perfect. Excellent rebuild project.', featured: false, auctionEnd: new Date('2026-07-10T18:00:00Z'), auctionActive: true, conditionCategory: 'insurance_writeoff', damageDescription: 'Theft recovery vehicle. Missing parts: front seats, steering wheel airbag, infotainment screen, alloy wheels (replaced with steel wheels). Minor scratch on right rear quarter panel. Engine, transmission, and all mechanical components are intact and operational.', runningStatus: 'running', salvageStatus: 'salvage', repairEstimate: 28000 },
+    // AUCTION - Rebuild project vehicle
+    { dealerIdx: 7, type: 'auction', brand: 'Toyota', model: '86 GR', year: 2020, color: 'Raven Black', mileage: 55000, fuelType: 'petrol', transmission: 'manual', seats: 4, condition: 'used', price: 35000, auctionStartBid: 18000, auctionReserve: 24000, currentBid: 21500, location: 'Cheras', city: 'Kuala Lumpur', state: 'Wilayah Persekutuan', features: ['GR Sport Package', 'Brembo Brakes', 'Limited Slip Diff', 'Sport Suspension', 'Sparco Seats', 'Track Mode'], photos: [9, 8], description: 'Toyota 86 GR - Ideal rebuild project car. Rear-end collision damage to bumper, boot floor, and tail lights. Frame is straight. Engine and gearbox are perfect. This is a popular platform for track car builds - strip the damaged rear, add a custom wide body kit, and you have a track weapon.', featured: false, auctionEnd: new Date('2026-07-15T18:00:00Z'), auctionActive: true, conditionCategory: 'rebuild_project', damageDescription: 'Rear-end collision: rear bumper destroyed, boot floor creased, both tail lights broken. Rear quarter panels have minor damage. Frame rails are straight and undamaged. Engine, gearbox, and all mechanical components are in excellent condition.', runningStatus: 'running', salvageStatus: 'rebuilt', repairEstimate: 15000 },
   ]
 
   const cars: any[] = []
@@ -223,6 +235,11 @@ async function main() {
         currentBid: c.currentBid || null,
         auctionEnd: c.auctionEnd || null,
         auctionActive: c.auctionActive || false,
+        conditionCategory: c.conditionCategory || null,
+        damageDescription: c.damageDescription || null,
+        runningStatus: c.runningStatus || null,
+        salvageStatus: c.salvageStatus || null,
+        repairEstimate: c.repairEstimate || null,
         rentalTerms: c.rentalTerms || null,
         pickupAvailable: c.pickupAvailable ?? true,
         deliveryAvailable: c.deliveryAvailable ?? false,
@@ -347,11 +364,11 @@ async function main() {
   // ============================
   // 7. CREATE AUCTION BIDS
   // ============================
-  // Bids on the Lamborghini
-  const auction1Car = cars[15] // Lamborghini
-  const auction2Car = cars[16] // GT-R NISMO
+  // Find auction cars by type
+  const auctionCars = cars.filter((c: any) => c.type === 'auction')
 
-  if (auction1Car) {
+  // Place bids on the first two auction cars (running condition)
+  if (auctionCars[0]) {
     const bids1 = [
       { userIdx: 4, amount: 760000, isWinning: false },
       { userIdx: 5, amount: 790000, isWinning: false },
@@ -360,7 +377,7 @@ async function main() {
     for (const bid of bids1) {
       await prisma.auctionBid.create({
         data: {
-          carId: auction1Car.id,
+          carId: auctionCars[0].id,
           userId: customers[bid.userIdx].id,
           amount: bid.amount,
           status: bid.isWinning ? 'winning' : 'outbid',
@@ -370,7 +387,7 @@ async function main() {
     }
   }
 
-  if (auction2Car) {
+  if (auctionCars[1]) {
     const bids2 = [
       { userIdx: 7, amount: 990000, isWinning: false },
       { userIdx: 0, amount: 1020000, isWinning: false },
@@ -379,7 +396,44 @@ async function main() {
     for (const bid of bids2) {
       await prisma.auctionBid.create({
         data: {
-          carId: auction2Car.id,
+          carId: auctionCars[1].id,
+          userId: customers[bid.userIdx].id,
+          amount: bid.amount,
+          status: bid.isWinning ? 'winning' : 'outbid',
+          isWinning: bid.isWinning,
+        }
+      })
+    }
+  }
+
+  // Place bids on salvage/rebuild auction cars
+  if (auctionCars[5]) { // BMW 320i salvage
+    const bids3 = [
+      { userIdx: 2, amount: 36000, isWinning: false },
+      { userIdx: 3, amount: 39000, isWinning: true },
+    ]
+    for (const bid of bids3) {
+      await prisma.auctionBid.create({
+        data: {
+          carId: auctionCars[5].id,
+          userId: customers[bid.userIdx].id,
+          amount: bid.amount,
+          status: bid.isWinning ? 'winning' : 'outbid',
+          isWinning: bid.isWinning,
+        }
+      })
+    }
+  }
+
+  if (auctionCars[7]) { // Toyota 86 GR rebuild
+    const bids4 = [
+      { userIdx: 4, amount: 19500, isWinning: false },
+      { userIdx: 5, amount: 21500, isWinning: true },
+    ]
+    for (const bid of bids4) {
+      await prisma.auctionBid.create({
+        data: {
+          carId: auctionCars[7].id,
           userId: customers[bid.userIdx].id,
           amount: bid.amount,
           status: bid.isWinning ? 'winning' : 'outbid',

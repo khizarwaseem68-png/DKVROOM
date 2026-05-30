@@ -1,82 +1,120 @@
 import { NextRequest } from 'next/server'
 import { getUserFromRequest } from '@/lib/auth/auth-utils'
 import { rateLimit, validateFileUpload, apiResponse, apiError } from '@/lib/security/middleware'
-import { writeFileSync, mkdirSync, existsSync } from 'fs'
-import { join, extname } from 'path'
+import { writeFile, mkdir } from 'fs/promises'
+import { join } from 'path'
+import { existsSync } from 'fs'
 import { randomUUID } from 'crypto'
 
-const UPLOAD_DIR = '/home/z/my-project/upload'
-const MAX_FILE_SIZE_MB = 10
-const ALLOWED_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-]
-
-// POST /api/upload - Handle file upload
+// POST /api/upload - Upload a file to local file system
 export async function POST(request: NextRequest) {
-  const rateCheck = rateLimit(request, { windowMs: 60 * 1000, maxRequests: 20, keyPrefix: 'upload' })
-  if (!rateCheck.allowed) return apiError('Too many requests', 429)
-
-  const user = await getUserFromRequest(request)
-  if (!user) return apiError('Unauthorized', 401)
-
   try {
+    // Rate limiting
+    const rateCheck = rateLimit(request, { windowMs: 60_000, maxRequests: 20, keyPrefix: 'upload' })
+    if (!rateCheck.allowed) {
+      return apiError('Too many upload requests. Please try again later.', 429)
+    }
+
+    // Auth check - must be logged in
+    const user = await getUserFromRequest(request)
+    if (!user) return apiError('Unauthorized', 401)
+
+    // Get the form data
     const formData = await request.formData()
     const file = formData.get('file') as File | null
+    const category = formData.get('category') as string | null // receipts, documents, photos, ic, license, agreements, vehicle_photos
 
     if (!file) {
       return apiError('No file provided', 400)
     }
 
-    // Validate file
-    const validation = validateFileUpload(file, {
-      maxSizeMB: MAX_FILE_SIZE_MB,
-      allowedTypes: ALLOWED_TYPES,
-    })
+    // Validate file type and size based on category
+    const maxSizes: Record<string, number> = {
+      receipts: 5,
+      documents: 10,
+      photos: 5,
+      ic: 5,
+      license: 5,
+      agreements: 10,
+      vehicle_photos: 5,
+      default: 5,
+    }
 
+    const allowedTypes: Record<string, string[]> = {
+      receipts: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+      documents: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+      photos: ['image/jpeg', 'image/png', 'image/webp'],
+      ic: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+      license: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+      agreements: ['application/pdf', 'image/jpeg', 'image/png'],
+      vehicle_photos: ['image/jpeg', 'image/png', 'image/webp'],
+      default: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+    }
+
+    const cat = category || 'default'
+    const maxSizeMB = maxSizes[cat] || maxSizes.default
+    const allowedMimes = allowedTypes[cat] || allowedTypes.default
+
+    // Validate file
+    const validation = validateFileUpload(file, { maxSizeMB, allowedTypes: allowedMimes })
     if (!validation.valid) {
       return apiError(validation.error || 'Invalid file', 400)
     }
 
-    // Ensure upload directory exists
-    if (!existsSync(UPLOAD_DIR)) {
-      mkdirSync(UPLOAD_DIR, { recursive: true })
+    // Generate unique filename
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf']
+    if (!allowedExtensions.includes(ext)) {
+      return apiError('Invalid file extension', 400)
     }
 
-    // Generate unique filename
-    const fileExtension = extname(file.name)
-    const uniqueId = randomUUID()
-    const timestamp = Date.now()
-    const uniqueFilename = `${timestamp}-${uniqueId}${fileExtension}`
+    const filename = `${cat}/${user.id}/${randomUUID()}.${ext}`
+    const uploadDir = join(process.cwd(), 'uploads', cat, user.id)
 
-    const filePath = join(UPLOAD_DIR, uniqueFilename)
+    // Ensure directory exists
+    if (!existsSync(uploadDir)) {
+      await mkdir(uploadDir, { recursive: true })
+    }
 
-    // Read file buffer and write to disk
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    // Write file to disk
+    const filePath = join(process.cwd(), 'uploads', filename)
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
+    await writeFile(filePath, buffer)
 
-    writeFileSync(filePath, buffer)
+    // Return the URL path (relative to server)
+    const url = `/uploads/${filename}`
 
-    // Return the URL path for accessing the file
-    const fileUrl = `/uploads/${uniqueFilename}`
+    // Audit log
+    const { db } = await import('@/lib/db')
+    await db.auditLog.create({
+      data: {
+        userId: user.id,
+        action: 'file_uploaded',
+        resource: 'upload',
+        details: JSON.stringify({
+          filename: file.name,
+          category: cat,
+          size: file.size,
+          type: file.type,
+          url,
+        }),
+        ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
+        userAgent: request.headers.get('user-agent') || 'unknown',
+        severity: 'info',
+      },
+    }).catch(() => {}) // Don't fail upload if audit log fails
 
     return apiResponse({
       success: true,
-      data: {
-        url: fileUrl,
-        filename: uniqueFilename,
-        originalName: file.name,
-        size: file.size,
-        type: file.type,
-      }
+      url,
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      category: cat,
     }, 201)
   } catch (error) {
-    console.error('File upload error:', error)
-    return apiError('Failed to upload file', 500)
+    console.error('[UPLOAD_ERROR]', error)
+    return apiError('File upload failed', 500)
   }
 }

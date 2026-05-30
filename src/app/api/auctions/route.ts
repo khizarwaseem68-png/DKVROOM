@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
   const city = searchParams.get('city')
   const minBid = searchParams.get('minBid')
   const maxBid = searchParams.get('maxBid')
+  const conditionCategory = searchParams.get('conditionCategory')
+  const runningStatus = searchParams.get('runningStatus')
+  const salvageStatus = searchParams.get('salvageStatus')
 
   const where: any = {
     type: 'auction',
@@ -25,6 +28,9 @@ export async function GET(request: NextRequest) {
 
   if (brand) where.brand = { contains: brand, mode: 'insensitive' }
   if (city) where.city = { contains: city, mode: 'insensitive' }
+  if (conditionCategory) where.conditionCategory = conditionCategory
+  if (runningStatus) where.runningStatus = runningStatus
+  if (salvageStatus) where.salvageStatus = salvageStatus
   if (minBid || maxBid) {
     where.currentBid = {}
     if (minBid) where.currentBid.gte = parseFloat(minBid)
