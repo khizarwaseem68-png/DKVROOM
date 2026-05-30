@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '@/lib/store'
+import { dealerApi, carsApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -9,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
@@ -58,38 +58,16 @@ import {
   AlertTriangle,
   Gavel,
   Handshake,
+  Loader2,
 } from 'lucide-react'
 
-// Mock data
-const mockBookings = [
-  { id: 'BK001', customer: 'Ahmad Razak', car: 'BMW M4 Competition', dates: 'Mar 1-5, 2026', status: 'confirmed', amount: 3400 },
-  { id: 'BK002', customer: 'Sarah Tan', car: 'Mercedes S580', dates: 'Mar 3-7, 2026', status: 'pending', amount: 5200 },
-  { id: 'BK003', customer: 'Lim Wei Jie', car: 'Porsche 911 Turbo S', dates: 'Mar 8-10, 2026', status: 'confirmed', amount: 3600 },
-  { id: 'BK004', customer: 'Nurul Aisyah', car: 'Honda Civic Type R', dates: 'Mar 10-12, 2026', status: 'completed', amount: 760 },
-  { id: 'BK005', customer: 'David Kumar', car: 'Audi RS6 Avant', dates: 'Mar 12-14, 2026', status: 'pending', amount: 3000 },
-]
-
-const mockListings = [
-  { id: '1', brand: 'BMW', model: 'M4 Competition', type: 'rent', price: 680, status: 'active', photo: 'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=200&q=60', featured: true },
-  { id: '3', brand: 'Porsche', model: '911 Turbo S', type: 'rent', price: 1200, status: 'active', photo: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=200&q=60', featured: true },
-  { id: '5', brand: 'Honda', model: 'Civic Type R', type: 'rent', price: 380, status: 'active', photo: 'https://images.unsplash.com/photo-1542362567-b07e54358753?w=200&q=60', featured: false },
-  { id: '11', brand: 'Audi', model: 'RS6 Avant', type: 'rent', price: 1500, status: 'active', photo: 'https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=200&q=60', featured: true },
-  { id: '2', brand: 'Mercedes-Benz', model: 'S-Class S580', type: 'sale', price: 898000, status: 'active', photo: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=200&q=60', featured: false },
-  { id: '4', brand: 'Toyota', model: 'Camry 2.5V', type: 'sale', price: 138000, status: 'pending', photo: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=200&q=60', featured: false },
-  { id: '6', brand: 'Perodua', model: 'Myvi 1.5 AV', type: 'continueLoan', price: 52000, status: 'active', photo: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=200&q=60', featured: false },
-  { id: '7', brand: 'BMW', model: 'X5 xDrive40i', type: 'continueLoan', price: 298000, status: 'sold', photo: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=200&q=60', featured: false },
-  { id: '8', brand: 'Lamborghini', model: 'Huracán EVO', type: 'auction', price: 880000, status: 'active', photo: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=200&q=60', featured: true },
-]
-
-const monthlyRevenue = [
-  { month: 'Sep', value: 45 },
-  { month: 'Oct', value: 62 },
-  { month: 'Nov', value: 55 },
-  { month: 'Dec', value: 78 },
-  { month: 'Jan', value: 85 },
-  { month: 'Feb', value: 92 },
-  { month: 'Mar', value: 68 },
-]
+// Helper to parse JSON strings from API
+function parseJsonField(val: any, fallback: any = []) {
+  if (typeof val === 'string') {
+    try { return JSON.parse(val) } catch { return fallback }
+  }
+  return Array.isArray(val) ? val : fallback
+}
 
 const sidebarItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -108,6 +86,7 @@ function getStatusBadge(status: string) {
     case 'confirmed':
       return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Active</Badge>
     case 'pending':
+    case 'payment_pending':
       return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
     case 'sold':
     case 'completed':
@@ -130,12 +109,78 @@ function getTypeLabel(type: string) {
 }
 
 export default function DealerDashboard() {
-  const { userName, goBack } = useAppStore()
+  const { user, goBack } = useAppStore()
+  const userName = user?.name || null
   const [activeTab, setActiveTab] = useState('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [listingFilter, setListingFilter] = useState('all')
   const [bookingFilter, setBookingFilter] = useState('all')
+
+  // API data state
+  const [stats, setStats] = useState<any>(null)
+  const [listings, setListings] = useState<any[]>([])
+  const [bookings, setBookings] = useState<any[]>([])
+  const [statsLoading, setStatsLoading] = useState(true)
+  const [listingsLoading, setListingsLoading] = useState(true)
+  const [bookingsLoading, setBookingsLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Fetch stats
+  const fetchStats = useCallback(async () => {
+    setStatsLoading(true)
+    try {
+      const result = await dealerApi.getStats()
+      setStats(result.data)
+    } catch (e) {
+      console.error('Failed to fetch dealer stats:', e)
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  // Fetch listings
+  const fetchListings = useCallback(async () => {
+    setListingsLoading(true)
+    try {
+      const params: Record<string, string> = { includeInactive: 'true' }
+      if (listingFilter !== 'all') params.type = listingFilter
+      const result = await dealerApi.getCars(params)
+      setListings(result.data?.cars || result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch dealer listings:', e)
+    } finally {
+      setListingsLoading(false)
+    }
+  }, [listingFilter])
+
+  // Fetch bookings
+  const fetchBookings = useCallback(async () => {
+    setBookingsLoading(true)
+    try {
+      const params: Record<string, string> = {}
+      if (bookingFilter !== 'all') params.status = bookingFilter
+      const result = await dealerApi.getBookings(params)
+      setBookings(result.data?.bookings || result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch dealer bookings:', e)
+    } finally {
+      setBookingsLoading(false)
+    }
+  }, [bookingFilter])
+
+  // Fetch data on mount and when filters change
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  useEffect(() => {
+    fetchListings()
+  }, [fetchListings])
+
+  useEffect(() => {
+    fetchBookings()
+  }, [fetchBookings])
 
   // Add car form state — common fields
   const [carType, setCarType] = useState('rent')
@@ -178,18 +223,123 @@ export default function DealerDashboard() {
   const [carReservePrice, setCarReservePrice] = useState('')
   const [carAuctionCondition, setCarAuctionCondition] = useState('')
 
-  const filteredListings = listingFilter === 'all'
-    ? mockListings
-    : mockListings.filter((l) => l.type === listingFilter)
-
-  const filteredBookings = bookingFilter === 'all'
-    ? mockBookings
-    : mockBookings.filter((b) => b.status === bookingFilter)
-
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setMobileSidebarOpen(false)
   }
+
+  // Submit add car form
+  const handleAddCar = async () => {
+    setSubmitting(true)
+    try {
+      const carData: any = {
+        type: carType,
+        brand: carBrand,
+        model: carModel,
+        year: parseInt(carYear),
+        price: carType === 'rent' ? parseFloat(carDailyPrice) : carType === 'sale' ? parseFloat(carSalePrice) : parseFloat(carTakeoverAmount || carDailyPrice),
+        description: carDescription,
+        location: carLocation,
+        city: carLocation,
+        photos: JSON.stringify(carPhotos),
+        features: carFeatures ? JSON.stringify(carFeatures.split(',').map(f => f.trim())) : undefined,
+      }
+
+      // Type-specific fields
+      if (carType === 'rent') {
+        carData.weeklyPrice = carWeeklyPrice ? parseFloat(carWeeklyPrice) : undefined
+        carData.monthlyPrice = carMonthlyPrice ? parseFloat(carMonthlyPrice) : undefined
+        carData.deposit = carRentDeposit ? parseFloat(carRentDeposit) : undefined
+        carData.rentalTerms = carRentalTerms || undefined
+        carData.pickupAvailable = carSelfPickup
+        carData.deliveryAvailable = carDeliveryAvailable
+        carData.deliveryFee = carDeliveryFee ? parseFloat(carDeliveryFee) : undefined
+        carData.transmission = 'auto'
+        carData.fuelType = 'petrol'
+        carData.condition = 'certified'
+      }
+
+      if (carType === 'sale') {
+        carData.price = parseFloat(carSalePrice)
+        carData.bookingFee = carBookingFee ? parseFloat(carBookingFee) : undefined
+        carData.condition = carSaleCondition || undefined
+        carData.mileage = carMileage ? parseInt(carMileage) : undefined
+        carData.transmission = 'auto'
+        carData.fuelType = 'petrol'
+      }
+
+      if (carType === 'continueLoan') {
+        carData.monthlyInstallment = carMonthlyInstallment ? parseFloat(carMonthlyInstallment) : undefined
+        carData.remainingMonths = carRemainingMonths ? parseInt(carRemainingMonths) : undefined
+        carData.takeoverAmount = carTakeoverAmount ? parseFloat(carTakeoverAmount) : undefined
+        carData.bankName = carBankName || undefined
+        carData.vehicleCondition = carVehicleCondition || undefined
+        carData.deposit = carTakeoverAmount ? parseFloat(carTakeoverAmount) : undefined
+        carData.transmission = 'auto'
+        carData.fuelType = 'petrol'
+        carData.condition = 'used'
+      }
+
+      if (carType === 'auction') {
+        carData.auctionStartBid = carStartingBid ? parseFloat(carStartingBid) : undefined
+        carData.auctionEnd = carAuctionEndDate || undefined
+        carData.auctionReserve = carReservePrice ? parseFloat(carReservePrice) : undefined
+        carData.condition = carAuctionCondition || undefined
+        carData.transmission = 'auto'
+        carData.fuelType = 'petrol'
+      }
+
+      await carsApi.create(carData)
+      alert('Car listing submitted for approval!')
+
+      // Reset form
+      setCarBrand('')
+      setCarModel('')
+      setCarYear('')
+      setCarLocation('')
+      setCarDescription('')
+      setCarPhotos([])
+      setCarDailyPrice('')
+      setCarWeeklyPrice('')
+      setCarMonthlyPrice('')
+      setCarRentDeposit('')
+      setCarRentalTerms('')
+      setCarSalePrice('')
+      setCarBookingFee('')
+      setCarSaleCondition('')
+      setCarMileage('')
+      setCarFeatures('')
+      setCarMonthlyInstallment('')
+      setCarRemainingMonths('')
+      setCarTakeoverAmount('')
+      setCarVehicleCondition('')
+      setCarBankName('')
+      setCarStartingBid('')
+      setCarAuctionEndDate('')
+      setCarReservePrice('')
+      setCarAuctionCondition('')
+
+      // Refresh listings
+      fetchListings()
+      fetchStats()
+      handleTabChange('listings')
+    } catch (e: any) {
+      console.error('Failed to create car:', e)
+      alert(e.message || 'Failed to create car listing. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Derived stats
+  const totalListings = stats?.listings?.total ?? 0
+  const activeBookings = stats?.bookings?.active ?? 0
+  const monthlyRevenue = stats?.revenue?.monthly ?? 0
+  const rating = stats?.engagement?.averageRating ?? stats?.profile?.rating ?? 0
+  const recentBookings = stats?.recentBookings || []
+
+  const filteredListings = listings
+  const filteredBookings = bookings
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f0e8] flex">
@@ -340,10 +490,10 @@ export default function DealerDashboard() {
               {/* Stats Cards */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Listings', value: '24', icon: Car, change: '+3', up: true },
-                  { label: 'Active Bookings', value: '8', icon: CalendarCheck, change: '+2', up: true },
-                  { label: 'Revenue This Month', value: 'RM 45,200', icon: DollarSign, change: '+12%', up: true },
-                  { label: 'Rating', value: '4.8', icon: Star, change: '+0.1', up: true },
+                  { label: 'Total Listings', value: statsLoading ? '...' : String(totalListings), icon: Car, change: `+${stats?.listings?.pending ?? 0} pending`, up: true },
+                  { label: 'Active Bookings', value: statsLoading ? '...' : String(activeBookings), icon: CalendarCheck, change: `${stats?.bookings?.total ?? 0} total`, up: true },
+                  { label: 'Revenue This Month', value: statsLoading ? '...' : `RM ${monthlyRevenue.toLocaleString()}`, icon: DollarSign, change: `RM ${(stats?.revenue?.total ?? 0).toLocaleString()} total`, up: true },
+                  { label: 'Rating', value: statsLoading ? '...' : rating.toFixed(1), icon: Star, change: `${stats?.engagement?.totalReviews ?? 0} reviews`, up: true },
                 ].map((stat) => {
                   const Icon = stat.icon
                   return (
@@ -367,24 +517,22 @@ export default function DealerDashboard() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Revenue Chart */}
+                {/* Revenue Chart placeholder */}
                 <Card className="lg:col-span-2 bg-[#111111] border-[#2a2a2a]">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold">Revenue Overview</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-0">
-                    <div className="flex items-end gap-2 sm:gap-3 h-48">
-                      {monthlyRevenue.map((item) => (
-                        <div key={item.month} className="flex-1 flex flex-col items-center gap-2">
-                          <div className="w-full relative" style={{ height: '160px' }}>
-                            <div
-                              className="absolute bottom-0 w-full rounded-t-md bg-gradient-to-t from-[#c9a84c] to-[#e8d48b] transition-all duration-500 hover:from-[#e8d48b] hover:to-[#c9a84c]"
-                              style={{ height: `${item.value}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-[#8a8578]">{item.month}</span>
+                    <div className="flex items-center justify-center h-48 text-[#8a8578] text-sm">
+                      {statsLoading ? (
+                        <Loader2 className="size-6 animate-spin text-[#c9a84c]" />
+                      ) : (
+                        <div className="text-center">
+                          <DollarSign className="size-8 text-[#c9a84c] mx-auto mb-2" />
+                          <p>Total Revenue: RM {(stats?.revenue?.total ?? 0).toLocaleString()}</p>
+                          <p className="text-xs mt-1">This Month: RM {monthlyRevenue.toLocaleString()}</p>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -395,18 +543,26 @@ export default function DealerDashboard() {
                     <CardTitle className="text-base font-semibold">Recent Bookings</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-3 max-h-72 overflow-y-auto">
-                    {mockBookings.slice(0, 5).map((booking) => (
-                      <div key={booking.id} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{booking.customer}</p>
-                          <p className="text-xs text-[#8a8578] truncate">{booking.car}</p>
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <p className="text-sm font-semibold text-[#c9a84c]">RM {booking.amount.toLocaleString()}</p>
-                          {getStatusBadge(booking.status)}
-                        </div>
+                    {statsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="size-5 animate-spin text-[#c9a84c]" />
                       </div>
-                    ))}
+                    ) : recentBookings.length > 0 ? (
+                      recentBookings.map((booking: any) => (
+                        <div key={booking.id} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{booking.user?.name || 'Customer'}</p>
+                            <p className="text-xs text-[#8a8578] truncate">{booking.car?.brand} {booking.car?.model}</p>
+                          </div>
+                          <div className="text-right shrink-0 ml-2">
+                            <p className="text-sm font-semibold text-[#c9a84c]">RM {(booking.totalAmount || 0).toLocaleString()}</p>
+                            {getStatusBadge(booking.status)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-center text-[#8a8578] text-sm py-4">No bookings yet</p>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -488,47 +644,71 @@ export default function DealerDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredListings.map((car) => (
-                          <tr key={car.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4">
-                              <img src={car.photo} alt={car.brand} className="w-16 h-12 object-cover rounded-md" />
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className="font-medium">{car.brand} {car.model}</p>
-                              {car.featured && (
-                                <Badge className="bg-[#c9a84c]/20 text-[#c9a84c] border-[#c9a84c]/30 text-[10px] mt-1">
-                                  <Star className="size-2.5 mr-0.5" />Featured
-                                </Badge>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">
-                                {getTypeLabel(car.type)}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">
-                              RM {car.price.toLocaleString()}{car.type === 'rent' ? '/day' : ''}
-                            </td>
-                            <td className="py-3 px-4">{getStatusBadge(car.status)}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-[#8a8578] hover:text-[#c9a84c]">
-                                  <Edit className="size-3.5" />
-                                </Button>
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-[#8a8578] hover:text-red-400">
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className={`h-7 w-7 ${car.featured ? 'text-[#c9a84c]' : 'text-[#8a8578]'} hover:text-[#c9a84c]`}
-                                >
-                                  {car.featured ? <Star className="size-3.5" /> : <StarOff className="size-3.5" />}
-                                </Button>
-                              </div>
+                        {listingsLoading ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center">
+                              <Loader2 className="size-5 animate-spin text-[#c9a84c] mx-auto" />
                             </td>
                           </tr>
-                        ))}
+                        ) : filteredListings.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-[#8a8578]">
+                              No listings found
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredListings.map((car: any) => {
+                            const photos = parseJsonField(car.photos, [])
+                            const photoUrl = photos[0] || ''
+                            return (
+                              <tr key={car.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                                <td className="py-3 px-4">
+                                  {photoUrl ? (
+                                    <img src={photoUrl} alt={car.brand} className="w-16 h-12 object-cover rounded-md" />
+                                  ) : (
+                                    <div className="w-16 h-12 rounded-md bg-[#1a1a1a] flex items-center justify-center">
+                                      <Car className="size-5 text-[#4a4535]" />
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <p className="font-medium">{car.brand} {car.model}</p>
+                                  {car.featured && (
+                                    <Badge className="bg-[#c9a84c]/20 text-[#c9a84c] border-[#c9a84c]/30 text-[10px] mt-1">
+                                      <Star className="size-2.5 mr-0.5" />Featured
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="py-3 px-4">
+                                  <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">
+                                    {getTypeLabel(car.type)}
+                                  </Badge>
+                                </td>
+                                <td className="py-3 px-4 font-medium text-[#c9a84c]">
+                                  RM {(car.price || 0).toLocaleString()}{car.type === 'rent' ? '/day' : ''}
+                                </td>
+                                <td className="py-3 px-4">{getStatusBadge(car.status)}</td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-[#8a8578] hover:text-[#c9a84c]">
+                                      <Edit className="size-3.5" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-[#8a8578] hover:text-red-400">
+                                      <Trash2 className="size-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className={`h-7 w-7 ${car.featured ? 'text-[#c9a84c]' : 'text-[#8a8578]'} hover:text-[#c9a84c]`}
+                                    >
+                                      {car.featured ? <Star className="size-3.5" /> : <StarOff className="size-3.5" />}
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1065,9 +1245,22 @@ export default function DealerDashboard() {
                   </div>
 
                   {/* Submit */}
-                  <Button className="w-full bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-12 text-base">
-                    <PlusCircle className="size-5 mr-2" />
-                    Add {getTypeLabel(carType)} Listing
+                  <Button
+                    className="w-full bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-12 text-base"
+                    onClick={handleAddCar}
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Loader2 className="size-5 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="size-5 mr-2" />
+                        Add {getTypeLabel(carType)} Listing
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>
@@ -1110,34 +1303,53 @@ export default function DealerDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredBookings.map((booking) => (
-                          <tr key={booking.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-medium">{booking.customer}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{booking.car}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{booking.dates}</td>
-                            <td className="py-3 px-4">{getStatusBadge(booking.status)}</td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {booking.amount.toLocaleString()}</td>
-                            <td className="py-3 px-4">
-                              {booking.status === 'pending' ? (
-                                <div className="flex items-center gap-1">
-                                  <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
-                                    <CheckCircle className="size-3.5 mr-1" />
-                                    Approve
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
-                                    <X className="size-3.5 mr-1" />
-                                    Reject
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
-                                  <Eye className="size-3.5 mr-1" />
-                                  View
-                                </Button>
-                              )}
+                        {bookingsLoading ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center">
+                              <Loader2 className="size-5 animate-spin text-[#c9a84c] mx-auto" />
                             </td>
                           </tr>
-                        ))}
+                        ) : filteredBookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-[#8a8578]">
+                              No bookings found
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBookings.map((booking: any) => {
+                            const startDate = booking.startDate ? new Date(booking.startDate).toLocaleDateString('en-MY') : ''
+                            const endDate = booking.endDate ? new Date(booking.endDate).toLocaleDateString('en-MY') : ''
+                            const dates = startDate && endDate ? `${startDate} - ${endDate}` : 'N/A'
+                            return (
+                              <tr key={booking.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                                <td className="py-3 px-4 font-medium">{booking.user?.name || 'Customer'}</td>
+                                <td className="py-3 px-4 text-[#8a8578]">{booking.car?.brand} {booking.car?.model}</td>
+                                <td className="py-3 px-4 text-[#8a8578]">{dates}</td>
+                                <td className="py-3 px-4">{getStatusBadge(booking.status)}</td>
+                                <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {(booking.totalAmount || 0).toLocaleString()}</td>
+                                <td className="py-3 px-4">
+                                  {booking.status === 'pending' || booking.status === 'payment_pending' ? (
+                                    <div className="flex items-center gap-1">
+                                      <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
+                                        <CheckCircle className="size-3.5 mr-1" />
+                                        Approve
+                                      </Button>
+                                      <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
+                                        <X className="size-3.5 mr-1" />
+                                        Reject
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
+                                      <Eye className="size-3.5 mr-1" />
+                                      View
+                                    </Button>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1149,35 +1361,41 @@ export default function DealerDashboard() {
           {/* ===== ENQUIRIES TAB ===== */}
           {activeTab === 'enquiries' && (
             <div className="space-y-4">
-              {[
-                { name: 'Ahmad Razak', car: 'BMW M4 Competition', message: 'Is this available for a week rental?', date: '2 hours ago', phone: '+60 12-345 6789' },
-                { name: 'Sarah Tan', car: 'Mercedes S580', message: 'Can I schedule a test drive?', date: '5 hours ago', phone: '+60 11-234 5678' },
-                { name: 'Lim Wei Jie', car: 'Porsche 911 Turbo S', message: 'What is the deposit amount?', date: '1 day ago', phone: '+60 13-456 7890' },
-                { name: 'Nurul Aisyah', car: 'Honda Civic Type R', message: 'Do you offer weekend packages?', date: '2 days ago', phone: '+60 14-567 8901' },
-              ].map((enquiry, idx) => (
-                <Card key={idx} className="bg-[#111111] border-[#2a2a2a]">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-semibold">{enquiry.name}</p>
-                        <p className="text-sm text-[#c9a84c]">{enquiry.car}</p>
+              {bookingsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="size-6 animate-spin text-[#c9a84c]" />
+                </div>
+              ) : filteredBookings.length > 0 ? (
+                filteredBookings.slice(0, 10).map((booking: any) => (
+                  <Card key={booking.id} className="bg-[#111111] border-[#2a2a2a]">
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex items-start justify-between mb-2">
+                        <div>
+                          <p className="font-semibold">{booking.user?.name || 'Customer'}</p>
+                          <p className="text-sm text-[#c9a84c]">{booking.car?.brand} {booking.car?.model}</p>
+                        </div>
+                        <span className="text-xs text-[#8a8578]">{new Date(booking.createdAt).toLocaleDateString('en-MY')}</span>
                       </div>
-                      <span className="text-xs text-[#8a8578]">{enquiry.date}</span>
-                    </div>
-                    <p className="text-sm text-[#8a8578] mb-3">{enquiry.message}</p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] text-xs">
-                        <MessageSquare className="size-3.5 mr-1" />
-                        Reply
-                      </Button>
-                      <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#8a8578] hover:text-[#f5f0e8] text-xs">
-                        <Phone className="size-3.5 mr-1" />
-                        {enquiry.phone}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      <p className="text-sm text-[#8a8578] mb-3">{booking.type} booking — RM {(booking.totalAmount || 0).toLocaleString()}</p>
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] text-xs">
+                          <MessageSquare className="size-3.5 mr-1" />
+                          Reply
+                        </Button>
+                        <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#8a8578] hover:text-[#f5f0e8] text-xs">
+                          <Phone className="size-3.5 mr-1" />
+                          {booking.user?.phone || 'N/A'}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center py-12 text-[#8a8578]">
+                  <MessageSquare className="size-8 mx-auto mb-3 text-[#4a4535]" />
+                  <p>No enquiries yet</p>
+                </div>
+              )}
             </div>
           )}
 
@@ -1187,46 +1405,51 @@ export default function DealerDashboard() {
               {/* Stats Row */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Views', value: '3,248', change: '+18%', up: true },
-                  { label: 'Conversion Rate', value: '4.2%', change: '+0.5%', up: true },
-                  { label: 'Avg. Response Time', value: '2.3h', change: '-15min', up: true },
-                  { label: 'Repeat Customers', value: '28%', change: '+3%', up: true },
-                ].map((stat) => (
-                  <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
-                    <CardContent className="p-4 sm:p-6">
-                      <div className="text-xs text-[#8a8578] mb-1">{stat.label}</div>
-                      <div className="text-2xl font-bold text-[#f5f0e8]">{stat.value}</div>
-                      <span className={`flex items-center text-xs font-medium ${stat.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                        <ArrowUpRight className="size-3" />
-                        {stat.change}
-                      </span>
-                    </CardContent>
-                  </Card>
-                ))}
+                  { label: 'Total Views', value: statsLoading ? '...' : (stats?.engagement?.totalViews ?? 0).toLocaleString(), change: 'All time', up: true },
+                  { label: 'Total Enquiries', value: statsLoading ? '...' : (stats?.engagement?.totalEnquiries ?? 0).toLocaleString(), change: 'All time', up: true },
+                  { label: 'Avg. Rating', value: statsLoading ? '...' : rating.toFixed(1), change: `${stats?.engagement?.totalReviews ?? 0} reviews`, up: true },
+                  { label: 'Total Sales', value: statsLoading ? '...' : String(stats?.profile?.totalSales ?? 0), change: 'All time', up: true },
+                ].map((stat) => {
+                  const Icon = BarChart3
+                  return (
+                    <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
+                      <CardContent className="p-4 sm:p-6">
+                        <div className="text-xs text-[#8a8578] mb-1">{stat.label}</div>
+                        <div className="text-2xl font-bold text-[#f5f0e8]">{stat.value}</div>
+                        <span className={`flex items-center text-xs font-medium text-emerald-400`}>
+                          <ArrowUpRight className="size-3" />
+                          {stat.change}
+                        </span>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Most Viewed Cars */}
+                {/* Top Cars by views */}
                 <Card className="bg-[#111111] border-[#2a2a2a]">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">Most Viewed Cars</CardTitle>
+                    <CardTitle className="text-base font-semibold">Top Cars by Views</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
-                    {[
-                      { name: 'BMW M4 Competition', views: 845 },
-                      { name: 'Porsche 911 Turbo S', views: 723 },
-                      { name: 'Lamborghini Huracán EVO', views: 691 },
-                      { name: 'Audi RS6 Avant', views: 534 },
-                      { name: 'Mercedes S580', views: 445 },
-                    ].map((item, idx) => (
-                      <div key={item.name} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-[#c9a84c] w-6">#{idx + 1}</span>
-                          <span className="text-sm">{item.name}</span>
-                        </div>
-                        <span className="text-sm text-[#8a8578]">{item.views} views</span>
+                    {statsLoading ? (
+                      <div className="flex items-center justify-center py-6">
+                        <Loader2 className="size-5 animate-spin text-[#c9a84c]" />
                       </div>
-                    ))}
+                    ) : (stats?.topCars || []).length > 0 ? (
+                      (stats.topCars || []).map((car: any, idx: number) => (
+                        <div key={car.id} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-[#c9a84c] w-6">#{idx + 1}</span>
+                            <span className="text-sm">{car.brand} {car.model}</span>
+                          </div>
+                          <span className="text-sm text-[#8a8578]">{car.views} views</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-center text-[#8a8578] text-sm py-4">No data yet</p>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -1237,9 +1460,8 @@ export default function DealerDashboard() {
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-4">
                     {[
-                      { label: 'Rental Income', value: 24500, color: 'bg-[#c9a84c]', percent: 54 },
-                      { label: 'Car Sales', value: 15200, color: 'bg-emerald-500', percent: 34 },
-                      { label: 'Continue Loan', value: 5500, color: 'bg-purple-500', percent: 12 },
+                      { label: 'Total Revenue', value: stats?.revenue?.total ?? 0, color: 'bg-[#c9a84c]', percent: 100 },
+                      { label: 'This Month', value: monthlyRevenue, color: 'bg-emerald-500', percent: stats?.revenue?.total ? Math.round((monthlyRevenue / stats.revenue.total) * 100) : 0 },
                     ].map((item) => (
                       <div key={item.label}>
                         <div className="flex items-center justify-between mb-1">
@@ -1247,7 +1469,7 @@ export default function DealerDashboard() {
                           <span className="text-sm font-semibold text-[#c9a84c]">RM {item.value.toLocaleString()}</span>
                         </div>
                         <div className="w-full h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
-                          <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${item.percent}%` }} />
+                          <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${Math.min(item.percent, 100)}%` }} />
                         </div>
                       </div>
                     ))}
@@ -1262,15 +1484,15 @@ export default function DealerDashboard() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Earned', value: 'RM 245,000' },
-                  { label: 'Pending Payout', value: 'RM 12,400' },
-                  { label: 'This Month', value: 'RM 45,200' },
-                  { label: 'Commission Rate', value: '8%' },
+                  { label: 'Total Earned', value: `RM ${(stats?.revenue?.total ?? 0).toLocaleString()}` },
+                  { label: 'This Month', value: `RM ${monthlyRevenue.toLocaleString()}` },
+                  { label: 'Active Bookings', value: String(activeBookings) },
+                  { label: 'Total Listings', value: String(totalListings) },
                 ].map((stat) => (
                   <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
                     <CardContent className="p-4">
                       <div className="text-xs text-[#8a8578]">{stat.label}</div>
-                      <div className="text-xl font-bold text-[#c9a84c] mt-1">{stat.value}</div>
+                      <div className="text-xl font-bold text-[#c9a84c] mt-1">{statsLoading ? '...' : stat.value}</div>
                     </CardContent>
                   </Card>
                 ))}
@@ -1281,38 +1503,42 @@ export default function DealerDashboard() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-[#2a2a2a]">
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Transaction ID</th>
+                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Booking ID</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Customer</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Amount</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Method</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Status</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Date</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { id: 'TXN001', customer: 'Ahmad Razak', amount: 3400, method: 'FPX', status: 'completed', date: 'Mar 1, 2026' },
-                          { id: 'TXN002', customer: 'Sarah Tan', amount: 5200, method: 'TNG', status: 'pending', date: 'Mar 3, 2026' },
-                          { id: 'TXN003', customer: 'Lim Wei Jie', amount: 3600, method: 'Billplz', status: 'completed', date: 'Mar 8, 2026' },
-                          { id: 'TXN004', customer: 'Nurul Aisyah', amount: 760, method: 'Stripe', status: 'completed', date: 'Mar 10, 2026' },
-                        ].map((txn) => (
-                          <tr key={txn.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-mono text-xs">{txn.id}</td>
-                            <td className="py-3 px-4">{txn.customer}</td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {txn.amount.toLocaleString()}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">{txn.method}</Badge>
+                        {bookingsLoading ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center">
+                              <Loader2 className="size-5 animate-spin text-[#c9a84c] mx-auto" />
                             </td>
-                            <td className="py-3 px-4">
-                              {txn.status === 'completed' ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Completed</Badge>
-                              ) : (
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-[#8a8578]">{txn.date}</td>
                           </tr>
-                        ))}
+                        ) : filteredBookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={5} className="py-8 text-center text-[#8a8578]">
+                              No payments found
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBookings.map((booking: any) => {
+                            const payment = booking.payments?.[0]
+                            return (
+                              <tr key={booking.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                                <td className="py-3 px-4 font-mono text-xs">{booking.id.slice(0, 8)}...</td>
+                                <td className="py-3 px-4">{booking.user?.name || 'Customer'}</td>
+                                <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {(booking.totalAmount || 0).toLocaleString()}</td>
+                                <td className="py-3 px-4">
+                                  {payment ? getStatusBadge(payment.status) : getStatusBadge(booking.status)}
+                                </td>
+                                <td className="py-3 px-4 text-[#8a8578]">{new Date(booking.createdAt).toLocaleDateString('en-MY')}</td>
+                              </tr>
+                            )
+                          })
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1345,19 +1571,19 @@ export default function DealerDashboard() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label className="text-[#8a8578]">Company Name</Label>
-                      <Input defaultValue="Prestige Auto KL" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
+                      <Input defaultValue={user?.dealer?.companyName || ''} className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[#8a8578]">Email</Label>
-                      <Input defaultValue="info@prestigeauto.my" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
+                      <Input defaultValue={user?.email || ''} className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[#8a8578]">Phone</Label>
-                      <Input defaultValue="+60 3-8888 9999" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
+                      <Input defaultValue={user?.phone || ''} className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
                     </div>
                     <div className="space-y-2">
                       <Label className="text-[#8a8578]">City</Label>
-                      <Input defaultValue="Kuala Lumpur" className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
+                      <Input defaultValue={user?.dealer?.city || ''} className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] focus-visible:border-[#c9a84c]" />
                     </div>
                   </div>
                   <Button className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold">

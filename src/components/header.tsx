@@ -50,16 +50,21 @@ export function Header() {
     currentView,
     searchQuery,
     isLoggedIn,
-    userRole,
-    userName,
+    user,
     navigate,
     setSearch,
     logout,
+    checkAuth,
   } = useAppStore()
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+
+  // Check auth on mount
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -75,6 +80,9 @@ export function Header() {
     navigate(view)
     setMobileOpen(false)
   }
+
+  const userRole = user?.role
+  const userName = user?.name
 
   const getRoleBadgeColor = () => {
     switch (userRole) {

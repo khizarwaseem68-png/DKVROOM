@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useAppStore } from '@/lib/store'
+import { loansApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -48,63 +49,7 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 
-// Mock applications for tracking
-const mockApplications = [
-  {
-    id: 'LA-2026-001',
-    car: 'Perodua Myvi 1.5 AV',
-    brand: 'Perodua',
-    model: 'Myvi 1.5 AV',
-    year: 2023,
-    amount: 41880,
-    bank: 'Maybank',
-    status: 'submitted',
-    submittedDate: 'Mar 1, 2026',
-    estimatedCompletion: 'Mar 15, 2026',
-    timeline: [
-      { step: 'Submitted', completed: true, date: 'Mar 1, 2026' },
-      { step: 'Under Review', completed: true, date: 'Mar 3, 2026' },
-      { step: 'Bank Verification', completed: false, date: '' },
-      { step: 'Approved', completed: false, date: '' },
-    ],
-  },
-  {
-    id: 'LA-2026-002',
-    car: 'BMW X5 xDrive40i',
-    brand: 'BMW',
-    model: 'X5 xDrive40i',
-    year: 2022,
-    amount: 153600,
-    bank: 'CIMB',
-    status: 'underReview',
-    submittedDate: 'Feb 25, 2026',
-    estimatedCompletion: 'Mar 12, 2026',
-    timeline: [
-      { step: 'Submitted', completed: true, date: 'Feb 25, 2026' },
-      { step: 'Under Review', completed: false, date: '' },
-      { step: 'Bank Verification', completed: false, date: '' },
-      { step: 'Approved', completed: false, date: '' },
-    ],
-  },
-  {
-    id: 'LA-2026-003',
-    car: 'Mazda CX-5 Turbo',
-    brand: 'Mazda',
-    model: 'CX-5 Turbo',
-    year: 2023,
-    amount: 99900,
-    bank: 'Hong Leong Bank',
-    status: 'approved',
-    submittedDate: 'Feb 10, 2026',
-    estimatedCompletion: 'Completed',
-    timeline: [
-      { step: 'Submitted', completed: true, date: 'Feb 10, 2026' },
-      { step: 'Under Review', completed: true, date: 'Feb 14, 2026' },
-      { step: 'Bank Verification', completed: true, date: 'Feb 22, 2026' },
-      { step: 'Approved', completed: true, date: 'Feb 28, 2026' },
-    ],
-  },
-]
+// Applications will be fetched from API
 
 function getStatusInfo(status: string) {
   switch (status) {
@@ -130,11 +75,15 @@ function getTimelineStepIcon(completed: boolean, isCurrent: boolean) {
 }
 
 export default function LoanApplication() {
-  const { goBack } = useAppStore()
+  const { goBack, user } = useAppStore()
   const [mainTab, setMainTab] = useState('apply')
   const [currentStep, setCurrentStep] = useState(1)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [expandedApp, setExpandedApp] = useState<string | null>(null)
+  const [applications, setApplications] = useState<any[]>([])
+  const [loadingApps, setLoadingApps] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   // Step 1: Personal Info
   const [fullName, setFullName] = useState('')
@@ -182,13 +131,69 @@ export default function LoanApplication() {
     if (currentStep > 1) setCurrentStep(currentStep - 1)
   }
 
-  const handleSubmit = () => {
-    setShowSuccessDialog(true)
+  const handleSubmit = async () => {
+    if (!user) return
+    setSubmitting(true)
+    setError('')
+    try {
+      const result = await loansApi.create({
+        type: loanType === 'continueLoan' ? 'continueLoan' : 'loan',
+        amount: Number(carPrice) - Number(downPayment || 0),
+        tenure: Number(loanTenure) * 12,
+        monthlyIncome: Number(monthlyIncome),
+        employmentType: employmentStatus === 'selfEmployed' ? 'self-employed' : 'employed',
+        employerName,
+        bankName: preferredBank,
+        carBrand,
+        carModel,
+        carYear: Number(carYear),
+      })
+      if (result.success) {
+        setShowSuccessDialog(true)
+      }
+    } catch (e: any) {
+      setError(e.message || 'Failed to submit application')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const handleDocUpload = (key: string) => {
     setUploadedDocs((prev) => ({ ...prev, [key]: !prev[key] }))
   }
+
+  // Fetch loan applications for tracking tab
+  const fetchApplications = async () => {
+    if (!user) return
+    setLoadingApps(true)
+    try {
+      const result = await loansApi.list()
+      if (result.data) {
+        setApplications(result.data.map((app: any) => ({
+          ...app,
+          car: app.car ? `${app.car.brand} ${app.car.model}` : `${app.carBrand || 'Unknown'} ${app.carModel || ''}`,
+          submittedDate: new Date(app.createdAt).toLocaleDateString('en-MY', { month: 'short', day: 'numeric', year: 'numeric' }),
+          estimatedCompletion: app.status === 'approved' ? 'Completed' : 'Pending',
+          timeline: [
+            { step: 'Submitted', completed: true, date: new Date(app.createdAt).toLocaleDateString('en-MY') },
+            { step: 'Under Review', completed: ['reviewing', 'approved', 'rejected'].includes(app.status), date: app.reviewedAt ? new Date(app.reviewedAt).toLocaleDateString('en-MY') : '' },
+            { step: 'Bank Verification', completed: ['approved', 'rejected'].includes(app.status), date: '' },
+            { step: app.status === 'approved' ? 'Approved' : 'Pending', completed: app.status === 'approved', date: app.status === 'approved' && app.reviewedAt ? new Date(app.reviewedAt).toLocaleDateString('en-MY') : '' },
+          ],
+        })))
+      }
+    } catch (e) {
+      console.error('Failed to fetch applications', e)
+    } finally {
+      setLoadingApps(false)
+    }
+  }
+
+  React.useEffect(() => {
+    if (mainTab === 'track' && user) {
+      fetchApplications()
+    }
+  }, [mainTab, user])
 
   const toggleExpand = (id: string) => {
     setExpandedApp(expandedApp === id ? null : id)
@@ -718,14 +723,23 @@ export default function LoanApplication() {
                   <ArrowRight className="size-4 ml-1" />
                 </Button>
               ) : (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!termsAccepted}
-                  className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  <CreditCard className="size-4 mr-2" />
-                  Submit Application
-                </Button>
+                <>
+                  {error && (
+                    <p className="text-sm text-red-400 mb-2 text-right">{error}</p>
+                  )}
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!termsAccepted || submitting}
+                    className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {submitting ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <CreditCard className="size-4 mr-2" />
+                    )}
+                    {submitting ? 'Submitting...' : 'Submit Application'}
+                  </Button>
+                </>
               )}
             </div>
           </TabsContent>
@@ -733,10 +747,24 @@ export default function LoanApplication() {
           {/* ===== TRACK APPLICATION TAB ===== */}
           <TabsContent value="track" className="mt-6 space-y-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-[#8a8578]">{mockApplications.length} applications</p>
+              <p className="text-sm text-[#8a8578]">{applications.length} applications</p>
             </div>
 
-            {mockApplications.map((app) => {
+            {loadingApps ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="size-8 text-[#c9a84c] animate-spin" />
+              </div>
+            ) : applications.length === 0 ? (
+              <Card className="bg-[#111111] border-[#2a2a2a]">
+                <CardContent className="p-8 text-center">
+                  <FileText className="size-12 text-[#8a8578] mx-auto mb-3" />
+                  <p className="text-[#8a8578]">No loan applications yet</p>
+                  <Button onClick={() => setMainTab('apply')} className="mt-4 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a]">
+                    Apply Now
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : applications.map((app) => {
               const statusInfo = getStatusInfo(app.status)
               const StatusIcon = statusInfo.icon
               const isExpanded = expandedApp === app.id

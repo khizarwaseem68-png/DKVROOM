@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
+import { workshopsApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,7 @@ import {
   ChevronRight,
   ShieldCheck,
   ExternalLink,
+  Loader2,
 } from 'lucide-react'
 
 const serviceCategories = [
@@ -40,7 +42,7 @@ const serviceCategories = [
   { id: 'inspection', icon: ClipboardCheck, name: 'Inspection', description: 'Pre-purchase checks & full inspection' },
 ]
 
-const workshops = [
+const defaultWorkshops = [
   { id: 'w1', name: 'AutoPrestige Service Center', logo: '🔧', city: 'Kuala Lumpur', rating: 4.9, specialization: ['European Cars', 'Engine Repair'], hours: 'Mon-Sat 8AM-6PM', services: ['Engine Overhaul', 'Oil Change', 'Brake Service', 'Diagnostics'], verified: true },
   { id: 'w2', name: 'TurboFix Motors', logo: '⚡', city: 'Selangor', rating: 4.7, specialization: ['Japanese Cars', 'Performance'], hours: 'Mon-Fri 9AM-7PM', services: ['Turbo Installation', 'ECU Tuning', 'Exhaust System', 'Suspension'], verified: true },
   { id: 'w3', name: 'CrystalClear Detailing', logo: '✨', city: 'Penang', rating: 4.8, specialization: ['Detailing', 'Body & Paint'], hours: 'Mon-Sun 10AM-8PM', services: ['Ceramic Coating', 'Paint Protection', 'Interior Detailing', 'Window Tinting'], verified: true },
@@ -75,10 +77,75 @@ function StarRating({ rating }: { rating: number }) {
   )
 }
 
+// Normalize API workshop data
+function normalizeWorkshop(apiWorkshop: any): typeof defaultWorkshops[0] {
+  const specialization = typeof apiWorkshop.specialization === 'string'
+    ? (() => { try { return JSON.parse(apiWorkshop.specialization) } catch { return [] } })()
+    : Array.isArray(apiWorkshop.specialization) ? apiWorkshop.specialization : []
+
+  const services = typeof apiWorkshop.services === 'string'
+    ? (() => { try { return JSON.parse(apiWorkshop.services) } catch { return [] } })()
+    : Array.isArray(apiWorkshop.services) ? apiWorkshop.services : []
+
+  return {
+    id: apiWorkshop.id,
+    name: apiWorkshop.companyName || apiWorkshop.name || 'Workshop',
+    logo: apiWorkshop.logo || '🔧',
+    city: apiWorkshop.city || 'Kuala Lumpur',
+    rating: apiWorkshop.rating || 4.5,
+    specialization: specialization.length > 0 ? specialization : ['General Repair'],
+    hours: apiWorkshop.operatingHours || apiWorkshop.hours || 'Mon-Sat 9AM-6PM',
+    services: services.length > 0 ? services : ['General Service'],
+    verified: apiWorkshop.verified ?? true,
+  }
+}
+
 export default function RepairPage() {
-  const { navigate } = useAppStore()
+  const { navigate, user } = useAppStore()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [workshops, setWorkshops] = useState(defaultWorkshops)
+  const [workshopsLoading, setWorkshopsLoading] = useState(true)
+  const [bookingWorkshop, setBookingWorkshop] = useState<string | null>(null)
+  const [bookingSubmitting, setBookingSubmitting] = useState(false)
+
+  useEffect(() => {
+    async function fetchWorkshops() {
+      try {
+        setWorkshopsLoading(true)
+        const result = await workshopsApi.list()
+        const data = result.data || []
+        if (data.length > 0) {
+          setWorkshops(data.map(normalizeWorkshop))
+        }
+      } catch (e) {
+        console.error('Failed to fetch workshops:', e)
+        // Keep default workshops
+      } finally {
+        setWorkshopsLoading(false)
+      }
+    }
+    fetchWorkshops()
+  }, [])
+
+  const handleBookAppointment = async (workshopId: string) => {
+    try {
+      setBookingWorkshop(workshopId)
+      setBookingSubmitting(true)
+      await workshopsApi.createAppointment({
+        workshopId,
+        userId: user?.id,
+        customerName: user?.name,
+        customerPhone: user?.phone,
+        customerEmail: user?.email,
+      })
+    } catch (e) {
+      console.error('Failed to create appointment:', e)
+    } finally {
+      setBookingSubmitting(false)
+      setBookingWorkshop(null)
+    }
+  }
 
   const filteredWorkshops = workshops.filter((w) => {
     const matchesSearch = searchQuery
@@ -203,81 +270,95 @@ export default function RepairPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredWorkshops.map((workshop) => (
-              <Card key={workshop.id} className="luxury-card bg-[#111111] border-[#2a2a2a] rounded-xl">
-                <CardContent className="p-6">
-                  {/* Header */}
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className="w-14 h-14 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center text-2xl shrink-0">
-                      {workshop.logo}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-[#f5f0e8] truncate">{workshop.name}</h3>
-                        {workshop.verified && (
-                          <ShieldCheck className="size-4 text-[#c9a84c] shrink-0" />
-                        )}
+          {workshopsLoading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="size-8 text-[#c9a84c] animate-spin" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredWorkshops.map((workshop) => (
+                <Card key={workshop.id} className="luxury-card bg-[#111111] border-[#2a2a2a] rounded-xl">
+                  <CardContent className="p-6">
+                    {/* Header */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-14 h-14 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center text-2xl shrink-0">
+                        {workshop.logo}
                       </div>
-                      <div className="flex items-center gap-1 text-sm text-[#8a8578] mt-1">
-                        <MapPin className="size-3.5 text-[#c9a84c]" />
-                        {workshop.city}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-[#f5f0e8] truncate">{workshop.name}</h3>
+                          {workshop.verified && (
+                            <ShieldCheck className="size-4 text-[#c9a84c] shrink-0" />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-[#8a8578] mt-1">
+                          <MapPin className="size-3.5 text-[#c9a84c]" />
+                          {workshop.city}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Rating */}
-                  <StarRating rating={workshop.rating} />
+                    {/* Rating */}
+                    <StarRating rating={workshop.rating} />
 
-                  {/* Specialization Tags */}
-                  <div className="flex flex-wrap gap-1.5 mt-3">
-                    {workshop.specialization.map((spec) => (
-                      <Badge key={spec} className="bg-[#c9a84c]/15 text-[#c9a84c] border-[#c9a84c]/25 text-[10px] px-2 py-0.5">
-                        {spec}
-                      </Badge>
-                    ))}
-                  </div>
-
-                  <Separator className="bg-[#2a2a2a] my-4" />
-
-                  {/* Hours */}
-                  <div className="flex items-center gap-2 text-sm text-[#8a8578] mb-3">
-                    <Clock className="size-3.5 text-[#c9a84c]" />
-                    {workshop.hours}
-                  </div>
-
-                  {/* Services */}
-                  <div className="mb-4">
-                    <span className="text-xs text-[#8a8578] uppercase tracking-wider mb-2 block">Services</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {workshop.services.map((service) => (
-                        <Badge key={service} variant="outline" className="text-[10px] border-[#2a2a2a] text-[#8a8578]">
-                          {service}
+                    {/* Specialization Tags */}
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {workshop.specialization.map((spec) => (
+                        <Badge key={spec} className="bg-[#c9a84c]/15 text-[#c9a84c] border-[#c9a84c]/25 text-[10px] px-2 py-0.5">
+                          {spec}
                         </Badge>
                       ))}
                     </div>
-                  </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <Button className="flex-1 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-9 rounded-lg text-sm">
-                      <Phone className="size-3.5 mr-1" />
-                      Book Now
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-[#25D366]/50 text-[#25D366] hover:bg-[#25D366]/10 font-semibold h-9 rounded-lg text-sm"
-                    >
-                      <MessageCircle className="size-3.5 mr-1" />
-                      WhatsApp
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    <Separator className="bg-[#2a2a2a] my-4" />
 
-          {filteredWorkshops.length === 0 && (
+                    {/* Hours */}
+                    <div className="flex items-center gap-2 text-sm text-[#8a8578] mb-3">
+                      <Clock className="size-3.5 text-[#c9a84c]" />
+                      {workshop.hours}
+                    </div>
+
+                    {/* Services */}
+                    <div className="mb-4">
+                      <span className="text-xs text-[#8a8578] uppercase tracking-wider mb-2 block">Services</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {workshop.services.map((service) => (
+                          <Badge key={service} variant="outline" className="text-[10px] border-[#2a2a2a] text-[#8a8578]">
+                            {service}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <Button
+                        className="flex-1 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-9 rounded-lg text-sm"
+                        disabled={bookingSubmitting && bookingWorkshop === workshop.id}
+                        onClick={() => handleBookAppointment(workshop.id)}
+                      >
+                        {bookingSubmitting && bookingWorkshop === workshop.id ? (
+                          <Loader2 className="size-3.5 mr-1 animate-spin" />
+                        ) : (
+                          <Phone className="size-3.5 mr-1" />
+                        )}
+                        Book Now
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="flex-1 border-[#25D366]/50 text-[#25D366] hover:bg-[#25D366]/10 font-semibold h-9 rounded-lg text-sm"
+                      >
+                        <MessageCircle className="size-3.5 mr-1" />
+                        WhatsApp
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {!workshopsLoading && filteredWorkshops.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <div className="size-16 rounded-full bg-[#111111] flex items-center justify-center mb-4">
                 <Search className="size-6 text-[#8a8578]" />

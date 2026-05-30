@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useAppStore } from '@/lib/store'
+import { useAppStore, type UserState } from '@/lib/store'
+import { authApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +74,8 @@ export default function AuthPage() {
   const { navigate, login } = useAppStore()
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [regRole, setRegRole] = useState<'customer' | 'dealer'>('customer')
   const [loginEmail, setLoginEmail] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -103,20 +106,100 @@ export default function AuthPage() {
   const [dealBankHolder, setDealBankHolder] = useState('')
   const [dealAgree, setDealAgree] = useState(false)
 
-  const handleLogin = () => {
-    if (!loginEmail) return
-    login(loginRole, loginRole === 'admin' ? 'Admin User' : loginRole === 'dealer' ? 'Premium Dealer' : 'Ahmad Razak')
-    if (loginRole === 'admin') navigate('adminDashboard')
-    else if (loginRole === 'dealer') navigate('dealerDashboard')
-    else navigate('home')
+  const handleLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      setError('Please enter email and password')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await authApi.login(loginEmail, loginPassword)
+      const u = data.user
+      const userState: UserState = {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        phone: u.phone,
+        whatsapp: u.whatsapp,
+        role: u.role,
+        verified: u.verified,
+        avatar: u.avatar,
+        dealerId: u.dealer?.id || null,
+        dealer: u.dealer || null,
+      }
+      login(userState, data.token)
+      if (u.role === 'admin') navigate('adminDashboard')
+      else if (u.role === 'dealer') navigate('dealerDashboard')
+      else navigate('home')
+    } catch (e: any) {
+      setError(e.message || 'Login failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleRegister = () => {
-    if (regRole === 'customer' && (!custName || !custEmail)) return
-    if (regRole === 'dealer' && (!dealBizName || !dealEmail)) return
-    login(regRole, regRole === 'dealer' ? dealBizName : custName)
-    if (regRole === 'dealer') navigate('dealerDashboard')
-    else navigate('home')
+  const handleRegister = async () => {
+    if (regRole === 'customer' && (!custName || !custEmail)) {
+      setError('Please fill in all required fields')
+      return
+    }
+    if (regRole === 'dealer' && (!dealBizName || !dealEmail)) {
+      setError('Please fill in all required fields')
+      return
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      const userData = regRole === 'customer'
+        ? {
+            name: custName,
+            email: custEmail,
+            password: custPassword,
+            phone: custPhone,
+            whatsapp: custWhatsapp,
+            role: 'customer',
+            address: custAddress,
+            icNumber: custIC,
+            licenseNumber: custLicense,
+          }
+        : {
+            name: dealContact,
+            email: dealEmail,
+            password: dealPassword,
+            phone: dealPhone,
+            whatsapp: dealWhatsapp,
+            role: 'dealer',
+            businessName: dealBizName,
+            dealerType: dealType,
+            address: dealAddress,
+            regNo: dealRegNo,
+            bankName: dealBankName,
+            bankAccount: dealBankAcc,
+            bankHolder: dealBankHolder,
+          }
+      const data = await authApi.register(userData)
+      const u = data.user
+      const userState: UserState = {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        phone: u.phone,
+        whatsapp: u.whatsapp,
+        role: u.role,
+        verified: u.verified,
+        avatar: u.avatar,
+        dealerId: u.dealer?.id || null,
+        dealer: u.dealer || null,
+      }
+      login(userState, data.token)
+      if (u.role === 'dealer') navigate('dealerDashboard')
+      else navigate('home')
+    } catch (e: any) {
+      setError(e.message || 'Registration failed. Please try again.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -204,15 +287,21 @@ export default function AuthPage() {
                     </button>
                   </div>
                 </div>
-                <Button onClick={handleLogin} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg">
-                  Sign In <ArrowRight className="size-4 ml-1" />
+                {error && (
+                  <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm flex items-center gap-2">
+                    <AlertCircle className="size-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
+                <Button onClick={handleLogin} disabled={loading} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg disabled:opacity-50">
+                  {loading ? 'Signing In...' : <>Sign In <ArrowRight className="size-4 ml-1" /></>}
                 </Button>
                 <div className="p-3 rounded-lg bg-[#0a0a0a] border border-[#2a2a2a]">
                   <p className="text-xs text-[#8a8578] mb-2">Quick demo access:</p>
                   <div className="flex gap-2 flex-wrap">
-                    <Badge className="cursor-pointer bg-[#c9a84c]/10 text-[#c9a84c] border-[#c9a84c]/30 hover:bg-[#c9a84c]/20" onClick={() => { setLoginRole('customer'); setLoginEmail('customer@demo.com') }}>Customer</Badge>
-                    <Badge className="cursor-pointer bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30 hover:bg-[#3b82f6]/20" onClick={() => { setLoginRole('dealer'); setLoginEmail('dealer@demo.com') }}>Dealer</Badge>
-                    <Badge className="cursor-pointer bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30 hover:bg-[#ef4444]/20" onClick={() => { setLoginRole('admin'); setLoginEmail('admin@demo.com') }}>Admin</Badge>
+                    <Badge className="cursor-pointer bg-[#c9a84c]/10 text-[#c9a84c] border-[#c9a84c]/30 hover:bg-[#c9a84c]/20" onClick={() => { setLoginRole('customer'); setLoginEmail('ahmad@dkvroom.com'); setLoginPassword('Customer@123') }}>Customer</Badge>
+                    <Badge className="cursor-pointer bg-[#3b82f6]/10 text-[#3b82f6] border-[#3b82f6]/30 hover:bg-[#3b82f6]/20" onClick={() => { setLoginRole('dealer'); setLoginEmail('prestige@dkvroom.com'); setLoginPassword('Dealer@123') }}>Dealer</Badge>
+                    <Badge className="cursor-pointer bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/30 hover:bg-[#ef4444]/20" onClick={() => { setLoginRole('admin'); setLoginEmail('admin@dkvroom.com'); setLoginPassword('Admin@123') }}>Admin</Badge>
                   </div>
                 </div>
               </div>
@@ -298,8 +387,8 @@ export default function AuthPage() {
                         I agree to the <span className="text-[#c9a84c]">Terms of Service</span> and <span className="text-[#c9a84c]">Privacy Policy</span>
                       </label>
                     </div>
-                    <Button onClick={handleRegister} disabled={!custAgree} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg disabled:opacity-50">
-                      Create Account <ArrowRight className="size-4 ml-1" />
+                    <Button onClick={handleRegister} disabled={!custAgree || loading} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg disabled:opacity-50">
+                      {loading ? 'Creating Account...' : <>Create Account <ArrowRight className="size-4 ml-1" /></>}
                     </Button>
                   </div>
                 )}
@@ -410,8 +499,8 @@ export default function AuthPage() {
                         I agree to the <span className="text-[#c9a84c]">Terms of Service</span>, <span className="text-[#c9a84c]">Privacy Policy</span>, and <span className="text-[#c9a84c]">Dealer Agreement</span>
                       </label>
                     </div>
-                    <Button onClick={handleRegister} disabled={!dealAgree} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg disabled:opacity-50">
-                      Register as Dealer <ArrowRight className="size-4 ml-1" />
+                    <Button onClick={handleRegister} disabled={!dealAgree || loading} className="w-full h-11 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold rounded-lg disabled:opacity-50">
+                      {loading ? 'Registering...' : <>Register as Dealer <ArrowRight className="size-4 ml-1" /></>}
                     </Button>
                   </div>
                 )}

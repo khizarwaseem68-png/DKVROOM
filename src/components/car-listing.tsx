@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useAppStore } from '@/lib/store'
-import { sampleCars, cities, brands, type CarData } from '@/lib/mock-data'
+import { carsApi } from '@/lib/api'
+import { cities, brands, type CarData } from '@/lib/mock-data'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -71,6 +72,53 @@ function formatPrice(amount: number): string {
 
 function formatMileage(km: number): string {
   return `${km.toLocaleString('en-MY')} km`
+}
+
+// Normalize API car data to CarData shape
+function normalizeCar(apiCar: any): CarData {
+  const photos = typeof apiCar.photos === 'string'
+    ? (() => { try { return JSON.parse(apiCar.photos) } catch { return [] } })()
+    : Array.isArray(apiCar.photos) ? apiCar.photos : []
+  const features = typeof apiCar.features === 'string'
+    ? (() => { try { return JSON.parse(apiCar.features) } catch { return [] } })()
+    : Array.isArray(apiCar.features) ? apiCar.features : []
+
+  return {
+    id: apiCar.id,
+    brand: apiCar.brand,
+    model: apiCar.model,
+    year: apiCar.year,
+    color: apiCar.color || 'N/A',
+    mileage: apiCar.mileage || 0,
+    fuelType: apiCar.fuelType || 'petrol',
+    transmission: apiCar.transmission || 'auto',
+    seats: apiCar.seats || 5,
+    condition: apiCar.condition || 'used',
+    price: apiCar.price || 0,
+    deposit: apiCar.deposit ?? undefined,
+    monthlyInstallment: apiCar.monthlyInstallment ?? undefined,
+    remainingMonths: apiCar.remainingMonths ?? undefined,
+    remainingBalance: apiCar.remainingBalance ?? undefined,
+    bankName: apiCar.bankName ?? undefined,
+    location: apiCar.location || apiCar.city || '',
+    city: apiCar.city || '',
+    description: apiCar.description || '',
+    features,
+    photos,
+    featured: apiCar.featured || false,
+    type: apiCar.type,
+    dealerName: apiCar.dealer?.companyName || '',
+    dealerId: apiCar.dealer?.id || apiCar.dealerId || '',
+    dealerVerified: apiCar.dealer?.verified || false,
+    rating: apiCar.dealer?.rating || 0,
+    vehicleCondition: apiCar.vehicleCondition ?? undefined,
+    requiredDocs: typeof apiCar.requiredDocs === 'string'
+      ? (() => { try { return JSON.parse(apiCar.requiredDocs) } catch { return undefined } })()
+      : Array.isArray(apiCar.requiredDocs) ? apiCar.requiredDocs : undefined,
+    auctionEnd: apiCar.auctionEnd ? new Date(apiCar.auctionEnd).toISOString() : undefined,
+    auctionStartBid: apiCar.auctionStartBid ?? undefined,
+    currentBid: apiCar.currentBid ?? undefined,
+  }
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -289,6 +337,62 @@ export default function CarListing({ type }: CarListingProps) {
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
 
+  // API data state
+  const [cars, setCars] = useState<CarData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [totalCars, setTotalCars] = useState(0)
+
+  // Fetch cars from API
+  const fetchCars = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params: Record<string, string | number | boolean> = {
+        page: currentPage,
+        limit: PAGE_SIZE,
+        status: 'approved',
+      }
+      if (type !== 'all') params.type = type
+      if (brandFilter !== 'All Brands') params.brand = brandFilter
+      if (cityFilter !== 'All Cities') params.city = cityFilter
+      if (searchQuery) params.search = searchQuery
+
+      // Price range filters
+      if (priceRange === 'low') {
+        params.maxPrice = 99999
+      } else if (priceRange === 'mid') {
+        params.minPrice = 100000
+        params.maxPrice = 499999
+      } else if (priceRange === 'high') {
+        params.minPrice = 500000
+      }
+
+      const result = await carsApi.list(params)
+      const rawCars = result.data || []
+      const normalized = rawCars.map(normalizeCar)
+
+      // Client-side filtering for transmission and fuel (API doesn't support these directly)
+      let filtered = normalized
+      if (transmissionFilter !== 'all') {
+        filtered = filtered.filter((car) => car.transmission === transmissionFilter)
+      }
+      if (fuelFilter !== 'all') {
+        filtered = filtered.filter((car) => car.fuelType === fuelFilter)
+      }
+
+      setCars(filtered)
+      setTotalCars(result.pagination?.total || 0)
+    } catch (e) {
+      console.error('Failed to fetch cars:', e)
+      setCars([])
+    } finally {
+      setLoading(false)
+    }
+  }, [type, currentPage, brandFilter, cityFilter, searchQuery, priceRange, transmissionFilter, fuelFilter])
+
+  useEffect(() => {
+    fetchCars()
+  }, [fetchCars])
+
   // Helper to set filter and reset page
   const updateFilter = (setter: (val: string) => void, value: string) => {
     setter(value)
@@ -297,70 +401,7 @@ export default function CarListing({ type }: CarListingProps) {
 
   const config = typeConfig[type] || typeConfig.all
 
-  const filteredCars = useMemo(() => {
-    let cars = sampleCars
-
-    // Filter by type
-    if (type !== 'all') {
-      cars = cars.filter((car) => car.type === type)
-    }
-
-    // Filter by brand
-    if (brandFilter !== 'All Brands') {
-      cars = cars.filter((car) => car.brand === brandFilter)
-    }
-
-    // Filter by city
-    if (cityFilter !== 'All Cities') {
-      cars = cars.filter((car) => car.city === cityFilter)
-    }
-
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase()
-      cars = cars.filter(
-        (car) =>
-          car.brand.toLowerCase().includes(query) ||
-          car.model.toLowerCase().includes(query) ||
-          car.description.toLowerCase().includes(query)
-      )
-    }
-
-    // Filter by transmission
-    if (transmissionFilter !== 'all') {
-      cars = cars.filter((car) => car.transmission === transmissionFilter)
-    }
-
-    // Filter by fuel type
-    if (fuelFilter !== 'all') {
-      cars = cars.filter((car) => car.fuelType === fuelFilter)
-    }
-
-    // Filter by price range
-    if (priceRange !== 'all') {
-      cars = cars.filter((car) => {
-        const price = car.type === 'auction' ? (car.currentBid || 0) : car.price
-        switch (priceRange) {
-          case 'low':
-            return price < 100000
-          case 'mid':
-            return price >= 100000 && price < 500000
-          case 'high':
-            return price >= 500000
-          default:
-            return true
-        }
-      })
-    }
-
-    return cars
-  }, [type, brandFilter, cityFilter, searchQuery, transmissionFilter, fuelFilter, priceRange])
-
-  const totalPages = Math.max(1, Math.ceil(filteredCars.length / PAGE_SIZE))
-  const paginatedCars = filteredCars.slice(
-    (currentPage - 1) * PAGE_SIZE,
-    currentPage * PAGE_SIZE
-  )
+  const totalPages = Math.max(1, Math.ceil(totalCars / PAGE_SIZE))
 
   const hasActiveFilters =
     brandFilter !== 'All Brands' ||
@@ -385,7 +426,7 @@ export default function CarListing({ type }: CarListingProps) {
           <h1 className="text-3xl font-bold gold-text sm:text-4xl">{config.title}</h1>
           <p className="mt-2 text-muted-foreground text-sm sm:text-base">{config.subtitle}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {filteredCars.length} vehicle{filteredCars.length !== 1 ? 's' : ''} available
+            {totalCars} vehicle{totalCars !== 1 ? 's' : ''} available
           </p>
         </div>
       </div>
@@ -537,10 +578,25 @@ export default function CarListing({ type }: CarListingProps) {
           </div>
         )}
 
-        {/* Car grid */}
-        {paginatedCars.length > 0 ? (
+        {/* Loading state */}
+        {loading ? (
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
-            {paginatedCars.map((car) => (
+            {Array.from({ length: PAGE_SIZE }).map((_, i) => (
+              <Card key={i} className="luxury-card overflow-hidden bg-card py-0 gap-0 animate-pulse">
+                <div className="aspect-[16/10] bg-muted" />
+                <CardContent className="p-4 space-y-3">
+                  <div className="h-5 bg-muted rounded w-3/4" />
+                  <div className="h-4 bg-muted rounded w-1/2" />
+                  <div className="h-6 bg-muted rounded w-1/3" />
+                  <div className="h-4 bg-muted rounded w-2/3" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : cars.length > 0 ? (
+          /* Car grid */
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
+            {cars.map((car) => (
               <CarCard key={car.id} car={car} type={type} />
             ))}
           </div>

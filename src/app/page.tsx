@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
 import { Header } from '@/components/header'
 import HomePage from '@/components/home-page'
@@ -60,9 +61,14 @@ function ViewRenderer() {
 }
 
 export default function Home() {
-  const { currentView } = useAppStore()
+  const { currentView, checkAuth } = useAppStore()
   const isAuthPage = currentView === 'login' || currentView === 'register'
   const isDashboard = currentView === 'dealerDashboard' || currentView === 'adminDashboard'
+
+  // Check auth state on app load
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   return (
     <div className="min-h-screen flex flex-col bg-[#0a0a0a] text-[#f5f0e8]">

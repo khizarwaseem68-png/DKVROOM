@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { authApi, setToken, clearToken } from '@/lib/api'
 
 export type View = 
   | 'home' 
@@ -29,6 +30,20 @@ interface BookingState {
   paymentStatus: PaymentStatus
   receiptUploaded: boolean
   contactUnlocked: boolean
+  paymentId: string | null
+}
+
+interface UserState {
+  id: string | null
+  email: string | null
+  name: string | null
+  phone: string | null
+  whatsapp: string | null
+  role: 'customer' | 'dealer' | 'admin' | null
+  verified: boolean
+  avatar: string | null
+  dealerId?: string | null
+  dealer?: any | null
 }
 
 interface AppState {
@@ -40,10 +55,10 @@ interface AppState {
   selectedCity: string
   filterType: string
   isLoggedIn: boolean
-  userRole: 'customer' | 'dealer' | 'admin' | null
-  userName: string | null
+  user: UserState | null
   showMobileMenu: boolean
   booking: BookingState
+  loading: boolean
   
   navigate: (view: View) => void
   goBack: () => void
@@ -51,14 +66,16 @@ interface AppState {
   setSearch: (query: string) => void
   setCity: (city: string) => void
   setFilter: (type: string) => void
-  login: (role: 'customer' | 'dealer' | 'admin', name: string) => void
+  login: (user: UserState, token: string) => void
   logout: () => void
   toggleMobileMenu: () => void
-  startBooking: (type: BookingState['bookingType'], amount: number) => void
+  startBooking: (type: BookingState['bookingType'], amount: number, bookingId?: string, paymentId?: string) => void
   uploadReceipt: () => void
   verifyPayment: () => void
   rejectPayment: () => void
   resetBooking: () => void
+  setLoading: (loading: boolean) => void
+  checkAuth: () => Promise<void>
 }
 
 const initialBooking: BookingState = {
@@ -68,6 +85,20 @@ const initialBooking: BookingState = {
   paymentStatus: 'none',
   receiptUploaded: false,
   contactUnlocked: false,
+  paymentId: null,
+}
+
+const initialUser: UserState = {
+  id: null,
+  email: null,
+  name: null,
+  phone: null,
+  whatsapp: null,
+  role: null,
+  verified: false,
+  avatar: null,
+  dealerId: null,
+  dealer: null,
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -79,10 +110,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedCity: '',
   filterType: 'all',
   isLoggedIn: false,
-  userRole: null,
-  userName: null,
+  user: null,
   showMobileMenu: false,
   booking: { ...initialBooking },
+  loading: false,
 
   navigate: (view) => set({ previousView: get().currentView, currentView: view, showMobileMenu: false }),
   goBack: () => set((state) => ({ currentView: state.previousView || 'home', previousView: null })),
@@ -90,18 +121,36 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSearch: (query) => set({ searchQuery: query }),
   setCity: (city) => set({ selectedCity: city }),
   setFilter: (type) => set({ filterType: type }),
-  login: (role, name) => set({ isLoggedIn: true, userRole: role, userName: name }),
-  logout: () => set({ isLoggedIn: false, userRole: null, userName: null, currentView: 'home', booking: { ...initialBooking } }),
+  
+  login: (user, token) => {
+    setToken(token)
+    set({
+      isLoggedIn: true,
+      user,
+    })
+  },
+
+  logout: () => {
+    clearToken()
+    set({
+      isLoggedIn: false,
+      user: null,
+      currentView: 'home',
+      booking: { ...initialBooking },
+    })
+  },
+
   toggleMobileMenu: () => set((state) => ({ showMobileMenu: !state.showMobileMenu })),
   
-  startBooking: (type, amount) => set({
+  startBooking: (type, amount, bookingId, paymentId) => set({
     booking: {
-      bookingId: 'BK' + Date.now().toString(36).toUpperCase(),
+      bookingId: bookingId || 'BK' + Date.now().toString(36).toUpperCase(),
       bookingType: type,
       amount,
       paymentStatus: 'pending',
       receiptUploaded: false,
       contactUnlocked: false,
+      paymentId: paymentId || null,
     },
     currentView: 'payment',
     previousView: get().currentView,
@@ -120,4 +169,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   })),
   
   resetBooking: () => set({ booking: { ...initialBooking } }),
+  
+  setLoading: (loading) => set({ loading }),
+
+  checkAuth: async () => {
+    try {
+      const data = await authApi.me()
+      if (data.user) {
+        const u = data.user
+        set({
+          isLoggedIn: true,
+          user: {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            phone: u.phone,
+            whatsapp: u.whatsapp,
+            role: u.role,
+            verified: u.verified,
+            avatar: u.avatar,
+            dealerId: u.dealer?.id || null,
+            dealer: u.dealer || null,
+          },
+        })
+      }
+    } catch {
+      // Token invalid or expired
+      clearToken()
+      set({ isLoggedIn: false, user: null })
+    }
+  },
 }))

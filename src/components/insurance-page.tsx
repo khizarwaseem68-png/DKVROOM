@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
+import { insuranceApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +38,7 @@ import {
   Clock,
   Headphones,
   ExternalLink,
+  Loader2,
 } from 'lucide-react'
 
 const insuranceTypes = [
@@ -67,15 +69,6 @@ const insuranceTypes = [
     color: 'from-[#c9a84c]/80 to-[#8b7532]',
     popular: false,
   },
-]
-
-const insurancePartners = [
-  { name: 'Allianz', color: '#003781' },
-  { name: 'AIA', color: '#CC0000' },
-  { name: 'Etiqa', color: '#003B6F' },
-  { name: 'Tokio Marine', color: '#E60012' },
-  { name: 'MSIG', color: '#002E5F' },
-  { name: 'Zurich', color: '#0066B3' },
 ]
 
 const dkVroomBenefits = [
@@ -113,7 +106,7 @@ const faqItems = [
 ]
 
 export default function InsurancePage() {
-  const { navigate } = useAppStore()
+  const { navigate, user } = useAppStore()
   const [carBrand, setCarBrand] = useState('')
   const [carModel, setCarModel] = useState('')
   const [carYear, setCarYear] = useState('')
@@ -124,12 +117,47 @@ export default function InsurancePage() {
   const [showResult, setShowResult] = useState(false)
   const [estimatedPremium, setEstimatedPremium] = useState(0)
 
+  // Insurance partners from API
+  const [insurancePartners, setInsurancePartners] = useState<any[]>([])
+  const [partnersLoading, setPartnersLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    async function fetchPartners() {
+      try {
+        setPartnersLoading(true)
+        const result = await insuranceApi.list()
+        const partners = result.data || []
+        setInsurancePartners(partners.length > 0 ? partners : [
+          { name: 'Allianz', color: '#003781' },
+          { name: 'AIA', color: '#CC0000' },
+          { name: 'Etiqa', color: '#003B6F' },
+          { name: 'Tokio Marine', color: '#E60012' },
+          { name: 'MSIG', color: '#002E5F' },
+          { name: 'Zurich', color: '#0066B3' },
+        ])
+      } catch (e) {
+        console.error('Failed to fetch insurance partners:', e)
+        setInsurancePartners([
+          { name: 'Allianz', color: '#003781' },
+          { name: 'AIA', color: '#CC0000' },
+          { name: 'Etiqa', color: '#003B6F' },
+          { name: 'Tokio Marine', color: '#E60012' },
+          { name: 'MSIG', color: '#002E5F' },
+          { name: 'Zurich', color: '#0066B3' },
+        ])
+      } finally {
+        setPartnersLoading(false)
+      }
+    }
+    fetchPartners()
+  }, [])
+
   const calculatePremium = () => {
     const sum = parseFloat(sumInsured) || 0
     const ncdPercent = parseFloat(ncd) || 0
     const age = parseInt(driverAge) || 30
 
-    // Mock calculation
     let baseRate = coverageType === 'comprehensive' ? 0.045 : coverageType === 'tpft' ? 0.025 : 0.015
     let ageFactor = age < 25 ? 1.3 : age < 30 ? 1.1 : age > 60 ? 1.15 : 1.0
 
@@ -141,6 +169,35 @@ export default function InsurancePage() {
 
     setEstimatedPremium(totalPremium)
     setShowResult(true)
+  }
+
+  const handleCreateEnquiry = async () => {
+    try {
+      setSubmitting(true)
+      await insuranceApi.createEnquiry({
+        carBrand,
+        carModel,
+        carYear: parseInt(carYear) || 0,
+        sumInsured: parseFloat(sumInsured) || 0,
+        ncd: parseFloat(ncd) || 0,
+        driverAge: parseInt(driverAge) || 0,
+        coverageType,
+        estimatedPremium,
+        userId: user?.id,
+      })
+    } catch (e) {
+      console.error('Failed to create insurance enquiry:', e)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const getPartnerColor = (partner: any) => {
+    return partner.color || '#c9a84c'
+  }
+
+  const getPartnerName = (partner: any) => {
+    return partner.name || partner.companyName || partner.partnerName || 'Insurance'
   }
 
   return (
@@ -375,7 +432,10 @@ export default function InsurancePage() {
 
                     <Button
                       className="w-full mt-6 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-11 rounded-lg"
+                      onClick={handleCreateEnquiry}
+                      disabled={submitting}
                     >
+                      {submitting ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
                       Get Protected Now
                       <ArrowRight className="size-4 ml-1" />
                     </Button>
@@ -415,13 +475,13 @@ export default function InsurancePage() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-            {insurancePartners.map((partner) => (
-              <Card key={partner.name} className="luxury-card bg-[#111111] border-[#2a2a2a] rounded-xl">
+            {insurancePartners.map((partner, idx) => (
+              <Card key={getPartnerName(partner) + idx} className="luxury-card bg-[#111111] border-[#2a2a2a] rounded-xl">
                 <CardContent className="p-5 flex flex-col items-center justify-center">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: partner.color + '20' }}>
-                    <Shield className="size-5" style={{ color: partner.color }} />
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: getPartnerColor(partner) + '20' }}>
+                    <Shield className="size-5" style={{ color: getPartnerColor(partner) }} />
                   </div>
-                  <span className="text-sm font-medium text-[#f5f0e8]">{partner.name}</span>
+                  <span className="text-sm font-medium text-[#f5f0e8]">{getPartnerName(partner)}</span>
                 </CardContent>
               </Card>
             ))}
@@ -512,7 +572,10 @@ export default function InsurancePage() {
             <Button
               size="lg"
               className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold px-8 h-12 rounded-lg"
+              onClick={handleCreateEnquiry}
+              disabled={submitting}
             >
+              {submitting ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
               Get Protected Now
               <ArrowRight className="size-4 ml-1" />
             </Button>

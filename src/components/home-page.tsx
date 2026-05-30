@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
-import { sampleCars, sampleDealers, cities } from '@/lib/mock-data'
+import { carsApi } from '@/lib/api'
+import { cities } from '@/lib/mock-data'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -204,11 +205,67 @@ function StarRating({ rating }: { rating: number }) {
 }
 
 export default function HomePage() {
-  const { navigate, selectCar, setSearch, setCity, isLoggedIn, userRole, searchQuery, selectedCity } = useAppStore()
+  const { navigate, selectCar, setSearch, setCity, isLoggedIn, user, searchQuery, selectedCity } = useAppStore()
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [localCity, setLocalCity] = useState(selectedCity || 'All Cities')
+  const [featuredCars, setFeaturedCars] = useState<any[]>([])
+  const [carsLoading, setCarsLoading] = useState(true)
+  const [dealers, setDealers] = useState<any[]>([])
+  const [dealersLoading, setDealersLoading] = useState(true)
 
-  const featuredCars = sampleCars.filter((car) => car.featured)
+  useEffect(() => {
+    async function fetchFeaturedCars() {
+      try {
+        const result = await carsApi.list({ featured: 'true', status: 'approved' })
+        const cars = result.data || result
+        const mapped = cars.map((car: any) => ({
+          ...car,
+          photos: typeof car.photos === 'string' ? JSON.parse(car.photos || '[]') : (car.photos || []),
+          features: typeof car.features === 'string' ? JSON.parse(car.features || '[]') : (car.features || []),
+          dealerName: car.dealer?.companyName || car.dealerUser?.name || 'DK Vroom Dealer',
+          dealerVerified: car.dealer?.verified || false,
+          rating: car.dealer?.rating || 4.5,
+        }))
+        setFeaturedCars(mapped)
+      } catch (e) {
+        console.error('Failed to fetch featured cars:', e)
+      } finally {
+        setCarsLoading(false)
+      }
+    }
+    fetchFeaturedCars()
+  }, [])
+
+  useEffect(() => {
+    async function fetchDealers() {
+      try {
+        const result = await carsApi.list({ status: 'approved', limit: 100 })
+        const cars = result.data || result
+        // Group cars by dealer to create dealer list
+        const dealerMap = new Map<string, any>()
+        cars.forEach((car: any) => {
+          if (car.dealer && !dealerMap.has(car.dealer.id)) {
+            dealerMap.set(car.dealer.id, {
+              id: car.dealer.id,
+              companyName: car.dealer.companyName || 'Dealer',
+              logo: car.dealer.companyName?.charAt(0) || '🏎️',
+              city: car.dealer.city || car.city || 'Malaysia',
+              verified: car.dealer.verified || false,
+              rating: car.dealer.rating || 4.5,
+              totalListings: car.dealer.totalListings || 0,
+              specialization: [car.type === 'rent' ? 'Luxury Rentals' : car.type === 'sale' ? 'Used Cars' : car.type === 'auction' ? 'Auction' : 'Continue Loan'],
+            })
+          }
+        })
+        setDealers(Array.from(dealerMap.values()).slice(0, 8))
+      } catch (e) {
+        console.error('Failed to fetch dealers:', e)
+      } finally {
+        setDealersLoading(false)
+      }
+    }
+    fetchDealers()
+  }, [])
 
   const handleSearch = () => {
     setSearch(localSearch)
@@ -403,6 +460,23 @@ export default function HomePage() {
 
           {/* Featured Cars Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {carsLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <Card key={i} className="bg-[#111111] border-[#2a2a2a] overflow-hidden rounded-xl">
+                  <div className="h-52 bg-[#1a1a1a] animate-pulse" />
+                  <CardContent className="p-5">
+                    <div className="h-5 bg-[#1a1a1a] rounded animate-pulse mb-3 w-3/4" />
+                    <div className="h-4 bg-[#1a1a1a] rounded animate-pulse mb-2 w-1/2" />
+                    <div className="h-4 bg-[#1a1a1a] rounded animate-pulse w-1/3" />
+                  </CardContent>
+                </Card>
+              ))
+            ) : featuredCars.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <p className="text-[#8a8578] text-lg">No featured vehicles available at the moment.</p>
+                <p className="text-[#8a8578]/60 text-sm mt-2">Check back soon for new listings!</p>
+              </div>
+            ) : null}
             {featuredCars.map((car) => (
               <Card
                 key={car.id}
@@ -535,7 +609,18 @@ export default function HomePage() {
 
           {/* Horizontal Scroll */}
           <div className="flex gap-5 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
-            {sampleDealers.map((dealer) => (
+            {dealersLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <Card key={i} className="bg-[#111111] border-[#2a2a2a] min-w-[280px] sm:min-w-[300px] snap-start shrink-0 rounded-xl">
+                  <CardContent className="p-6">
+                    <div className="h-10 bg-[#1a1a1a] rounded animate-pulse mb-3 w-3/4" />
+                    <div className="h-4 bg-[#1a1a1a] rounded animate-pulse w-1/2" />
+                  </CardContent>
+                </Card>
+              ))
+            ) : dealers.length === 0 ? (
+              <p className="text-[#8a8578] py-8">No dealers available yet.</p>
+            ) : dealers.map((dealer) => (
               <Card
                 key={dealer.id}
                 className="luxury-card bg-[#111111] border-[#2a2a2a] min-w-[280px] sm:min-w-[300px] snap-start shrink-0 rounded-xl"
@@ -712,7 +797,7 @@ export default function HomePage() {
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
-              {isLoggedIn && userRole === 'dealer' ? (
+              {isLoggedIn && user?.role === 'dealer' ? (
                 <Button
                   onClick={() => navigate('dealerDashboard')}
                   size="lg"

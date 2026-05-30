@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '@/lib/store'
+import { adminApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Select,
@@ -51,76 +51,10 @@ import {
   Activity,
   Flag,
   Gavel,
+  Loader2,
 } from 'lucide-react'
 
-// Mock data
-const mockDealers = [
-  { id: 'd1', company: 'Prestige Auto KL', city: 'Kuala Lumpur', status: 'verified', listings: 45, rating: 4.9 },
-  { id: 'd2', company: 'Merc Gallery MY', city: 'Kuala Lumpur', status: 'verified', listings: 38, rating: 4.8 },
-  { id: 'd3', company: 'Stuttgart Motors', city: 'Selangor', status: 'verified', listings: 22, rating: 5.0 },
-  { id: 'd4', company: 'Southern Auto Hub', city: 'Johor', status: 'verified', listings: 120, rating: 4.5 },
-  { id: 'd5', company: 'Honda Power Zone', city: 'Selangor', status: 'pending', listings: 65, rating: 4.7 },
-  { id: 'd6', company: 'MyviMart Shah Alam', city: 'Selangor', status: 'verified', listings: 90, rating: 4.3 },
-  { id: 'd7', company: 'Bavarian Motors KL', city: 'Kuala Lumpur', status: 'pending', listings: 35, rating: 4.8 },
-  { id: 'd8', company: 'Supercars Asia', city: 'Kuala Lumpur', status: 'rejected', listings: 15, rating: 4.9 },
-]
-
-const mockCars = [
-  { id: '1', brand: 'BMW M4 Competition', dealer: 'Prestige Auto KL', type: 'rent', price: 680, status: 'approved', photo: 'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=200&q=60' },
-  { id: '2', brand: 'Mercedes S580', dealer: 'Merc Gallery MY', type: 'sale', price: 898000, status: 'approved', photo: 'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=200&q=60' },
-  { id: '3', brand: 'Porsche 911 Turbo S', dealer: 'Stuttgart Motors', type: 'rent', price: 1200, status: 'pending', photo: 'https://images.unsplash.com/photo-1555215695-3004980ad54e?w=200&q=60' },
-  { id: '4', brand: 'Toyota Camry 2.5V', dealer: 'Southern Auto Hub', type: 'sale', price: 138000, status: 'pending', photo: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=200&q=60' },
-  { id: '5', brand: 'Honda Civic Type R', dealer: 'Honda Power Zone', type: 'rent', price: 380, status: 'approved', photo: 'https://images.unsplash.com/photo-1542362567-b07e54358753?w=200&q=60' },
-  { id: '6', brand: 'Perodua Myvi 1.5 AV', dealer: 'MyviMart Shah Alam', type: 'continueLoan', price: 52000, status: 'approved', photo: 'https://images.unsplash.com/photo-1618843479313-40f8afb4b4d8?w=200&q=60' },
-]
-
-const mockLoans = [
-  { id: 'LN001', applicant: 'Ahmad Razak', car: 'Perodua Myvi 1.5 AV', bank: 'Maybank', amount: 41880, status: 'pending', date: 'Mar 1, 2026' },
-  { id: 'LN002', applicant: 'Sarah Tan', car: 'BMW X5 xDrive40i', bank: 'CIMB', amount: 153600, status: 'underReview', date: 'Mar 2, 2026' },
-  { id: 'LN003', applicant: 'Lim Wei Jie', car: 'Mazda CX-5 Turbo', bank: 'Hong Leong Bank', amount: 99900, status: 'approved', date: 'Feb 28, 2026' },
-  { id: 'LN004', applicant: 'Nurul Aisyah', car: 'Honda HR-V', bank: 'Public Bank', amount: 85000, status: 'rejected', date: 'Feb 25, 2026' },
-  { id: 'LN005', applicant: 'David Kumar', car: 'Toyota Vios', bank: 'Maybank', amount: 62000, status: 'pending', date: 'Mar 4, 2026' },
-]
-
-const mockPayments = [
-  { id: 'TXN001', user: 'Ahmad Razak', dealer: 'Prestige Auto KL', amount: 3400, method: 'FPX', status: 'completed', date: 'Mar 1, 2026' },
-  { id: 'TXN002', user: 'Sarah Tan', dealer: 'Merc Gallery MY', amount: 5200, method: 'TNG', status: 'pending', date: 'Mar 3, 2026' },
-  { id: 'TXN003', user: 'Lim Wei Jie', dealer: 'Stuttgart Motors', amount: 3600, method: 'Billplz', status: 'completed', date: 'Mar 8, 2026' },
-  { id: 'TXN004', user: 'Nurul Aisyah', dealer: 'Honda Power Zone', amount: 760, method: 'Stripe', status: 'failed', date: 'Mar 10, 2026' },
-  { id: 'TXN005', user: 'David Kumar', dealer: 'MyviMart Shah Alam', amount: 3000, method: 'FPX', status: 'completed', date: 'Mar 12, 2026' },
-  { id: 'TXN006', user: 'Wei Ming', dealer: 'Bavarian Motors KL', amount: 15000, method: 'Billplz', status: 'pending', date: 'Mar 13, 2026' },
-]
-
-const mockFraud = [
-  { id: 'FR001', type: 'Suspicious Listing', desc: '2019 Proton Saga listed at RM 180,000 — well above market value', user: 'Unknown Dealer', date: 'Mar 10, 2026', severity: 'high' },
-  { id: 'FR002', type: 'Duplicate Account', desc: 'Two dealer accounts with identical company registration', user: 'Auto Dealer X', date: 'Mar 9, 2026', severity: 'medium' },
-  { id: 'FR003', type: 'Unusual Pricing', desc: 'BMW X5 listed at RM 89,000 — significantly below market', user: 'Quick Cars MY', date: 'Mar 8, 2026', severity: 'high' },
-  { id: 'FR004', type: 'Fake Documents', desc: 'Uploaded IC appears to be digitally altered', user: 'Applicant #4521', date: 'Mar 7, 2026', severity: 'high' },
-  { id: 'FR005', type: 'Suspicious Listing', desc: 'Multiple high-value vehicles listed by newly registered dealer', user: 'Luxury Auto Hub', date: 'Mar 6, 2026', severity: 'low' },
-]
-
-const recentActivity = [
-  { text: 'New dealer registration: Honda Power Zone', time: '5 min ago', icon: Users },
-  { text: 'Car listing approved: BMW M4 Competition', time: '12 min ago', icon: Car },
-  { text: 'Loan application submitted: RM 41,880', time: '25 min ago', icon: Banknote },
-  { text: 'Payment received: RM 3,400 via FPX', time: '1 hour ago', icon: Wallet },
-  { text: 'Fraud flag: Suspicious listing detected', time: '2 hours ago', icon: ShieldAlert },
-  { text: 'Dealer verified: Prestige Auto KL', time: '3 hours ago', icon: UserCheck },
-  { text: 'New car listing: Toyota Camry 2.5V', time: '4 hours ago', icon: Car },
-  { text: 'Loan approved: CIMB - RM 153,600', time: '5 hours ago', icon: Banknote },
-  { text: 'Dispute resolved: Booking #BK-2341', time: '6 hours ago', icon: CheckCircle },
-  { text: 'New user registration: david.kumar@email.com', time: '7 hours ago', icon: Users },
-]
-
-const monthlyPlatformRevenue = [
-  { month: 'Sep', rental: 30, sale: 45, loan: 15, auction: 10 },
-  { month: 'Oct', rental: 35, sale: 50, loan: 20, auction: 15 },
-  { month: 'Nov', rental: 40, sale: 55, loan: 18, auction: 12 },
-  { month: 'Dec', rental: 50, sale: 65, loan: 25, auction: 20 },
-  { month: 'Jan', rental: 55, sale: 70, loan: 28, auction: 18 },
-  { month: 'Feb', rental: 60, sale: 75, loan: 32, auction: 22 },
-]
-
+// Static sidebar items
 const sidebarItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'dealers', label: 'Dealers', icon: Users },
@@ -137,6 +71,7 @@ const sidebarItems = [
 function getVerificationBadge(status: string) {
   switch (status) {
     case 'verified':
+    case 'approved':
       return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Verified</Badge>
     case 'pending':
       return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
@@ -185,8 +120,25 @@ function getTypeLabel(type: string) {
   }
 }
 
+function getPaymentStatusBadge(status: string) {
+  switch (status) {
+    case 'completed':
+    case 'verified':
+      return <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Completed</Badge>
+    case 'pending':
+    case 'uploaded':
+      return <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
+    case 'rejected':
+    case 'failed':
+      return <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Failed</Badge>
+    default:
+      return <Badge className="bg-gray-500/20 text-gray-400 border-gray-500/30 text-xs">{status}</Badge>
+  }
+}
+
 export default function AdminDashboard() {
-  const { userName, goBack } = useAppStore()
+  const { user, goBack } = useAppStore()
+  const userName = user?.name
   const [activeTab, setActiveTab] = useState('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
@@ -194,23 +146,209 @@ export default function AdminDashboard() {
   const [dealerSearch, setDealerSearch] = useState('')
   const [loanFilter, setLoanFilter] = useState('all')
   const [paymentFilter, setPaymentFilter] = useState('all')
+  const [carStatusFilter, setCarStatusFilter] = useState('all')
 
-  const filteredDealers = mockDealers
-    .filter((d) => dealerFilter === 'all' || d.status === dealerFilter)
-    .filter((d) => dealerSearch === '' || d.company.toLowerCase().includes(dealerSearch.toLowerCase()))
+  // API data states
+  const [stats, setStats] = useState<any>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const filteredLoans = loanFilter === 'all'
-    ? mockLoans
-    : mockLoans.filter((l) => l.status === loanFilter)
+  const [dealers, setDealers] = useState<any[]>([])
+  const [dealersLoading, setDealersLoading] = useState(true)
 
-  const filteredPayments = paymentFilter === 'all'
-    ? mockPayments
-    : mockPayments.filter((p) => p.method === paymentFilter)
+  const [cars, setCars] = useState<any[]>([])
+  const [carsLoading, setCarsLoading] = useState(true)
+
+  const [payments, setPayments] = useState<any[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+
+  const [loans, setLoans] = useState<any[]>([])
+  const [loansLoading, setLoansLoading] = useState(true)
+
+  const [bookings, setBookings] = useState<any[]>([])
+  const [bookingsLoading, setBookingsLoading] = useState(true)
+
+  // Action states
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment'; id: string } | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+
+  // Fetch stats
+  const fetchStats = useCallback(async () => {
+    try {
+      setStatsLoading(true)
+      const result = await adminApi.getStats()
+      setStats(result.data || result)
+    } catch (e) {
+      console.error('Failed to fetch stats:', e)
+      setStats({
+        totalUsers: 0, totalDealers: 0, totalCars: 0, totalRevenue: 0,
+        pendingDealers: 0, pendingCars: 0, pendingPayments: 0,
+      })
+    } finally {
+      setStatsLoading(false)
+    }
+  }, [])
+
+  // Fetch dealers
+  const fetchDealers = useCallback(async () => {
+    try {
+      setDealersLoading(true)
+      const params: Record<string, string> = {}
+      if (dealerFilter !== 'all') params.status = dealerFilter
+      if (dealerSearch) params.search = dealerSearch
+      const result = await adminApi.getDealers(params)
+      setDealers(result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch dealers:', e)
+      setDealers([])
+    } finally {
+      setDealersLoading(false)
+    }
+  }, [dealerFilter, dealerSearch])
+
+  // Fetch cars
+  const fetchCars = useCallback(async () => {
+    try {
+      setCarsLoading(true)
+      const params: Record<string, string> = {}
+      if (carStatusFilter !== 'all') params.status = carStatusFilter
+      const result = await adminApi.getCars(params)
+      setCars(result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch cars:', e)
+      setCars([])
+    } finally {
+      setCarsLoading(false)
+    }
+  }, [carStatusFilter])
+
+  // Fetch payments
+  const fetchPayments = useCallback(async () => {
+    try {
+      setPaymentsLoading(true)
+      const params: Record<string, string> = {}
+      if (paymentFilter !== 'all') params.status = paymentFilter
+      const result = await adminApi.getPayments(params)
+      setPayments(result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch payments:', e)
+      setPayments([])
+    } finally {
+      setPaymentsLoading(false)
+    }
+  }, [paymentFilter])
+
+  // Fetch loans
+  const fetchLoans = useCallback(async () => {
+    try {
+      setLoansLoading(true)
+      const params: Record<string, string> = {}
+      if (loanFilter !== 'all') params.status = loanFilter
+      const result = await adminApi.getPayments({ ...params, type: 'loan' })
+      setLoans(result.data || [])
+    } catch (e) {
+      console.error('Failed to fetch loans:', e)
+      setLoans([])
+    } finally {
+      setLoansLoading(false)
+    }
+  }, [loanFilter])
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchStats()
+  }, [fetchStats])
+
+  useEffect(() => {
+    if (activeTab === 'dealers') fetchDealers()
+  }, [activeTab, fetchDealers])
+
+  useEffect(() => {
+    if (activeTab === 'cars') fetchCars()
+  }, [activeTab, fetchCars])
+
+  useEffect(() => {
+    if (activeTab === 'payments') fetchPayments()
+  }, [activeTab, fetchPayments])
+
+  useEffect(() => {
+    if (activeTab === 'loans') fetchLoans()
+  }, [activeTab, fetchLoans])
+
+  // Action handlers
+  const handleVerifyDealer = async (dealerId: string, action: 'verify' | 'reject') => {
+    try {
+      setActionLoading(dealerId)
+      await adminApi.verifyDealer(dealerId, action, action === 'reject' ? rejectReason : undefined)
+      await fetchDealers()
+      await fetchStats()
+      setRejectDialog(null)
+      setRejectReason('')
+    } catch (e) {
+      console.error('Failed to verify dealer:', e)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleApproveCar = async (carId: string, action: 'approve' | 'reject') => {
+    try {
+      setActionLoading(carId)
+      await adminApi.approveCar(carId, action, action === 'reject' ? rejectReason : undefined)
+      await fetchCars()
+      await fetchStats()
+      setRejectDialog(null)
+      setRejectReason('')
+    } catch (e) {
+      console.error('Failed to approve car:', e)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleVerifyPayment = async (paymentId: string, action: 'verify' | 'reject') => {
+    try {
+      setActionLoading(paymentId)
+      await adminApi.verifyPayment(paymentId, action, action === 'reject' ? rejectReason : undefined)
+      await fetchPayments()
+      await fetchStats()
+      setRejectDialog(null)
+      setRejectReason('')
+    } catch (e) {
+      console.error('Failed to verify payment:', e)
+    } finally {
+      setActionLoading(null)
+    }
+  }
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setMobileSidebarOpen(false)
   }
+
+  // Derived data
+  const pendingDealerCount = dealers.filter(d => d.status === 'pending' || d.verified === false).length
+
+  // Helper to parse JSON strings for car photos
+  const getCarPhoto = (car: any) => {
+    try {
+      const photos = typeof car.photos === 'string' ? JSON.parse(car.photos) : car.photos
+      return Array.isArray(photos) && photos.length > 0 ? photos[0] : ''
+    } catch {
+      return ''
+    }
+  }
+
+  const getCarBrand = (car: any) => {
+    return car.brand && car.model ? `${car.brand} ${car.model}` : car.brand || car.title || 'Unknown'
+  }
+
+  // Loading spinner component
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center py-16">
+      <Loader2 className="size-8 text-[#c9a84c] animate-spin" />
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f0e8] flex">
@@ -254,12 +392,6 @@ export default function AdminDashboard() {
               >
                 <Icon className="size-4 shrink-0" />
                 {!sidebarCollapsed && <span>{item.label}</span>}
-                {item.id === 'fraud' && !sidebarCollapsed && (
-                  <Badge className="ml-auto bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5">3</Badge>
-                )}
-                {item.id === 'dealers' && !sidebarCollapsed && (
-                  <Badge className="ml-auto bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5">2</Badge>
-                )}
               </button>
             )
           })}
@@ -318,6 +450,52 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* Reject Reason Dialog */}
+      {rejectDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <Card className="bg-[#111111] border-[#2a2a2a] w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <XCircle className="size-5 text-red-400" />
+                Reject {rejectDialog.type === 'dealer' ? 'Dealer' : rejectDialog.type === 'car' ? 'Car' : 'Payment'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-xs text-[#8a8578]">Reason for rejection</label>
+                <Input
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Enter reason..."
+                  className="bg-[#1a1a1a] border-[#2a2a2a] text-[#f5f0e8] placeholder:text-[#4a4535] focus-visible:border-[#c9a84c]"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => {
+                    if (rejectDialog.type === 'dealer') handleVerifyDealer(rejectDialog.id, 'reject')
+                    else if (rejectDialog.type === 'car') handleApproveCar(rejectDialog.id, 'reject')
+                    else handleVerifyPayment(rejectDialog.id, 'reject')
+                  }}
+                  disabled={!rejectReason || actionLoading !== null}
+                  className="bg-red-500 hover:bg-red-600 text-white font-semibold flex-1"
+                >
+                  {actionLoading ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                  Reject
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setRejectDialog(null); setRejectReason('') }}
+                  className="border-[#2a2a2a] text-[#8a8578] hover:text-[#f5f0e8] flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
@@ -364,97 +542,119 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               {/* Stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                {[
-                  { label: 'Total Users', value: '15,247', icon: Users, change: '+842', up: true },
-                  { label: 'Total Dealers', value: '183', icon: UserCheck, change: '+12', up: true },
-                  { label: 'Total Cars Listed', value: '2,541', icon: Car, change: '+156', up: true },
-                  { label: 'Platform Revenue', value: 'RM 1.2M', icon: DollarSign, change: '+23%', up: true },
-                ].map((stat) => {
-                  const Icon = stat.icon
-                  return (
-                    <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
+                {statsLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <Card key={i} className="bg-[#111111] border-[#2a2a2a] animate-pulse">
                       <CardContent className="p-4 sm:p-6">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="w-10 h-10 rounded-lg bg-[#c9a84c]/10 flex items-center justify-center">
-                            <Icon className="size-5 text-[#c9a84c]" />
-                          </div>
-                          <span className={`flex items-center text-xs font-medium ${stat.up ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                            {stat.change}
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-[#f5f0e8]">{stat.value}</div>
-                        <div className="text-xs text-[#8a8578] mt-1">{stat.label}</div>
+                        <div className="h-10 bg-[#1a1a1a] rounded mb-3" />
+                        <div className="h-7 bg-[#1a1a1a] rounded w-2/3 mb-1" />
+                        <div className="h-4 bg-[#1a1a1a] rounded w-1/2" />
                       </CardContent>
                     </Card>
-                  )
-                })}
+                  ))
+                ) : (
+                  [
+                    { label: 'Total Users', value: stats?.totalUsers?.toLocaleString() || '0', icon: Users, change: '+842', up: true },
+                    { label: 'Total Dealers', value: stats?.totalDealers?.toLocaleString() || '0', icon: UserCheck, change: '+12', up: true },
+                    { label: 'Total Cars Listed', value: stats?.totalCars?.toLocaleString() || '0', icon: Car, change: '+156', up: true },
+                    { label: 'Platform Revenue', value: stats?.totalRevenue ? `RM ${(stats.totalRevenue / 1000000).toFixed(1)}M` : 'RM 0', icon: DollarSign, change: '+23%', up: true },
+                  ].map((stat) => {
+                    const Icon = stat.icon
+                    return (
+                      <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
+                        <CardContent className="p-4 sm:p-6">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="w-10 h-10 rounded-lg bg-[#c9a84c]/10 flex items-center justify-center">
+                              <Icon className="size-5 text-[#c9a84c]" />
+                            </div>
+                            <span className={`flex items-center text-xs font-medium ${stat.up ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                              {stat.change}
+                            </span>
+                          </div>
+                          <div className="text-2xl font-bold text-[#f5f0e8]">{stat.value}</div>
+                          <div className="text-xs text-[#8a8578] mt-1">{stat.label}</div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })
+                )}
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Platform Activity Chart */}
+                {/* Platform Activity Chart - static visualization */}
                 <Card className="lg:col-span-2 bg-[#111111] border-[#2a2a2a]">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">Platform Revenue</CardTitle>
+                    <CardTitle className="text-base font-semibold">Platform Overview</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-0">
-                    <div className="flex items-end gap-2 sm:gap-3 h-48">
-                      {monthlyPlatformRevenue.map((item) => (
-                        <div key={item.month} className="flex-1 flex flex-col items-center gap-2">
-                          <div className="w-full relative flex gap-0.5" style={{ height: '160px' }}>
-                            <div className="absolute bottom-0 w-1/4 h-full flex flex-col justify-end">
-                              <div className="bg-[#c9a84c] rounded-t-sm" style={{ height: `${item.rental}%` }} />
-                            </div>
-                            <div className="absolute bottom-0 left-1/4 w-1/4 h-full flex flex-col justify-end">
-                              <div className="bg-emerald-500 rounded-t-sm" style={{ height: `${item.sale}%` }} />
-                            </div>
-                            <div className="absolute bottom-0 left-1/2 w-1/4 h-full flex flex-col justify-end">
-                              <div className="bg-purple-500 rounded-t-sm" style={{ height: `${item.loan}%` }} />
-                            </div>
-                            <div className="absolute bottom-0 left-3/4 w-1/4 h-full flex flex-col justify-end">
-                              <div className="bg-orange-500 rounded-t-sm" style={{ height: `${item.auction}%` }} />
-                            </div>
-                          </div>
-                          <span className="text-[10px] text-[#8a8578]">{item.month}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-4 mt-4 flex-wrap">
-                      {[
-                        { label: 'Rental', color: 'bg-[#c9a84c]' },
-                        { label: 'Sale', color: 'bg-emerald-500' },
-                        { label: 'Loan', color: 'bg-purple-500' },
-                        { label: 'Auction', color: 'bg-orange-500' },
-                      ].map((l) => (
-                        <div key={l.label} className="flex items-center gap-1.5">
-                          <div className={`w-2.5 h-2.5 rounded-sm ${l.color}`} />
-                          <span className="text-xs text-[#8a8578]">{l.label}</span>
-                        </div>
-                      ))}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6">
+                      <div className="text-center p-4 rounded-xl bg-[#1a1a1a]">
+                        <Car className="size-6 text-[#c9a84c] mx-auto mb-2" />
+                        <div className="text-xl font-bold text-[#f5f0e8]">{stats?.totalCars || 0}</div>
+                        <div className="text-xs text-[#8a8578]">Total Cars</div>
+                      </div>
+                      <div className="text-center p-4 rounded-xl bg-[#1a1a1a]">
+                        <Users className="size-6 text-emerald-400 mx-auto mb-2" />
+                        <div className="text-xl font-bold text-[#f5f0e8]">{stats?.totalUsers || 0}</div>
+                        <div className="text-xs text-[#8a8578]">Total Users</div>
+                      </div>
+                      <div className="text-center p-4 rounded-xl bg-[#1a1a1a]">
+                        <Wallet className="size-6 text-purple-400 mx-auto mb-2" />
+                        <div className="text-xl font-bold text-[#f5f0e8]">{stats?.totalPayments || 0}</div>
+                        <div className="text-xs text-[#8a8578]">Payments</div>
+                      </div>
+                      <div className="text-center p-4 rounded-xl bg-[#1a1a1a]">
+                        <Banknote className="size-6 text-orange-400 mx-auto mb-2" />
+                        <div className="text-xl font-bold text-[#f5f0e8]">{stats?.totalLoans || 0}</div>
+                        <div className="text-xs text-[#8a8578]">Loans</div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Recent Activity */}
+                {/* Recent Activity - derived from stats */}
                 <Card className="bg-[#111111] border-[#2a2a2a]">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">Recent Activity</CardTitle>
+                    <CardTitle className="text-base font-semibold">Platform Status</CardTitle>
                   </CardHeader>
-                  <CardContent className="p-4 sm:p-6 pt-2 space-y-3 max-h-72 overflow-y-auto">
-                    {recentActivity.map((item, idx) => {
-                      const Icon = item.icon
-                      return (
-                        <div key={idx} className="flex items-start gap-3 py-2 border-b border-[#2a2a2a]/50 last:border-0">
-                          <div className="w-7 h-7 rounded-full bg-[#1a1a1a] flex items-center justify-center shrink-0 mt-0.5">
-                            <Icon className="size-3.5 text-[#c9a84c]" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs leading-relaxed">{item.text}</p>
-                            <p className="text-[10px] text-[#8a8578] mt-0.5">{item.time}</p>
-                          </div>
-                        </div>
-                      )
-                    })}
+                  <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
+                    <div className="flex items-start gap-3 py-2 border-b border-[#2a2a2a]/50">
+                      <div className="w-7 h-7 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Clock className="size-3.5 text-yellow-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed">{stats?.pendingDealers || 0} dealer(s) pending verification</p>
+                        <p className="text-[10px] text-[#8a8578] mt-0.5">Requires action</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 py-2 border-b border-[#2a2a2a]/50">
+                      <div className="w-7 h-7 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Car className="size-3.5 text-yellow-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed">{stats?.pendingCars || 0} car(s) pending approval</p>
+                        <p className="text-[10px] text-[#8a8578] mt-0.5">Requires review</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 py-2 border-b border-[#2a2a2a]/50">
+                      <div className="w-7 h-7 rounded-full bg-yellow-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <Wallet className="size-3.5 text-yellow-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed">{stats?.pendingPayments || 0} payment(s) pending verification</p>
+                        <p className="text-[10px] text-[#8a8578] mt-0.5">Requires verification</p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3 py-2">
+                      <div className="w-7 h-7 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                        <CheckCircle className="size-3.5 text-emerald-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs leading-relaxed">Platform operating normally</p>
+                        <p className="text-[10px] text-[#8a8578] mt-0.5">All systems online</p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
@@ -468,7 +668,7 @@ export default function AdminDashboard() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold">Pending Verifications</p>
-                      <p className="text-2xl font-bold text-yellow-400">2</p>
+                      <p className="text-2xl font-bold text-yellow-400">{(stats?.pendingDealers || 0) + (stats?.pendingCars || 0)}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -478,8 +678,8 @@ export default function AdminDashboard() {
                       <AlertTriangle className="size-5 text-orange-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">Unresolved Disputes</p>
-                      <p className="text-2xl font-bold text-orange-400">5</p>
+                      <p className="text-sm font-semibold">Pending Payments</p>
+                      <p className="text-2xl font-bold text-orange-400">{stats?.pendingPayments || 0}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -489,8 +689,8 @@ export default function AdminDashboard() {
                       <ShieldAlert className="size-5 text-red-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold">Fraud Flags</p>
-                      <p className="text-2xl font-bold text-red-400">3</p>
+                      <p className="text-sm font-semibold">Rejected Items</p>
+                      <p className="text-2xl font-bold text-red-400">{(stats?.rejectedDealers || 0) + (stats?.rejectedCars || 0)}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -544,31 +744,54 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredDealers.map((dealer) => (
-                          <tr key={dealer.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-medium">{dealer.company}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{dealer.city}</td>
-                            <td className="py-3 px-4">{getVerificationBadge(dealer.status)}</td>
-                            <td className="py-3 px-4">{dealer.listings}</td>
-                            <td className="py-3 px-4 text-[#c9a84c] font-medium">{dealer.rating}</td>
-                            <td className="py-3 px-4">
-                              {dealer.status === 'pending' ? (
-                                <div className="flex items-center gap-1">
-                                  <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
-                                    <CheckCircle className="size-3.5 mr-1" />Verify
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
-                                    <XCircle className="size-3.5 mr-1" />Reject
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
-                                  <Eye className="size-3.5 mr-1" />View
-                                </Button>
-                              )}
+                        {dealersLoading ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center">
+                              <Loader2 className="size-6 text-[#c9a84c] animate-spin mx-auto" />
+                              <p className="text-xs text-[#8a8578] mt-2">Loading dealers...</p>
                             </td>
                           </tr>
-                        ))}
+                        ) : dealers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-[#8a8578]">No dealers found</td>
+                          </tr>
+                        ) : (
+                          dealers.map((dealer) => (
+                            <tr key={dealer.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                              <td className="py-3 px-4 font-medium">{dealer.companyName || dealer.company}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{dealer.city}</td>
+                              <td className="py-3 px-4">{getVerificationBadge(dealer.verified ? 'verified' : dealer.status || 'pending')}</td>
+                              <td className="py-3 px-4">{dealer.totalListings || dealer.listings || 0}</td>
+                              <td className="py-3 px-4 text-[#c9a84c] font-medium">{dealer.rating?.toFixed(1) || 'N/A'}</td>
+                              <td className="py-3 px-4">
+                                {(dealer.status === 'pending' || dealer.verified === false) ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                                                      variant="ghost" size="sm"
+                                                                      className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
+                                                                      disabled={actionLoading === dealer.id}
+                                                                      onClick={() => handleVerifyDealer(dealer.id, 'verify')}
+                                                                    >
+                                                                      {actionLoading === dealer.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
+                                      Verify
+                                    </Button>
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                      onClick={() => setRejectDialog({ type: 'dealer', id: dealer.id })}
+                                    >
+                                      <XCircle className="size-3.5 mr-1" />Reject
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
+                                    <Eye className="size-3.5 mr-1" />View
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -581,7 +804,23 @@ export default function AdminDashboard() {
           {activeTab === 'cars' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-[#8a8578]">{mockCars.length} car listings</p>
+                <p className="text-sm text-[#8a8578]">{cars.length} car listings</p>
+                <div className="flex items-center gap-2">
+                  {['all', 'approved', 'pending', 'rejected'].map((status) => (
+                    <Button
+                      key={status}
+                      variant={carStatusFilter === status ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setCarStatusFilter(status)}
+                      className={carStatusFilter === status
+                        ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#b8963e] text-xs'
+                        : 'text-[#8a8578] hover:text-[#f5f0e8] text-xs'
+                      }
+                    >
+                      {status.charAt(0).toUpperCase() + status.slice(1)}
+                    </Button>
+                  ))}
+                </div>
               </div>
               <Card className="bg-[#111111] border-[#2a2a2a]">
                 <CardContent className="p-0">
@@ -599,46 +838,77 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {mockCars.map((car) => (
-                          <tr key={car.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4">
-                              <img src={car.photo} alt={car.brand} className="w-16 h-12 object-cover rounded-md" />
-                            </td>
-                            <td className="py-3 px-4 font-medium">{car.brand}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{car.dealer}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">
-                                {getTypeLabel(car.type)}
-                              </Badge>
-                            </td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">
-                              RM {car.price.toLocaleString()}{car.type === 'rent' ? '/day' : ''}
-                            </td>
-                            <td className="py-3 px-4">
-                              {car.status === 'approved' ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Approved</Badge>
-                              ) : (
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
-                              )}
-                            </td>
-                            <td className="py-3 px-4">
-                              {car.status === 'pending' ? (
-                                <div className="flex items-center gap-1">
-                                  <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
-                                    <CheckCircle className="size-3.5 mr-1" />Approve
-                                  </Button>
-                                  <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
-                                    <XCircle className="size-3.5 mr-1" />Reject
-                                  </Button>
-                                </div>
-                              ) : (
-                                <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
-                                  <Eye className="size-3.5 mr-1" />View
-                                </Button>
-                              )}
+                        {carsLoading ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center">
+                              <Loader2 className="size-6 text-[#c9a84c] animate-spin mx-auto" />
+                              <p className="text-xs text-[#8a8578] mt-2">Loading cars...</p>
                             </td>
                           </tr>
-                        ))}
+                        ) : cars.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-[#8a8578]">No cars found</td>
+                          </tr>
+                        ) : (
+                          cars.map((car) => (
+                            <tr key={car.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                              <td className="py-3 px-4">
+                                {getCarPhoto(car) ? (
+                                  <img src={getCarPhoto(car)} alt={getCarBrand(car)} className="w-16 h-12 object-cover rounded-md" />
+                                ) : (
+                                  <div className="w-16 h-12 bg-[#1a1a1a] rounded-md flex items-center justify-center">
+                                    <Car className="size-5 text-[#8a8578]" />
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 font-medium">{getCarBrand(car)}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{car.dealer?.companyName || car.dealerName || 'Unknown'}</td>
+                              <td className="py-3 px-4">
+                                <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">
+                                  {getTypeLabel(car.type)}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4 font-medium text-[#c9a84c]">
+                                RM {car.price?.toLocaleString() || 0}{car.type === 'rent' ? '/day' : ''}
+                              </td>
+                              <td className="py-3 px-4">
+                                {car.status === 'approved' ? (
+                                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Approved</Badge>
+                                ) : car.status === 'rejected' ? (
+                                  <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Rejected</Badge>
+                                ) : (
+                                  <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
+                                )}
+                              </td>
+                              <td className="py-3 px-4">
+                                {car.status === 'pending' ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
+                                      disabled={actionLoading === car.id}
+                                      onClick={() => handleApproveCar(car.id, 'approve')}
+                                    >
+                                      {actionLoading === car.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
+                                      Approve
+                                    </Button>
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                      onClick={() => setRejectDialog({ type: 'car', id: car.id })}
+                                    >
+                                      <XCircle className="size-3.5 mr-1" />Reject
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
+                                    <Eye className="size-3.5 mr-1" />View
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -666,21 +936,30 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {[
-                          { id: 'BK001', customer: 'Ahmad Razak', car: 'BMW M4', dealer: 'Prestige Auto KL', dates: 'Mar 1-5', amount: 3400, status: 'confirmed' },
-                          { id: 'BK002', customer: 'Sarah Tan', car: 'Mercedes S580', dealer: 'Merc Gallery MY', dates: 'Mar 3-7', amount: 5200, status: 'pending' },
-                          { id: 'BK003', customer: 'Lim Wei Jie', car: 'Porsche 911', dealer: 'Stuttgart Motors', dates: 'Mar 8-10', amount: 3600, status: 'confirmed' },
-                        ].map((b) => (
-                          <tr key={b.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-mono text-xs">{b.id}</td>
-                            <td className="py-3 px-4">{b.customer}</td>
-                            <td className="py-3 px-4">{b.car}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{b.dealer}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{b.dates}</td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {b.amount.toLocaleString()}</td>
-                            <td className="py-3 px-4">{getVerificationBadge(b.status)}</td>
+                        {bookingsLoading ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center">
+                              <Loader2 className="size-6 text-[#c9a84c] animate-spin mx-auto" />
+                              <p className="text-xs text-[#8a8578] mt-2">Loading bookings...</p>
+                            </td>
                           </tr>
-                        ))}
+                        ) : bookings.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-[#8a8578]">No bookings found</td>
+                          </tr>
+                        ) : (
+                          bookings.map((b: any) => (
+                            <tr key={b.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                              <td className="py-3 px-4 font-mono text-xs">{b.id}</td>
+                              <td className="py-3 px-4">{b.user?.name || b.customerName || 'N/A'}</td>
+                              <td className="py-3 px-4">{b.car?.brand} {b.car?.model || ''}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{b.dealer?.companyName || 'N/A'}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{b.startDate ? new Date(b.startDate).toLocaleDateString() : 'N/A'}</td>
+                              <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {b.totalAmount?.toLocaleString() || b.amount?.toLocaleString() || 0}</td>
+                              <td className="py-3 px-4">{getVerificationBadge(b.status)}</td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -726,28 +1005,36 @@ export default function AdminDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredLoans.map((loan) => (
-                          <tr key={loan.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-medium">{loan.applicant}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{loan.car}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{loan.bank}</td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {loan.amount.toLocaleString()}</td>
-                            <td className="py-3 px-4">{getLoanStatusBadge(loan.status)}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{loan.date}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
-                                  <Eye className="size-3.5 mr-1" />View
-                                </Button>
-                                {(loan.status === 'pending' || loan.status === 'underReview') && (
-                                  <Button variant="ghost" size="sm" className="h-7 text-[#c9a84c] hover:text-[#e8d48b] text-xs">
-                                    <FileCheck className="size-3.5 mr-1" />Process
-                                  </Button>
-                                )}
-                              </div>
+                        {loansLoading ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center">
+                              <Loader2 className="size-6 text-[#c9a84c] animate-spin mx-auto" />
+                              <p className="text-xs text-[#8a8578] mt-2">Loading loans...</p>
                             </td>
                           </tr>
-                        ))}
+                        ) : loans.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-[#8a8578]">No loans found</td>
+                          </tr>
+                        ) : (
+                          loans.map((loan: any) => (
+                            <tr key={loan.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                              <td className="py-3 px-4 font-medium">{loan.user?.name || loan.applicantName || 'N/A'}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{loan.car?.brand} {loan.car?.model || loan.carName || 'N/A'}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{loan.bankName || loan.bank || 'N/A'}</td>
+                              <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {loan.loanAmount?.toLocaleString() || loan.amount?.toLocaleString() || 0}</td>
+                              <td className="py-3 px-4">{getLoanStatusBadge(loan.status)}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{loan.createdAt ? new Date(loan.createdAt).toLocaleDateString() : 'N/A'}</td>
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-1">
+                                  <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
+                                    <Eye className="size-3.5 mr-1" />View
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -761,10 +1048,10 @@ export default function AdminDashboard() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {[
-                  { label: 'Total Processed', value: 'RM 1.2M' },
-                  { label: 'Pending', value: 'RM 23,400' },
-                  { label: 'Failed', value: 'RM 760' },
-                  { label: 'Commission Earned', value: 'RM 96,000' },
+                  { label: 'Total Processed', value: stats?.totalRevenue ? `RM ${(stats.totalRevenue / 1000).toFixed(0)}K` : 'RM 0' },
+                  { label: 'Pending', value: `${stats?.pendingPayments || 0} items` },
+                  { label: 'Failed', value: `${stats?.rejectedPayments || 0} items` },
+                  { label: 'Commission Earned', value: stats?.totalRevenue ? `RM ${(stats.totalRevenue * 0.08 / 1000).toFixed(0)}K` : 'RM 0' },
                 ].map((stat) => (
                   <Card key={stat.label} className="bg-[#111111] border-[#2a2a2a]">
                     <CardContent className="p-4">
@@ -777,18 +1064,18 @@ export default function AdminDashboard() {
 
               <div className="flex items-center gap-2 flex-wrap">
                 <Filter className="size-4 text-[#8a8578]" />
-                {['all', 'FPX', 'TNG', 'Billplz', 'Stripe'].map((method) => (
+                {['all', 'pending', 'verified', 'rejected'].map((status) => (
                   <Button
-                    key={method}
-                    variant={paymentFilter === method ? 'default' : 'ghost'}
+                    key={status}
+                    variant={paymentFilter === status ? 'default' : 'ghost'}
                     size="sm"
-                    onClick={() => setPaymentFilter(method)}
-                    className={paymentFilter === method
+                    onClick={() => setPaymentFilter(status)}
+                    className={paymentFilter === status
                       ? 'bg-[#c9a84c] text-[#0a0a0a] hover:bg-[#b8963e] text-xs'
                       : 'text-[#8a8578] hover:text-[#f5f0e8] text-xs'
                     }
                   >
-                    {method === 'all' ? 'All Methods' : method}
+                    {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
                   </Button>
                 ))}
               </div>
@@ -806,30 +1093,64 @@ export default function AdminDashboard() {
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Method</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Status</th>
                           <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Date</th>
+                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredPayments.map((txn) => (
-                          <tr key={txn.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4 font-mono text-xs">{txn.id}</td>
-                            <td className="py-3 px-4">{txn.user}</td>
-                            <td className="py-3 px-4 text-[#8a8578]">{txn.dealer}</td>
-                            <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {txn.amount.toLocaleString()}</td>
-                            <td className="py-3 px-4">
-                              <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">{txn.method}</Badge>
+                        {paymentsLoading ? (
+                          <tr>
+                            <td colSpan={8} className="py-8 text-center">
+                              <Loader2 className="size-6 text-[#c9a84c] animate-spin mx-auto" />
+                              <p className="text-xs text-[#8a8578] mt-2">Loading payments...</p>
                             </td>
-                            <td className="py-3 px-4">
-                              {txn.status === 'completed' ? (
-                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Completed</Badge>
-                              ) : txn.status === 'pending' ? (
-                                <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Pending</Badge>
-                              ) : (
-                                <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Failed</Badge>
-                              )}
-                            </td>
-                            <td className="py-3 px-4 text-[#8a8578]">{txn.date}</td>
                           </tr>
-                        ))}
+                        ) : payments.length === 0 ? (
+                          <tr>
+                            <td colSpan={8} className="py-8 text-center text-[#8a8578]">No payments found</td>
+                          </tr>
+                        ) : (
+                          payments.map((txn: any) => (
+                            <tr key={txn.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
+                              <td className="py-3 px-4 font-mono text-xs">{txn.id}</td>
+                              <td className="py-3 px-4">{txn.user?.name || txn.userName || 'N/A'}</td>
+                              <td className="py-3 px-4 text-[#8a8578]">{txn.dealer?.companyName || txn.dealerName || 'N/A'}</td>
+                              <td className="py-3 px-4 font-medium text-[#c9a84c]">RM {txn.amount?.toLocaleString() || 0}</td>
+                              <td className="py-3 px-4">
+                                <Badge variant="outline" className="border-[#2a2a2a] text-[#8a8578] text-xs">{txn.paymentMethod || txn.method || 'N/A'}</Badge>
+                              </td>
+                              <td className="py-3 px-4">
+                                {getPaymentStatusBadge(txn.status)}
+                              </td>
+                              <td className="py-3 px-4 text-[#8a8578]">{txn.createdAt ? new Date(txn.createdAt).toLocaleDateString() : 'N/A'}</td>
+                              <td className="py-3 px-4">
+                                {txn.status === 'pending' || txn.status === 'uploaded' ? (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
+                                      disabled={actionLoading === txn.id}
+                                      onClick={() => handleVerifyPayment(txn.id, 'verify')}
+                                    >
+                                      {actionLoading === txn.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
+                                      Verify
+                                    </Button>
+                                    <Button
+                                      variant="ghost" size="sm"
+                                      className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                      onClick={() => setRejectDialog({ type: 'payment', id: txn.id })}
+                                    >
+                                      <XCircle className="size-3.5 mr-1" />Reject
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#c9a84c] text-xs">
+                                    <Eye className="size-3.5 mr-1" />View
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -841,116 +1162,24 @@ export default function AdminDashboard() {
           {/* ===== DISPUTES ===== */}
           {activeTab === 'disputes' && (
             <div className="space-y-4">
-              {[
-                { id: 'DSP001', title: 'Car not as described', user: 'Ahmad Razak', dealer: 'Prestige Auto KL', status: 'open', date: 'Mar 10, 2026', amount: 'RM 3,400' },
-                { id: 'DSP002', title: 'Overcharged for rental extension', user: 'Sarah Tan', dealer: 'Merc Gallery MY', status: 'investigating', date: 'Mar 9, 2026', amount: 'RM 520' },
-                { id: 'DSP003', title: 'Deposit not refunded', user: 'Lim Wei Jie', dealer: 'Stuttgart Motors', status: 'resolved', date: 'Mar 8, 2026', amount: 'RM 5,000' },
-                { id: 'DSP004', title: 'Late return penalty dispute', user: 'Nurul Aisyah', dealer: 'Honda Power Zone', status: 'open', date: 'Mar 7, 2026', amount: 'RM 380' },
-                { id: 'DSP005', title: 'Damage claim disagreement', user: 'David Kumar', dealer: 'MyviMart Shah Alam', status: 'investigating', date: 'Mar 6, 2026', amount: 'RM 2,500' },
-              ].map((dispute) => (
-                <Card key={dispute.id} className="bg-[#111111] border-[#2a2a2a]">
-                  <CardContent className="p-4 sm:p-6">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
-                      <div>
-                        <p className="font-semibold">{dispute.title}</p>
-                        <p className="text-xs text-[#8a8578] mt-0.5">{dispute.id} · {dispute.date}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-[#c9a84c]">{dispute.amount}</span>
-                        {dispute.status === 'open' && (
-                          <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs">Open</Badge>
-                        )}
-                        {dispute.status === 'investigating' && (
-                          <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs">Investigating</Badge>
-                        )}
-                        {dispute.status === 'resolved' && (
-                          <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">Resolved</Badge>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm text-[#8a8578] mb-3">User: {dispute.user} · Dealer: {dispute.dealer}</p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] text-xs">
-                        <Eye className="size-3.5 mr-1" />View Details
-                      </Button>
-                      {dispute.status !== 'resolved' && (
-                        <Button variant="outline" size="sm" className="border-[#2a2a2a] text-[#8a8578] hover:text-[#f5f0e8] text-xs">
-                          <CheckCircle className="size-3.5 mr-1" />Resolve
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              <Card className="bg-[#111111] border-[#2a2a2a]">
+                <CardContent className="p-8 text-center">
+                  <AlertTriangle className="size-8 text-[#8a8578] mx-auto mb-3" />
+                  <p className="text-[#8a8578]">Dispute management coming soon</p>
+                  <p className="text-xs text-[#8a8578]/60 mt-1">This feature is under development</p>
+                </CardContent>
+              </Card>
             </div>
           )}
 
           {/* ===== FRAUD ===== */}
           {activeTab === 'fraud' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <Card className="bg-[#111111] border-red-500/20">
-                  <CardContent className="p-4">
-                    <div className="text-xs text-[#8a8578]">High Severity</div>
-                    <div className="text-2xl font-bold text-red-400 mt-1">3</div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-[#111111] border-yellow-500/20">
-                  <CardContent className="p-4">
-                    <div className="text-xs text-[#8a8578]">Medium Severity</div>
-                    <div className="text-2xl font-bold text-yellow-400 mt-1">1</div>
-                  </CardContent>
-                </Card>
-                <Card className="bg-[#111111] border-emerald-500/20">
-                  <CardContent className="p-4">
-                    <div className="text-xs text-[#8a8578]">Low Severity</div>
-                    <div className="text-2xl font-bold text-emerald-400 mt-1">1</div>
-                  </CardContent>
-                </Card>
-              </div>
-
               <Card className="bg-[#111111] border-[#2a2a2a]">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[#2a2a2a]">
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Type</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Description</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">User</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Date</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Severity</th>
-                          <th className="text-left py-3 px-4 text-[#8a8578] font-medium">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {mockFraud.map((item) => (
-                          <tr key={item.id} className="border-b border-[#2a2a2a]/50 hover:bg-[#1a1a1a]/50">
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1.5">
-                                <Flag className={`size-3.5 ${item.severity === 'high' ? 'text-red-400' : item.severity === 'medium' ? 'text-yellow-400' : 'text-emerald-400'}`} />
-                                <span className="text-xs">{item.type}</span>
-                              </div>
-                            </td>
-                            <td className="py-3 px-4 text-xs text-[#8a8578] max-w-xs truncate">{item.desc}</td>
-                            <td className="py-3 px-4 text-xs">{item.user}</td>
-                            <td className="py-3 px-4 text-xs text-[#8a8578]">{item.date}</td>
-                            <td className="py-3 px-4">{getSeverityBadge(item.severity)}</td>
-                            <td className="py-3 px-4">
-                              <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="sm" className="h-7 text-[#c9a84c] hover:text-[#e8d48b] hover:bg-[#c9a84c]/10 text-xs">
-                                  <Eye className="size-3.5 mr-1" />Investigate
-                                </Button>
-                                <Button variant="ghost" size="sm" className="h-7 text-[#8a8578] hover:text-[#f5f0e8] text-xs">
-                                  <XCircle className="size-3.5 mr-1" />Dismiss
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                <CardContent className="p-8 text-center">
+                  <ShieldAlert className="size-8 text-[#8a8578] mx-auto mb-3" />
+                  <p className="text-[#8a8578]">Fraud detection system coming soon</p>
+                  <p className="text-xs text-[#8a8578]/60 mt-1">This feature is under development</p>
                 </CardContent>
               </Card>
             </div>
@@ -962,110 +1191,60 @@ export default function AdminDashboard() {
               {/* Revenue Breakdown */}
               <Card className="bg-[#111111] border-[#2a2a2a]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold">Revenue by Module</CardTitle>
+                  <CardTitle className="text-base font-semibold">Platform Statistics</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 pt-2 space-y-4">
-                  {[
-                    { label: 'Car Sales', value: 520000, color: 'bg-emerald-500', percent: 43 },
-                    { label: 'Rental Income', value: 340000, color: 'bg-[#c9a84c]', percent: 28 },
-                    { label: 'Loan Commission', value: 180000, color: 'bg-purple-500', percent: 15 },
-                    { label: 'Auction Fees', value: 96000, color: 'bg-orange-500', percent: 8 },
-                    { label: 'Insurance Commission', value: 64000, color: 'bg-cyan-500', percent: 5 },
-                  ].map((item) => (
-                    <div key={item.label}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2.5 h-2.5 rounded-sm ${item.color}`} />
-                          <span className="text-sm">{item.label}</span>
-                        </div>
-                        <span className="text-sm font-semibold text-[#c9a84c]">RM {item.value.toLocaleString()}</span>
-                      </div>
-                      <div className="w-full h-2 bg-[#1a1a1a] rounded-full overflow-hidden">
-                        <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${item.percent}%` }} />
-                      </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="p-4 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <p className="text-xs text-[#8a8578]">Total Cars</p>
+                      <p className="text-lg font-bold text-[#c9a84c] mt-1">{stats?.totalCars || 0}</p>
                     </div>
-                  ))}
+                    <div className="p-4 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <p className="text-xs text-[#8a8578]">Total Dealers</p>
+                      <p className="text-lg font-bold text-[#c9a84c] mt-1">{stats?.totalDealers || 0}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <p className="text-xs text-[#8a8578]">Total Users</p>
+                      <p className="text-lg font-bold text-[#c9a84c] mt-1">{stats?.totalUsers || 0}</p>
+                    </div>
+                    <div className="p-4 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
+                      <p className="text-xs text-[#8a8578]">Revenue</p>
+                      <p className="text-lg font-bold text-[#c9a84c] mt-1">RM {stats?.totalRevenue?.toLocaleString() || 0}</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* User Growth */}
-                <Card className="bg-[#111111] border-[#2a2a2a]">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">User Growth</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 sm:p-6 pt-0">
-                    <div className="flex items-end gap-2 sm:gap-3 h-48">
-                      {[
-                        { month: 'Sep', value: 40 },
-                        { month: 'Oct', value: 48 },
-                        { month: 'Nov', value: 52 },
-                        { month: 'Dec', value: 60 },
-                        { month: 'Jan', value: 72 },
-                        { month: 'Feb', value: 85 },
-                      ].map((item) => (
-                        <div key={item.month} className="flex-1 flex flex-col items-center gap-2">
-                          <div className="w-full relative" style={{ height: '160px' }}>
-                            <div
-                              className="absolute bottom-0 w-full rounded-t-md bg-gradient-to-t from-emerald-600 to-emerald-400 transition-all duration-500"
-                              style={{ height: `${item.value}%` }}
-                            />
-                          </div>
-                          <span className="text-[10px] text-[#8a8578]">{item.month}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Top Dealers */}
-                <Card className="bg-[#111111] border-[#2a2a2a]">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold">Top Dealers</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
-                    {[
-                      { name: 'Prestige Auto KL', revenue: 'RM 128,500', rating: 4.9 },
-                      { name: 'Merc Gallery MY', revenue: 'RM 98,200', rating: 4.8 },
-                      { name: 'Stuttgart Motors', revenue: 'RM 76,300', rating: 5.0 },
-                      { name: 'Southern Auto Hub', revenue: 'RM 65,800', rating: 4.5 },
-                      { name: 'Bavarian Motors KL', revenue: 'RM 54,200', rating: 4.8 },
-                    ].map((dealer, idx) => (
-                      <div key={dealer.name} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-[#c9a84c] w-6">#{idx + 1}</span>
-                          <div>
-                            <p className="text-sm font-medium">{dealer.name}</p>
-                            <p className="text-xs text-[#8a8578]">Rating: {dealer.rating}</p>
-                          </div>
-                        </div>
-                        <span className="text-sm font-semibold text-[#c9a84c]">{dealer.revenue}</span>
-                      </div>
-                    ))}
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Commission Tracking */}
+              {/* Top Dealers from API */}
               <Card className="bg-[#111111] border-[#2a2a2a]">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold">Commission Tracking</CardTitle>
+                  <CardTitle className="text-base font-semibold">Top Dealers</CardTitle>
                 </CardHeader>
-                <CardContent className="p-4 sm:p-6 pt-0">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {[
-                      { label: 'Sales Commission', value: 'RM 52,000', rate: '10%' },
-                      { label: 'Rental Commission', value: 'RM 34,000', rate: '8%' },
-                      { label: 'Loan Commission', value: 'RM 18,000', rate: '5%' },
-                      { label: 'Auction Commission', value: 'RM 9,600', rate: '3%' },
-                    ].map((item) => (
-                      <div key={item.label} className="p-4 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a]">
-                        <p className="text-xs text-[#8a8578]">{item.label}</p>
-                        <p className="text-lg font-bold text-[#c9a84c] mt-1">{item.value}</p>
-                        <p className="text-xs text-[#8a8578] mt-0.5">Rate: {item.rate}</p>
-                      </div>
-                    ))}
-                  </div>
+                <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
+                  {dealersLoading ? (
+                    <div className="flex justify-center py-8">
+                      <Loader2 className="size-6 text-[#c9a84c] animate-spin" />
+                    </div>
+                  ) : dealers.length === 0 ? (
+                    <p className="text-center text-[#8a8578] py-4">No dealers found</p>
+                  ) : (
+                    dealers
+                      .filter((d) => d.verified || d.status === 'verified')
+                      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+                      .slice(0, 5)
+                      .map((dealer, idx) => (
+                        <div key={dealer.id} className="flex items-center justify-between py-2 border-b border-[#2a2a2a]/50 last:border-0">
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm font-bold text-[#c9a84c] w-6">#{idx + 1}</span>
+                            <div>
+                              <p className="text-sm font-medium">{dealer.companyName || dealer.company}</p>
+                              <p className="text-xs text-[#8a8578]">Rating: {dealer.rating?.toFixed(1) || 'N/A'} · {dealer.totalListings || 0} listings</p>
+                            </div>
+                          </div>
+                          <span className="text-sm text-[#8a8578]">{dealer.city}</span>
+                        </div>
+                      ))
+                  )}
                 </CardContent>
               </Card>
             </div>

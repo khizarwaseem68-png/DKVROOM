@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/lib/store'
-import { sampleCars, type CarData } from '@/lib/mock-data'
+import { carsApi, bookingsApi } from '@/lib/api'
+import { type CarData } from '@/lib/mock-data'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -46,7 +47,55 @@ import {
   AlertTriangle,
   Shield,
   Send,
+  Loader2,
 } from 'lucide-react'
+
+// Normalize API car data to CarData shape
+function normalizeCar(apiCar: any): CarData {
+  const photos = typeof apiCar.photos === 'string'
+    ? (() => { try { return JSON.parse(apiCar.photos) } catch { return [] } })()
+    : Array.isArray(apiCar.photos) ? apiCar.photos : []
+  const features = typeof apiCar.features === 'string'
+    ? (() => { try { return JSON.parse(apiCar.features) } catch { return [] } })()
+    : Array.isArray(apiCar.features) ? apiCar.features : []
+
+  return {
+    id: apiCar.id,
+    brand: apiCar.brand,
+    model: apiCar.model,
+    year: apiCar.year,
+    color: apiCar.color || 'N/A',
+    mileage: apiCar.mileage || 0,
+    fuelType: apiCar.fuelType || 'petrol',
+    transmission: apiCar.transmission || 'auto',
+    seats: apiCar.seats || 5,
+    condition: apiCar.condition || 'used',
+    price: apiCar.price || 0,
+    deposit: apiCar.deposit ?? undefined,
+    monthlyInstallment: apiCar.monthlyInstallment ?? undefined,
+    remainingMonths: apiCar.remainingMonths ?? undefined,
+    remainingBalance: apiCar.remainingBalance ?? undefined,
+    bankName: apiCar.bankName ?? undefined,
+    location: apiCar.location || apiCar.city || '',
+    city: apiCar.city || '',
+    description: apiCar.description || '',
+    features,
+    photos,
+    featured: apiCar.featured || false,
+    type: apiCar.type,
+    dealerName: apiCar.dealer?.companyName || '',
+    dealerId: apiCar.dealer?.id || apiCar.dealerId || '',
+    dealerVerified: apiCar.dealer?.verified || false,
+    rating: apiCar.dealer?.rating || 0,
+    vehicleCondition: apiCar.vehicleCondition ?? undefined,
+    requiredDocs: typeof apiCar.requiredDocs === 'string'
+      ? (() => { try { return JSON.parse(apiCar.requiredDocs) } catch { return undefined } })()
+      : Array.isArray(apiCar.requiredDocs) ? apiCar.requiredDocs : undefined,
+    auctionEnd: apiCar.auctionEnd ? new Date(apiCar.auctionEnd).toISOString() : undefined,
+    auctionStartBid: apiCar.auctionStartBid ?? undefined,
+    currentBid: apiCar.currentBid ?? undefined,
+  }
+}
 
 function formatPrice(amount: number): string {
   return `RM ${amount.toLocaleString('en-MY')}`
@@ -566,12 +615,37 @@ export default function CarDetail() {
     isLoggedIn,
     booking,
     startBooking,
+    user,
   } = useAppStore()
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [isZoomed, setIsZoomed] = useState(false)
+  const [car, setCar] = useState<CarData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [bookingLoading, setBookingLoading] = useState(false)
 
-  const car = sampleCars.find((c) => c.id === selectedCarId)
+  // Fetch car data from API
+  useEffect(() => {
+    if (!selectedCarId) {
+      setLoading(false)
+      return
+    }
+
+    async function fetchCar() {
+      try {
+        const result = await carsApi.get(selectedCarId!)
+        if (result.data) {
+          setCar(normalizeCar(result.data))
+        }
+      } catch (e) {
+        console.error('Failed to fetch car:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCar()
+  }, [selectedCarId])
 
   // Determine if contact is unlocked for this car
   const contactUnlocked = useMemo(() => {
@@ -580,6 +654,16 @@ export default function CarDetail() {
       booking.bookingType === car.type &&
       booking.paymentStatus === 'verified'
   }, [booking, car])
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <Loader2 className="size-12 text-gold animate-spin" />
+        <p className="text-muted-foreground">Loading vehicle details...</p>
+      </div>
+    )
+  }
 
   if (!car) {
     return (
@@ -600,30 +684,68 @@ export default function CarDetail() {
   const isRent = car.type === 'rent'
   const isSale = car.type === 'sale'
 
-  // CTA logic per car type
-  const handlePrimaryCta = () => {
-    if (isRent) {
-      if (!isLoggedIn) {
-        navigate('login')
+  // CTA logic per car type — creates a real booking via API
+  const handlePrimaryCta = async () => {
+    if (!isLoggedIn) {
+      navigate('login')
+      return
+    }
+
+    setBookingLoading(true)
+    try {
+      // Determine booking type and amount
+      let bookingType: string = car.type
+      let amount = car.price
+
+      if (isRent) {
+        amount = car.deposit || car.price
+      } else if (isSale) {
+        bookingType = 'purchase'
+        amount = 100 // enquiry fee
+      } else if (isAuction) {
+        amount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
+      } else if (isContinueLoan) {
+        // Continue loan uses different flow
+        navigate('continueLoanEnquiry')
+        setBookingLoading(false)
         return
       }
-      const depositAmount = car.deposit || car.price
-      startBooking('rent', depositAmount)
-    } else if (isSale) {
-      if (!isLoggedIn) {
-        navigate('login')
-        return
+
+      // Create booking via API
+      const bookingData: any = {
+        carId: car.id,
+        type: bookingType,
+        totalAmount: amount,
       }
-      startBooking('sale', 100)
-    } else if (isAuction) {
-      if (!isLoggedIn) {
-        navigate('login')
-        return
+
+      if (isRent) {
+        // For rental, default to 1 day booking
+        const today = new Date()
+        const tomorrow = new Date(today)
+        tomorrow.setDate(tomorrow.getDate() + 1)
+        bookingData.startDate = today.toISOString()
+        bookingData.endDate = tomorrow.toISOString()
       }
-      const depositAmount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
-      startBooking('auction', depositAmount)
-    } else if (isContinueLoan) {
-      navigate('continueLoanEnquiry')
+
+      const result = await bookingsApi.create(bookingData)
+      const newBooking = result.data
+
+      // Extract booking and payment IDs from the response
+      const bookingId = newBooking?.id
+      const paymentId = newBooking?.payments?.[0]?.id
+
+      // Update store with booking info and navigate to payment
+      startBooking(
+        bookingType as 'rent' | 'sale' | 'continueLoan' | 'auction',
+        amount,
+        bookingId,
+        paymentId
+      )
+    } catch (e: any) {
+      console.error('Failed to create booking:', e)
+      alert(e.message || 'Failed to create booking. Please try again.')
+    } finally {
+      setBookingLoading(false)
     }
   }
 
@@ -637,6 +759,7 @@ export default function CarDetail() {
   }
 
   const getCtaIcon = () => {
+    if (bookingLoading) return <Loader2 className="size-5 animate-spin" />
     if (isAuction) return <Gavel className="size-5" />
     if (isContinueLoan) return <Send className="size-5" />
     if (isRent) return <Calendar className="size-5" />
@@ -675,13 +798,19 @@ export default function CarDetail() {
               className="relative aspect-[16/10] overflow-hidden rounded-xl border border-border bg-muted cursor-zoom-in"
               onClick={() => setIsZoomed(!isZoomed)}
             >
-              <img
-                src={car.photos[selectedImageIndex]}
-                alt={`${car.brand} ${car.model}`}
-                className={`h-full w-full object-cover transition-transform duration-500 ${
-                  isZoomed ? 'scale-150' : 'scale-100'
-                }`}
-              />
+              {car.photos.length > 0 ? (
+                <img
+                  src={car.photos[selectedImageIndex]}
+                  alt={`${car.brand} ${car.model}`}
+                  className={`h-full w-full object-cover transition-transform duration-500 ${
+                    isZoomed ? 'scale-150' : 'scale-100'
+                  }`}
+                />
+              ) : (
+                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
+                  <Car className="size-16" />
+                </div>
+              )}
               {/* Image navigation arrows */}
               {car.photos.length > 1 && (
                 <>
@@ -906,6 +1035,7 @@ export default function CarDetail() {
               <Button
                 className="flex-1 bg-gold text-gold-dark hover:bg-gold-light font-semibold h-12 text-base gap-2"
                 onClick={handlePrimaryCta}
+                disabled={bookingLoading}
               >
                 {getCtaIcon()}
                 {getCtaLabel()}

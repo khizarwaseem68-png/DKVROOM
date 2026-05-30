@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useAppStore } from '@/lib/store'
+import { paymentsApi, adminApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,26 +25,66 @@ import {
   CheckCircle2,
   ImagePlus,
   X,
+  Loader2,
 } from 'lucide-react'
 
 export default function PaymentPage() {
-  const { booking, goBack, uploadReceipt, verifyPayment, navigate } = useAppStore()
-  const [receiptFile, setReceiptFile] = useState<string | null>(null)
+  const { booking, goBack, uploadReceipt, verifyPayment, navigate, user } = useAppStore()
   const [uploaded, setUploaded] = useState(booking.receiptUploaded)
   const [copied, setCopied] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [receiptFile, setReceiptFile] = useState<File | null>(null)
+  const [receiptFileName, setReceiptFileName] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const isAdmin = user?.role === 'admin'
 
   const qrValue = `https://dkvroom.com/pay?ref=${booking.bookingId || 'DEMO'}&amount=${booking.amount}`
 
-  const handleUpload = () => {
-    setReceiptFile('receipt_uploaded_' + Date.now() + '.jpg')
-    setUploaded(true)
-    uploadReceipt()
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setReceiptFile(file)
+    setReceiptFileName(file.name)
+  }
+
+  const handleUpload = async () => {
+    if (!receiptFile || !booking.paymentId) return
+
+    setUploading(true)
+    try {
+      await paymentsApi.uploadReceipt(booking.paymentId, receiptFile)
+      setUploaded(true)
+      uploadReceipt()
+    } catch (e: any) {
+      console.error('Failed to upload receipt:', e)
+      alert(e.message || 'Failed to upload receipt. Please try again.')
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleCopyRef = () => {
     navigator.clipboard?.writeText(booking.bookingId || '')
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleAdminVerify = async () => {
+    if (!booking.paymentId) return
+
+    setVerifying(true)
+    try {
+      await adminApi.verifyPayment(booking.paymentId, 'verify')
+      verifyPayment()
+    } catch (e: any) {
+      console.error('Failed to verify payment:', e)
+      alert(e.message || 'Failed to verify payment. Please try again.')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const getStatusStep = () => {
@@ -336,29 +377,92 @@ export default function PaymentPage() {
                     <FileText className="size-6 text-[#c9a84c]" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-[#f5f0e8] truncate">{receiptFile || 'payment_receipt.jpg'}</p>
-                    <p className="text-xs text-[#8a8578]">1.2 MB</p>
+                    <p className="text-sm font-medium text-[#f5f0e8] truncate">{receiptFileName || 'payment_receipt.jpg'}</p>
+                    <p className="text-xs text-[#8a8578]">{receiptFile ? `${(receiptFile.size / 1024).toFixed(1)} KB` : 'Receipt uploaded'}</p>
                   </div>
                   <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Upload Area */}
-                <button
-                  onClick={handleUpload}
-                  className="w-full p-8 rounded-xl border-2 border-dashed border-[#2a2a2a] hover:border-[#c9a84c]/50 bg-[#0a0a0a] transition-all group"
-                >
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-14 h-14 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center group-hover:bg-[#c9a84c]/20 transition-colors">
-                      <ImagePlus className="size-7 text-[#c9a84c]" />
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
+                  className="hidden"
+                  onChange={handleFileSelect}
+                />
+
+                {receiptFile ? (
+                  /* File selected, ready to upload */
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-[#0a0a0a]">
+                      <div className="w-12 h-12 rounded-lg bg-[#1a1a1a] flex items-center justify-center">
+                        <ImagePlus className="size-6 text-[#c9a84c]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-[#f5f0e8] truncate">{receiptFileName}</p>
+                        <p className="text-xs text-[#8a8578]">{(receiptFile.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-[#8a8578] hover:text-red-400"
+                        onClick={() => {
+                          setReceiptFile(null)
+                          setReceiptFileName(null)
+                        }}
+                      >
+                        <X className="size-4" />
+                      </Button>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-[#f5f0e8]">Click to upload or drag and drop</p>
-                      <p className="text-xs text-[#8a8578] mt-1">JPG, PNG, PDF (max 5MB)</p>
-                    </div>
+                    <Button
+                      className="w-full bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-11 gap-2"
+                      onClick={handleUpload}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <>
+                          <Loader2 className="size-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="size-4" />
+                          Upload Receipt
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full text-[#8a8578] hover:text-[#f5f0e8] text-sm"
+                      onClick={() => {
+                        setReceiptFile(null)
+                        setReceiptFileName(null)
+                        fileInputRef.current?.click()
+                      }}
+                    >
+                      Choose a different file
+                    </Button>
                   </div>
-                </button>
+                ) : (
+                  /* Upload Area */
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full p-8 rounded-xl border-2 border-dashed border-[#2a2a2a] hover:border-[#c9a84c]/50 bg-[#0a0a0a] transition-all group"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="w-14 h-14 rounded-xl bg-[#c9a84c]/10 flex items-center justify-center group-hover:bg-[#c9a84c]/20 transition-colors">
+                        <ImagePlus className="size-7 text-[#c9a84c]" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-[#f5f0e8]">Click to upload or drag and drop</p>
+                        <p className="text-xs text-[#8a8578] mt-1">JPG, PNG, PDF (max 5MB)</p>
+                      </div>
+                    </div>
+                  </button>
+                )}
               </div>
             )}
           </CardContent>
@@ -409,24 +513,35 @@ export default function PaymentPage() {
           </CardContent>
         </Card>
 
-        {/* Demo: Verify Payment Button (for testing only) */}
-        <div className="p-3 rounded-lg bg-[#1a1a1a] border border-[#2a2a2a] mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium text-[#8a8578]">Demo Mode</p>
-              <p className="text-[10px] text-[#8a8578]/60">Simulate admin verifying payment</p>
+        {/* Admin: Verify Payment Button (only for admin users) */}
+        {isAdmin && (
+          <div className="p-3 rounded-lg bg-[#1a1a1a] border border-[#c9a84c]/30 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-medium text-[#c9a84c]">Admin Mode</p>
+                <p className="text-[10px] text-[#8a8578]/60">Verify this payment as admin</p>
+              </div>
+              <Button
+                size="sm"
+                onClick={handleAdminVerify}
+                disabled={!uploaded || verifying}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs disabled:opacity-50 gap-1"
+              >
+                {verifying ? (
+                  <>
+                    <Loader2 className="size-3 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="size-3" />
+                    Verify Payment
+                  </>
+                )}
+              </Button>
             </div>
-            <Button
-              size="sm"
-              onClick={verifyPayment}
-              disabled={!uploaded}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs disabled:opacity-50"
-            >
-              <Shield className="size-3 mr-1" />
-              Verify Payment
-            </Button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

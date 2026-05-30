@@ -1,6 +1,8 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
+import { auctionsApi } from '@/lib/api'
 import CarListing from '@/components/car-listing'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,15 +13,48 @@ import {
   Clock,
   ArrowRight,
   Zap,
+  Loader2,
 } from 'lucide-react'
 
-const auctionStats = [
-  { icon: Gavel, value: '24', label: 'Active Auctions', color: 'text-[#c9a84c]' },
-  { icon: Users, value: '1,847', label: 'Total Bids', color: 'text-[#e8d48b]' },
-  { icon: TrendingUp, value: 'RM 2.4M', label: 'Current High Value', color: 'text-[#c9a84c]' },
-]
-
 export default function AuctionPage() {
+  const [auctionStats, setAuctionStats] = useState([
+    { icon: Gavel, value: '...', label: 'Active Auctions', color: 'text-[#c9a84c]' },
+    { icon: Users, value: '...', label: 'Total Bids', color: 'text-[#e8d48b]' },
+    { icon: TrendingUp, value: '...', label: 'Current High Value', color: 'text-[#c9a84c]' },
+  ])
+  const [statsLoading, setStatsLoading] = useState(true)
+
+  useEffect(() => {
+    async function fetchAuctionStats() {
+      try {
+        const result = await auctionsApi.list({ limit: 100 })
+        const auctionCars = result.data || []
+        const activeCount = auctionCars.length
+        const totalBids = auctionCars.reduce((sum: number, c: any) => sum + (c.bidCount || 0), 0)
+        const highValue = auctionCars.reduce((max: number, c: any) => {
+          const bid = c.currentBid || c.auctionStartBid || 0
+          return bid > max ? bid : max
+        }, 0)
+
+        setAuctionStats([
+          { icon: Gavel, value: String(activeCount), label: 'Active Auctions', color: 'text-[#c9a84c]' },
+          { icon: Users, value: totalBids.toLocaleString(), label: 'Total Bids', color: 'text-[#e8d48b]' },
+          { icon: TrendingUp, value: `RM ${(highValue / 1000).toFixed(0)}K`, label: 'Current High Value', color: 'text-[#c9a84c]' },
+        ])
+      } catch (e) {
+        console.error('Failed to fetch auction stats:', e)
+        setAuctionStats([
+          { icon: Gavel, value: '0', label: 'Active Auctions', color: 'text-[#c9a84c]' },
+          { icon: Users, value: '0', label: 'Total Bids', color: 'text-[#e8d48b]' },
+          { icon: TrendingUp, value: 'RM 0', label: 'Current High Value', color: 'text-[#c9a84c]' },
+        ])
+      } finally {
+        setStatsLoading(false)
+      }
+    }
+    fetchAuctionStats()
+  }, [])
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f0e8]">
       {/* ===== HERO SECTION ===== */}
@@ -54,7 +89,9 @@ export default function AuctionPage() {
               return (
                 <div key={stat.label} className="p-4 rounded-xl bg-[#111111]/80 border border-[#2a2a2a]/50">
                   <Icon className={`size-5 ${stat.color} mb-2`} />
-                  <div className="text-lg sm:text-xl font-bold gold-text">{stat.value}</div>
+                  <div className="text-lg sm:text-xl font-bold gold-text">
+                    {statsLoading ? <Loader2 className="size-5 animate-spin text-[#c9a84c]" /> : stat.value}
+                  </div>
                   <div className="text-xs text-[#8a8578]">{stat.label}</div>
                 </div>
               )

@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useAppStore } from '@/lib/store'
+import { loansApi } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -33,6 +34,7 @@ import {
   Zap,
   UserCheck,
   Car,
+  Loader2,
 } from 'lucide-react'
 
 const loanFeatures = [
@@ -59,11 +61,14 @@ const partnerBanks = [
 ]
 
 export default function LoanPage() {
-  const { navigate } = useAppStore()
+  const { navigate, user } = useAppStore()
   const [carPrice, setCarPrice] = useState('100000')
   const [downPaymentPercent, setDownPaymentPercent] = useState([30])
   const [tenure, setTenure] = useState('7')
   const [interestRate, setInterestRate] = useState('4.0')
+  const [applying, setApplying] = useState(false)
+  const [userLoans, setUserLoans] = useState<any[]>([])
+  const [loansLoading, setLoansLoading] = useState(false)
 
   const calculation = useMemo(() => {
     const price = parseFloat(carPrice) || 0
@@ -92,6 +97,46 @@ export default function LoanPage() {
     `RM ${value.toLocaleString('en-MY', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 
   const tenureYears = [5, 7, 9]
+
+  // Fetch user's existing loans
+  useEffect(() => {
+    async function fetchLoans() {
+      if (!user?.id) return
+      try {
+        setLoansLoading(true)
+        const result = await loansApi.list()
+        setUserLoans(result.data || [])
+      } catch (e) {
+        console.error('Failed to fetch loans:', e)
+        setUserLoans([])
+      } finally {
+        setLoansLoading(false)
+      }
+    }
+    fetchLoans()
+  }, [user?.id])
+
+  const handleApplyLoan = async () => {
+    try {
+      setApplying(true)
+      await loansApi.create({
+        userId: user?.id,
+        loanAmount: calculation.loanAmount,
+        tenure: parseInt(tenure),
+        interestRate: parseFloat(interestRate),
+        monthlyInstallment: calculation.monthlyInstallment,
+        carPrice: parseFloat(carPrice),
+        downPayment: calculation.downPayment,
+      })
+      // Refresh loans list
+      const result = await loansApi.list()
+      setUserLoans(result.data || [])
+    } catch (e) {
+      console.error('Failed to apply for loan:', e)
+    } finally {
+      setApplying(false)
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#f5f0e8]">
@@ -250,9 +295,11 @@ export default function LoanPage() {
                 </div>
 
                 <Button
-                  onClick={() => navigate('applyLoan')}
+                  onClick={handleApplyLoan}
+                  disabled={applying}
                   className="w-full mt-6 bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold h-11 rounded-lg"
                 >
+                  {applying ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
                   Apply Now
                   <ArrowRight className="size-4 ml-1" />
                 </Button>
@@ -261,6 +308,47 @@ export default function LoanPage() {
           </div>
         </div>
       </section>
+
+      {/* ===== USER'S LOAN APPLICATIONS ===== */}
+      {user?.id && userLoans.length > 0 && (
+        <section className="py-12 sm:py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-10">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <div className="h-px w-12 bg-[#c9a84c]" />
+                <span className="text-[#c9a84c] text-sm font-medium tracking-widest uppercase">Your Applications</span>
+                <div className="h-px w-12 bg-[#c9a84c]" />
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-bold">
+                My <span className="gold-text">Loans</span>
+              </h2>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {userLoans.map((loan: any) => (
+                <Card key={loan.id} className="bg-[#111111] border-[#2a2a2a] rounded-xl">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <Badge className={
+                        loan.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs' :
+                        loan.status === 'rejected' ? 'bg-red-500/20 text-red-400 border-red-500/30 text-xs' :
+                        loan.status === 'underReview' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30 text-xs' :
+                        'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-xs'
+                      }>
+                        {loan.status === 'underReview' ? 'Under Review' : loan.status?.charAt(0).toUpperCase() + loan.status?.slice(1) || 'Pending'}
+                      </Badge>
+                      <span className="text-xs text-[#8a8578]">{loan.createdAt ? new Date(loan.createdAt).toLocaleDateString() : ''}</span>
+                    </div>
+                    <div className="text-lg font-bold text-[#c9a84c]">RM {loan.loanAmount?.toLocaleString() || loan.amount?.toLocaleString() || 0}</div>
+                    <div className="text-xs text-[#8a8578] mt-1">{loan.bankName || loan.bank || 'Processing'}</div>
+                    <div className="text-xs text-[#8a8578] mt-1">Monthly: RM {loan.monthlyInstallment?.toLocaleString() || 0}</div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== LOAN FEATURES ===== */}
       <section className="py-12 sm:py-16">
@@ -413,10 +501,12 @@ export default function LoanPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              onClick={() => navigate('applyLoan')}
+              onClick={handleApplyLoan}
+              disabled={applying}
               size="lg"
               className="bg-[#c9a84c] hover:bg-[#b8963e] text-[#0a0a0a] font-semibold px-8 h-12 rounded-lg"
             >
+              {applying ? <Loader2 className="size-4 mr-2 animate-spin" /> : null}
               Apply Now
               <ArrowRight className="size-4 ml-1" />
             </Button>

@@ -111,7 +111,8 @@ model Car {
   id                String   @id @default(cuid())
   dealerId          String
   dealer            Dealer   @relation("DealerListedCars", fields: [dealerId], references: [id], onDelete: Cascade)
-  dealerUser        User     @relation("DealerCars", fields: [dealerId], references: [id], onDelete: Cascade)
+  userId            String   // The dealer's user account ID
+  dealerUser        User     @relation("DealerCars", fields: [userId], references: [id], onDelete: Cascade)
   type              String   // rent, sale, auction, continueLoan
   brand             String
   model             String
