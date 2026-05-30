@@ -1,43 +1,174 @@
-// DK Vroom API Client - All backend communication goes through this layer
+// DK Vroom API Client — Type-safe backend communication layer
 const API_BASE = '/api'
 
-// Token management
+// ===== TOKEN MANAGEMENT =====
+
+const TOKEN_KEY = 'dkvroom_token'
+
 let authToken: string | null = null
 
-export function setToken(token: string | null) {
+export function setToken(token: string | null): void {
   authToken = token
+  if (typeof window === 'undefined') return
   if (token) {
-    localStorage.setItem('dkvroom_token', token)
+    localStorage.setItem(TOKEN_KEY, token)
   } else {
-    localStorage.removeItem('dkvroom_token')
+    localStorage.removeItem(TOKEN_KEY)
   }
 }
 
 export function getToken(): string | null {
   if (authToken) return authToken
   if (typeof window !== 'undefined') {
-    authToken = localStorage.getItem('dkvroom_token')
+    authToken = localStorage.getItem(TOKEN_KEY)
   }
   return authToken
 }
 
-export function clearToken() {
+export function clearToken(): void {
   authToken = null
   if (typeof window !== 'undefined') {
-    localStorage.removeItem('dkvroom_token')
+    localStorage.removeItem(TOKEN_KEY)
   }
 }
 
-// Generic fetch wrapper with auth
-async function apiFetch(endpoint: string, options: RequestInit = {}) {
-  const token = getToken()
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
+// ===== API TYPES =====
+
+export interface ApiResponse<T = unknown> {
+  success: boolean
+  data?: T
+  error?: string
+  pagination?: {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+    hasNext: boolean
+    hasPrev: boolean
   }
+}
+
+export interface LoginResponse {
+  success: boolean
+  token: string
+  user: {
+    id: string
+    email: string
+    name: string
+    phone: string | null
+    whatsapp: string | null
+    role: 'customer' | 'dealer' | 'admin'
+    verified: boolean
+    avatar: string | null
+    dealer?: {
+      id: string
+      companyName: string
+      verified: boolean
+      rating: number
+      [key: string]: unknown
+    } | null
+  }
+}
+
+export interface CarData {
+  id: string
+  brand: string
+  model: string
+  year: number
+  color: string | null
+  mileage: number | null
+  fuelType: string | null
+  transmission: string | null
+  seats: number | null
+  condition: string | null
+  price: number
+  weeklyPrice: number | null
+  monthlyPrice: number | null
+  deposit: number | null
+  bookingFee: number | null
+  monthlyInstallment: number | null
+  remainingMonths: number | null
+  remainingBalance: number | null
+  takeoverAmount: number | null
+  bankName: string | null
+  vehicleCondition: string | null
+  requiredDocs: string | null
+  auctionStartBid: number | null
+  auctionReserve: number | null
+  currentBid: number | null
+  auctionEnd: string | null
+  auctionActive: boolean
+  conditionCategory: string | null
+  damageDescription: string | null
+  runningStatus: string | null
+  salvageStatus: string | null
+  repairEstimate: number | null
+  rentalTerms: string | null
+  pickupAvailable: boolean
+  deliveryAvailable: boolean
+  deliveryFee: number | null
+  availableFrom: string | null
+  availableTo: string | null
+  location: string | null
+  city: string | null
+  state: string | null
+  description: string | null
+  features: string | null
+  photos: string | null
+  videoUrl: string | null
+  featured: boolean
+  status: string
+  views: number
+  enquiries: number
+  type: 'rent' | 'sale' | 'auction' | 'continueLoan'
+  dealerId: string
+  dealer?: {
+    id: string
+    companyName: string
+    city: string | null
+    verified: boolean
+    rating: number
+    totalListings: number
+    [key: string]: unknown
+  }
+  dealerUser?: {
+    id: string
+    name: string
+    [key: string]: unknown
+  }
+  _count?: {
+    auctionBids: number
+    reviews: number
+    [key: string]: number
+  }
+  [key: string]: unknown
+}
+
+// ===== GENERIC FETCH WRAPPER =====
+
+class ApiError extends Error {
+  status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+async function apiFetch<T = unknown>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = getToken()
+  const headers: Record<string, string> = {}
+
+  // Only set Content-Type for non-FormData requests
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
+  }
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
+
+  Object.assign(headers, options.headers as Record<string, string> || {})
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
@@ -47,14 +178,20 @@ async function apiFetch(endpoint: string, options: RequestInit = {}) {
   const data = await response.json()
 
   if (!response.ok) {
-    throw new Error(data.error || 'Something went wrong')
+    if (response.status === 401) {
+      // Token expired or invalid
+      clearToken()
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:expired'))
+      }
+    }
+    throw new ApiError(data.error || 'Something went wrong', response.status)
   }
 
-  return data
+  return data as T
 }
 
-// File upload (multipart)
-async function apiUpload(endpoint: string, file: File) {
+async function apiUpload<T = unknown>(endpoint: string, file: File): Promise<T> {
   const token = getToken()
   const formData = new FormData()
   formData.append('file', file)
@@ -68,16 +205,15 @@ async function apiUpload(endpoint: string, file: File) {
   })
 
   const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'Upload failed')
-  return data
+  if (!response.ok) throw new ApiError(data.error || 'Upload failed', response.status)
+  return data as T
 }
 
-// ========================
-// AUTH API
-// ========================
+// ===== AUTH API =====
+
 export const authApi = {
-  login: async (email: string, password: string) => {
-    const data = await apiFetch('/auth/login', {
+  login: async (email: string, password: string): Promise<LoginResponse> => {
+    const data = await apiFetch<LoginResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     })
@@ -85,8 +221,8 @@ export const authApi = {
     return data
   },
 
-  register: async (userData: any) => {
-    const data = await apiFetch('/auth/register', {
+  register: async (userData: Record<string, unknown>): Promise<LoginResponse> => {
+    const data = await apiFetch<LoginResponse>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(userData),
     })
@@ -94,20 +230,19 @@ export const authApi = {
     return data
   },
 
-  me: async () => {
+  me: async (): Promise<LoginResponse> => {
     return apiFetch('/auth/me')
   },
 
-  logout: () => {
+  logout: (): void => {
     clearToken()
   },
 }
 
-// ========================
-// CARS API
-// ========================
+// ===== CARS API =====
+
 export const carsApi = {
-  list: async (params: Record<string, string | number | boolean> = {}) => {
+  list: async (params: Record<string, string | number | boolean | undefined> = {}): Promise<ApiResponse<CarData[]>> => {
     const searchParams = new URLSearchParams()
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
@@ -117,52 +252,49 @@ export const carsApi = {
     return apiFetch(`/cars?${searchParams.toString()}`)
   },
 
-  get: async (id: string) => {
+  get: async (id: string): Promise<ApiResponse<CarData>> => {
     return apiFetch(`/cars/${id}`)
   },
 
-  create: async (carData: any) => {
+  create: async (carData: Record<string, unknown>): Promise<ApiResponse<CarData>> => {
     return apiFetch('/cars', {
       method: 'POST',
       body: JSON.stringify(carData),
     })
   },
 
-  update: async (id: string, carData: any) => {
+  update: async (id: string, carData: Record<string, unknown>): Promise<ApiResponse<CarData>> => {
     return apiFetch(`/cars/${id}`, {
       method: 'PUT',
       body: JSON.stringify(carData),
     })
   },
 
-  delete: async (id: string) => {
-    return apiFetch(`/cars/${id}`, {
-      method: 'DELETE',
-    })
+  delete: async (id: string): Promise<ApiResponse> => {
+    return apiFetch(`/cars/${id}`, { method: 'DELETE' })
   },
 }
 
-// ========================
-// BOOKINGS API
-// ========================
+// ===== BOOKINGS API =====
+
 export const bookingsApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/bookings?${searchParams.toString()}`)
   },
 
-  get: async (id: string) => {
+  get: async (id: string): Promise<ApiResponse> => {
     return apiFetch(`/bookings/${id}`)
   },
 
-  create: async (bookingData: any) => {
+  create: async (bookingData: Record<string, unknown> | { carId: string; type: string; totalAmount: number; startDate?: string; endDate?: string }): Promise<ApiResponse> => {
     return apiFetch('/bookings', {
       method: 'POST',
       body: JSON.stringify(bookingData),
     })
   },
 
-  update: async (id: string, data: any) => {
+  update: async (id: string, data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch(`/bookings/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -170,21 +302,20 @@ export const bookingsApi = {
   },
 }
 
-// ========================
-// PAYMENTS API
-// ========================
+// ===== PAYMENTS API =====
+
 export const paymentsApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/payments?${searchParams.toString()}`)
   },
 
-  get: async (id: string) => {
+  get: async (id: string): Promise<ApiResponse> => {
     return apiFetch(`/payments/${id}`)
   },
 
-  uploadReceipt: async (id: string, file: File) => {
-    const uploadResult = await apiUpload('/upload', file)
+  uploadReceipt: async (id: string, file: File): Promise<ApiResponse> => {
+    const uploadResult = await apiUpload<{ url: string }>('/upload', file)
     return apiFetch(`/payments/${id}`, {
       method: 'PUT',
       body: JSON.stringify({
@@ -194,14 +325,14 @@ export const paymentsApi = {
     })
   },
 
-  verify: async (id: string) => {
+  verify: async (id: string): Promise<ApiResponse> => {
     return apiFetch(`/payments/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ status: 'verified' }),
     })
   },
 
-  reject: async (id: string, reason: string) => {
+  reject: async (id: string, reason: string): Promise<ApiResponse> => {
     return apiFetch(`/payments/${id}`, {
       method: 'PUT',
       body: JSON.stringify({ status: 'rejected', rejectionReason: reason }),
@@ -209,27 +340,26 @@ export const paymentsApi = {
   },
 }
 
-// ========================
-// CONTINUE LOAN API
-// ========================
+// ===== CONTINUE LOAN API =====
+
 export const continueLoanApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/continue-loan?${searchParams.toString()}`)
   },
 
-  get: async (id: string) => {
+  get: async (id: string): Promise<ApiResponse> => {
     return apiFetch(`/continue-loan/${id}`)
   },
 
-  create: async (data: any) => {
+  create: async (data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch('/continue-loan', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   },
 
-  update: async (id: string, data: any) => {
+  update: async (id: string, data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch(`/continue-loan/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -237,27 +367,26 @@ export const continueLoanApi = {
   },
 }
 
-// ========================
-// LOANS API
-// ========================
+// ===== LOANS API =====
+
 export const loansApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/loans?${searchParams.toString()}`)
   },
 
-  get: async (id: string) => {
+  get: async (id: string): Promise<ApiResponse> => {
     return apiFetch(`/loans/${id}`)
   },
 
-  create: async (data: any) => {
+  create: async (data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch('/loans', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   },
 
-  update: async (id: string, data: any) => {
+  update: async (id: string, data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch(`/loans/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
@@ -265,37 +394,31 @@ export const loansApi = {
   },
 }
 
-// ========================
-// AUCTIONS API
-// ========================
+// ===== AUCTIONS API =====
+
 export const auctionsApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/auctions?${searchParams.toString()}`)
   },
 
-  placeBid: async (data: { carId: string; amount: number }) => {
+  placeBid: async (data: { carId: string; amount: number }): Promise<ApiResponse> => {
     return apiFetch('/auctions', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   },
-
-  getCategories: async () => {
-    return apiFetch('/auctions?limit=1&groupBy=conditionCategory')
-  },
 }
 
-// ========================
-// WORKSHOPS API
-// ========================
+// ===== WORKSHOPS API =====
+
 export const workshopsApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/workshops?${searchParams.toString()}`)
   },
 
-  createAppointment: async (data: any) => {
+  createAppointment: async (data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch('/workshops', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -303,16 +426,15 @@ export const workshopsApi = {
   },
 }
 
-// ========================
-// INSURANCE API
-// ========================
+// ===== INSURANCE API =====
+
 export const insuranceApi = {
-  list: async (params: Record<string, string> = {}) => {
+  list: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/insurance?${searchParams.toString()}`)
   },
 
-  createEnquiry: async (data: any) => {
+  createEnquiry: async (data: Record<string, unknown>): Promise<ApiResponse> => {
     return apiFetch('/insurance', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -320,63 +442,61 @@ export const insuranceApi = {
   },
 }
 
-// ========================
-// DEALER API
-// ========================
+// ===== DEALER API =====
+
 export const dealerApi = {
-  getCars: async (params: Record<string, string> = {}) => {
+  getCars: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/dealer/cars?${searchParams.toString()}`)
   },
 
-  getBookings: async (params: Record<string, string> = {}) => {
+  getBookings: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/dealer/bookings?${searchParams.toString()}`)
   },
 
-  getStats: async () => {
+  getStats: async (): Promise<ApiResponse> => {
     return apiFetch('/dealer/stats')
   },
 }
 
-// ========================
-// ADMIN API
-// ========================
+// ===== ADMIN API =====
+
 export const adminApi = {
-  getStats: async () => {
+  getStats: async (): Promise<ApiResponse> => {
     return apiFetch('/admin/stats')
   },
 
-  getDealers: async (params: Record<string, string> = {}) => {
+  getDealers: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/admin/dealers?${searchParams.toString()}`)
   },
 
-  verifyDealer: async (id: string, action: 'verify' | 'reject', reason?: string) => {
+  verifyDealer: async (id: string, action: 'verify' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/dealers', {
       method: 'PUT',
       body: JSON.stringify({ dealerId: id, action, reason }),
     })
   },
 
-  getCars: async (params: Record<string, string> = {}) => {
+  getCars: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/admin/cars?${searchParams.toString()}`)
   },
 
-  approveCar: async (id: string, action: 'approve' | 'reject', reason?: string) => {
+  approveCar: async (id: string, action: 'approve' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/cars', {
       method: 'PUT',
       body: JSON.stringify({ carId: id, action, reason }),
     })
   },
 
-  getPayments: async (params: Record<string, string> = {}) => {
+  getPayments: async (params: Record<string, string> = {}): Promise<ApiResponse> => {
     const searchParams = new URLSearchParams(params)
     return apiFetch(`/admin/payments?${searchParams.toString()}`)
   },
 
-  verifyPayment: async (id: string, action: 'verify' | 'reject', reason?: string) => {
+  verifyPayment: async (id: string, action: 'verify' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/payments', {
       method: 'PUT',
       body: JSON.stringify({ paymentId: id, action, reason }),
@@ -384,15 +504,14 @@ export const adminApi = {
   },
 }
 
-// ========================
-// NOTIFICATIONS API
-// ========================
+// ===== NOTIFICATIONS API =====
+
 export const notificationsApi = {
-  list: async () => {
+  list: async (): Promise<ApiResponse> => {
     return apiFetch('/notifications')
   },
 
-  markRead: async (id?: string) => {
+  markRead: async (id?: string): Promise<ApiResponse> => {
     return apiFetch('/notifications', {
       method: 'PUT',
       body: JSON.stringify(id ? { notificationId: id } : { markAll: true }),
@@ -400,11 +519,10 @@ export const notificationsApi = {
   },
 }
 
-// ========================
-// UPLOAD API
-// ========================
+// ===== UPLOAD API =====
+
 export const uploadApi = {
-  upload: async (file: File) => {
+  upload: async (file: File): Promise<{ url: string }> => {
     return apiUpload('/upload', file)
   },
 }

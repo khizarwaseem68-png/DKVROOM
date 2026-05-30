@@ -1,12 +1,28 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useAppStore } from '@/lib/store'
-import { carsApi } from '@/lib/api'
-import { cities, brands, type CarData } from '@/lib/mock-data'
+import { carsApi, type CarData } from '@/lib/api'
+import {
+  formatPrice,
+  formatMileage,
+  CITIES,
+  BRANDS,
+  CONDITION_CATEGORIES,
+} from '@/lib/constants'
+import {
+  StarRating,
+  EmptyState,
+  VehicleTypeBadge,
+  ConditionCategoryBadge,
+  RunningStatusBadge,
+  SalvageStatusBadge,
+  CountdownTimer,
+} from '@/components/shared'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import {
   Select,
   SelectContent,
@@ -16,7 +32,6 @@ import {
 } from '@/components/ui/select'
 import {
   MapPin,
-  Star,
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
@@ -24,191 +39,317 @@ import {
   SlidersHorizontal,
   Gavel,
   Clock,
-  Banknote,
-  FileText,
-  Calendar,
-  Fuel,
-  Car,
   X,
   AlertTriangle,
   Wrench,
-  ShieldAlert,
-  Recycle,
-  FileWarning,
+  Fuel,
 } from 'lucide-react'
 
+// ============================================================
+// Types
+// ============================================================
+
 interface CarListingProps {
-  type: 'rent' | 'sale' | 'auction' | 'continueLoan' | 'all'
-  conditionCategory?: string // Auction vehicle condition filter
+  type: 'rent' | 'sale' | 'auction' | 'continueLoan'
+  conditionCategory?: string
 }
+
+/** Display-ready car with parsed JSON fields */
+interface NormalizedCar {
+  id: string
+  brand: string
+  model: string
+  year: number
+  color: string
+  mileage: number
+  fuelType: string
+  transmission: string
+  seats: number
+  condition: string
+  price: number
+  deposit: number | null
+  monthlyInstallment: number | null
+  remainingMonths: number | null
+  remainingBalance: number | null
+  takeoverAmount: number | null
+  bankName: string | null
+  location: string
+  city: string
+  description: string
+  features: string[]
+  photos: string[]
+  featured: boolean
+  type: 'rent' | 'sale' | 'auction' | 'continueLoan'
+  dealerName: string
+  dealerId: string
+  dealerVerified: boolean
+  rating: number
+  vehicleCondition: string | null
+  requiredDocs: string[]
+  auctionEnd: string | null
+  auctionStartBid: number | null
+  currentBid: number | null
+  conditionCategory: string | null
+  damageDescription: string | null
+  runningStatus: string | null
+  salvageStatus: string | null
+  repairEstimate: number | null
+}
+
+type PriceRange = 'all' | 'low' | 'mid' | 'high'
+
+// ============================================================
+// Constants
+// ============================================================
 
 const PAGE_SIZE = 6
 
-const typeConfig: Record<string, { title: string; subtitle: string; priceLabel: string }> = {
+const TYPE_META: Record<string, { title: string; subtitle: string }> = {
   rent: {
     title: 'Rent a Car',
     subtitle: 'Premium vehicles available for daily, weekly, or monthly rental',
-    priceLabel: '/day',
   },
   sale: {
     title: 'Buy & Sell Cars',
     subtitle: 'Find your perfect ride from verified dealers across Malaysia',
-    priceLabel: '',
   },
   auction: {
     title: 'Live Auctions',
     subtitle: 'Bid on exclusive vehicles — highest bidder wins',
-    priceLabel: '',
   },
   continueLoan: {
     title: 'Continue Loan / Sambung Bayar',
     subtitle: 'Take over existing car loans with easy approval process',
-    priceLabel: '',
-  },
-  all: {
-    title: 'All Vehicles',
-    subtitle: 'Browse our complete collection of vehicles across all categories',
-    priceLabel: '',
   },
 }
 
-function formatPrice(amount: number): string {
-  return `RM ${amount.toLocaleString('en-MY')}`
+const PRICE_RANGES: { key: PriceRange; label: string }[] = [
+  { key: 'all', label: 'All Prices' },
+  { key: 'low', label: 'Under RM 100K' },
+  { key: 'mid', label: 'RM 100K – 500K' },
+  { key: 'high', label: 'Above RM 500K' },
+]
+
+const TRANSMISSION_OPTIONS = [
+  { key: 'all', label: 'All Transmissions' },
+  { key: 'auto', label: 'Automatic' },
+  { key: 'manual', label: 'Manual' },
+]
+
+const FUEL_OPTIONS = [
+  { key: 'all', label: 'All Fuel Types' },
+  { key: 'petrol', label: 'Petrol' },
+  { key: 'diesel', label: 'Diesel' },
+  { key: 'hybrid', label: 'Hybrid' },
+  { key: 'electric', label: 'Electric' },
+]
+
+// ============================================================
+// Helpers
+// ============================================================
+
+/** Safely parse a JSON string field from the API */
+function parseJsonField<T>(value: string | T[] | null | undefined, fallback: T[] = []): T[] {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) as T[] } catch { return fallback }
+  }
+  return fallback
 }
 
-function formatMileage(km: number): string {
-  return `${km.toLocaleString('en-MY')} km`
-}
-
-// Normalize API car data to CarData shape
-function normalizeCar(apiCar: any): CarData {
-  const photos = typeof apiCar.photos === 'string'
-    ? (() => { try { return JSON.parse(apiCar.photos) } catch { return [] } })()
-    : Array.isArray(apiCar.photos) ? apiCar.photos : []
-  const features = typeof apiCar.features === 'string'
-    ? (() => { try { return JSON.parse(apiCar.features) } catch { return [] } })()
-    : Array.isArray(apiCar.features) ? apiCar.features : []
-
+/** Normalize raw API car data into display-ready shape */
+function normalizeCar(raw: CarData): NormalizedCar {
   return {
-    id: apiCar.id,
-    brand: apiCar.brand,
-    model: apiCar.model,
-    year: apiCar.year,
-    color: apiCar.color || 'N/A',
-    mileage: apiCar.mileage || 0,
-    fuelType: apiCar.fuelType || 'petrol',
-    transmission: apiCar.transmission || 'auto',
-    seats: apiCar.seats || 5,
-    condition: apiCar.condition || 'used',
-    price: apiCar.price || 0,
-    deposit: apiCar.deposit ?? undefined,
-    monthlyInstallment: apiCar.monthlyInstallment ?? undefined,
-    remainingMonths: apiCar.remainingMonths ?? undefined,
-    remainingBalance: apiCar.remainingBalance ?? undefined,
-    bankName: apiCar.bankName ?? undefined,
-    location: apiCar.location || apiCar.city || '',
-    city: apiCar.city || '',
-    description: apiCar.description || '',
-    features,
-    photos,
-    featured: apiCar.featured || false,
-    type: apiCar.type,
-    dealerName: apiCar.dealer?.companyName || '',
-    dealerId: apiCar.dealer?.id || apiCar.dealerId || '',
-    dealerVerified: apiCar.dealer?.verified || false,
-    rating: apiCar.dealer?.rating || 0,
-    vehicleCondition: apiCar.vehicleCondition ?? undefined,
-    requiredDocs: typeof apiCar.requiredDocs === 'string'
-      ? (() => { try { return JSON.parse(apiCar.requiredDocs) } catch { return undefined } })()
-      : Array.isArray(apiCar.requiredDocs) ? apiCar.requiredDocs : undefined,
-    auctionEnd: apiCar.auctionEnd ? new Date(apiCar.auctionEnd).toISOString() : undefined,
-    auctionStartBid: apiCar.auctionStartBid ?? undefined,
-    currentBid: apiCar.currentBid ?? undefined,
-    conditionCategory: apiCar.conditionCategory ?? undefined,
-    damageDescription: apiCar.damageDescription ?? undefined,
-    runningStatus: apiCar.runningStatus ?? undefined,
-    salvageStatus: apiCar.salvageStatus ?? undefined,
-    repairEstimate: apiCar.repairEstimate ?? undefined,
+    id: raw.id,
+    brand: raw.brand,
+    model: raw.model,
+    year: raw.year,
+    color: raw.color || 'N/A',
+    mileage: raw.mileage || 0,
+    fuelType: raw.fuelType || 'petrol',
+    transmission: raw.transmission || 'auto',
+    seats: raw.seats || 5,
+    condition: raw.condition || 'used',
+    price: raw.price || 0,
+    deposit: raw.deposit ?? null,
+    monthlyInstallment: raw.monthlyInstallment ?? null,
+    remainingMonths: raw.remainingMonths ?? null,
+    remainingBalance: raw.remainingBalance ?? null,
+    takeoverAmount: raw.takeoverAmount ?? null,
+    bankName: raw.bankName ?? null,
+    location: raw.location || raw.city || '',
+    city: raw.city || '',
+    description: raw.description || '',
+    features: parseJsonField(raw.features),
+    photos: parseJsonField(raw.photos),
+    featured: raw.featured || false,
+    type: raw.type,
+    dealerName: raw.dealer?.companyName || '',
+    dealerId: raw.dealer?.id || raw.dealerId || '',
+    dealerVerified: raw.dealer?.verified || false,
+    rating: raw.dealer?.rating || 0,
+    vehicleCondition: raw.vehicleCondition ?? null,
+    requiredDocs: parseJsonField<string>(raw.requiredDocs),
+    auctionEnd: raw.auctionEnd ?? null,
+    auctionStartBid: raw.auctionStartBid ?? null,
+    currentBid: raw.currentBid ?? null,
+    conditionCategory: raw.conditionCategory ?? null,
+    damageDescription: raw.damageDescription ?? null,
+    runningStatus: raw.runningStatus ?? null,
+    salvageStatus: raw.salvageStatus ?? null,
+    repairEstimate: raw.repairEstimate ?? null,
   }
 }
 
-function StarRating({ rating }: { rating: number }) {
+// ============================================================
+// Sub-components
+// ============================================================
+
+function CarCardSkeleton() {
   return (
-    <div className="flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <Star
-          key={star}
-          className={`size-3 ${
-            star <= Math.floor(rating)
-              ? 'fill-gold text-gold'
-              : star <= rating
-              ? 'fill-gold/50 text-gold'
-              : 'text-muted-foreground/30'
-          }`}
-        />
-      ))}
-      <span className="ml-1 text-xs text-muted-foreground">{rating.toFixed(1)}</span>
+    <Card className="luxury-card overflow-hidden bg-card py-0 gap-0">
+      <Skeleton className="aspect-[16/10] w-full rounded-none" />
+      <CardContent className="p-4 space-y-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <Skeleton className="h-7 w-1/3" />
+        <Skeleton className="h-4 w-2/3" />
+        <div className="h-px bg-border" />
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function AuctionCardSkeleton() {
+  return (
+    <Card className="luxury-card overflow-hidden bg-card py-0 gap-0">
+      <Skeleton className="aspect-[16/10] w-full rounded-none" />
+      <CardContent className="p-4 space-y-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <Skeleton className="h-6 w-1/2" />
+        <Skeleton className="h-4 w-1/3" />
+        <Skeleton className="h-9 w-full" />
+      </CardContent>
+    </Card>
+  )
+}
+
+function ContinueLoanCardSkeleton() {
+  return (
+    <Card className="luxury-card overflow-hidden bg-card py-0 gap-0">
+      <Skeleton className="aspect-[16/10] w-full rounded-none" />
+      <CardContent className="p-4 space-y-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-1/2" />
+        </div>
+        <div className="rounded-lg border border-border bg-muted/50 p-3 space-y-2">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-full" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Auction condition details block */
+function AuctionConditionDetails({ car }: { car: NormalizedCar }) {
+  return (
+    <div className="space-y-1.5 mt-2 p-2.5 rounded-lg border border-border bg-muted/50">
+      {/* Badges row */}
+      <div className="flex flex-wrap gap-1.5">
+        {car.conditionCategory && (
+          <ConditionCategoryBadge category={car.conditionCategory} />
+        )}
+        {car.runningStatus && (
+          <RunningStatusBadge status={car.runningStatus} />
+        )}
+        {car.salvageStatus && (
+          <SalvageStatusBadge status={car.salvageStatus} />
+        )}
+      </div>
+
+      {/* Repair estimate */}
+      {car.repairEstimate != null && car.repairEstimate > 0 && (
+        <div className="flex items-center justify-between text-body-sm">
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Wrench className="size-3" />
+            Repair Est.
+          </span>
+          <span className="text-orange-400 font-medium">
+            {formatPrice(car.repairEstimate)}
+          </span>
+        </div>
+      )}
+
+      {/* Damage description */}
+      {car.damageDescription && (
+        <p className="text-caption text-muted-foreground line-clamp-2 pt-1 border-t border-border">
+          <AlertTriangle className="size-3 inline mr-1 shrink-0" />
+          {car.damageDescription}
+        </p>
+      )}
     </div>
   )
 }
 
-function CountdownTimer({ endDate }: { endDate: string }) {
-  const [timeLeft, setTimeLeft] = useState('')
-
-  useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date().getTime()
-      const end = new Date(endDate).getTime()
-      const diff = end - now
-
-      if (diff <= 0) {
-        setTimeLeft('Ended')
-        return
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000)
-
-      setTimeLeft(`${days}d ${hours}h ${minutes}m ${seconds}s`)
-    }
-
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
-  }, [endDate])
-
-  return <span>{timeLeft}</span>
-}
-
-function TypeBadge({ type }: { type: string }) {
-  const config: Record<string, { label: string; icon: React.ReactNode }> = {
-    rent: { label: 'For Rent', icon: <Car className="size-3" /> },
-    sale: { label: 'For Sale', icon: <Banknote className="size-3" /> },
-    auction: { label: 'Auction', icon: <Gavel className="size-3" /> },
-    continueLoan: { label: 'Sambung Bayar', icon: <FileText className="size-3" /> },
-  }
-
-  const item = config[type]
-  if (!item) return null
-
+/** Continue Loan details block */
+function ContinueLoanDetails({ car }: { car: NormalizedCar }) {
   return (
-    <Badge className="bg-gold/20 text-gold border-gold/30 gap-1">
-      {item.icon}
-      {item.label}
-    </Badge>
+    <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
+      {car.takeoverAmount != null && car.takeoverAmount > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-overline text-muted-foreground">Takeover Amount</span>
+          <span className="text-body-sm font-semibold text-gold">
+            {formatPrice(car.takeoverAmount)}
+          </span>
+        </div>
+      )}
+      {car.deposit != null && car.deposit > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-overline text-muted-foreground">Deposit</span>
+          <span className="text-body-sm font-semibold text-gold">
+            {formatPrice(car.deposit)}
+          </span>
+        </div>
+      )}
+      <div className="flex items-center justify-between">
+        <span className="text-overline text-muted-foreground">Monthly Installment</span>
+        <span className="text-body-sm font-semibold text-foreground">
+          {formatPrice(car.monthlyInstallment || 0)}/mo
+        </span>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-overline text-muted-foreground">Remaining</span>
+        <span className="text-caption text-muted-foreground">
+          {car.remainingMonths ?? 0} months &middot; {formatPrice(car.remainingBalance || 0)}
+        </span>
+      </div>
+      {car.bankName && (
+        <div className="flex items-center justify-between">
+          <span className="text-overline text-muted-foreground">Bank</span>
+          <span className="text-caption font-medium text-foreground">{car.bankName}</span>
+        </div>
+      )}
+    </div>
   )
 }
 
-function CarCard({ car, type }: { car: CarData; type: string }) {
+/** Single car card in the grid */
+function CarCard({ car, type }: { car: NormalizedCar; type: CarListingProps['type'] }) {
   const { selectCar } = useAppStore()
-  const isContinueLoan = car.type === 'continueLoan'
   const isAuction = car.type === 'auction'
-  // Get condition category info for auction cars
-  const conditionInfo = isAuction && (car as any).conditionCategory
-    ? conditionCategoryConfig[(car as any).conditionCategory]
-    : null
+  const isContinueLoan = car.type === 'continueLoan'
 
   return (
     <Card
@@ -218,36 +359,36 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
       {/* Image */}
       <div className="relative aspect-[16/10] overflow-hidden">
         <img
-          src={car.photos[0]}
+          src={car.photos[0] || '/placeholder-car.png'}
           alt={`${car.brand} ${car.model}`}
           className="h-full w-full object-cover transition-transform duration-500 hover:scale-110"
+          loading="lazy"
         />
-        {/* Type badge overlay */}
+
+        {/* Top-left badges */}
         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-          <TypeBadge type={car.type} />
-          {/* Condition category badge for auction */}
-          {conditionInfo && (
-            <Badge className={`${conditionInfo.bgColor} border text-[10px] gap-1`}>
-              <conditionInfo.icon className="size-3" />
-              {conditionInfo.label}
-            </Badge>
+          <VehicleTypeBadge type={car.type} />
+          {isAuction && car.conditionCategory && (
+            <ConditionCategoryBadge category={car.conditionCategory} />
           )}
         </div>
+
         {/* Featured badge */}
         {car.featured && (
           <div className="absolute top-3 right-3">
             <Badge className="bg-gold text-gold-dark border-0 text-xs font-bold">
-              ⭐ Featured
+              &#9733; Featured
             </Badge>
           </div>
         )}
+
         {/* Auction countdown overlay */}
         {isAuction && car.auctionEnd && (
           <div className="absolute bottom-3 left-3 right-3">
-            <div className="flex items-center gap-1.5 rounded-md bg-black/80 backdrop-blur-sm px-2.5 py-1.5 text-xs">
-              <Clock className="size-3.5 text-gold" />
-              <span className="text-gold font-medium">
-                <CountdownTimer endDate={car.auctionEnd} />
+            <div className="flex items-center gap-1.5 rounded-md bg-black/80 backdrop-blur-sm px-2.5 py-1.5">
+              <Clock className="size-3.5 text-gold shrink-0" />
+              <span className="text-gold font-medium text-xs">
+                <CountdownTimer targetDate={car.auctionEnd} />
               </span>
             </div>
           </div>
@@ -257,49 +398,43 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
       <CardContent className="p-4 space-y-3">
         {/* Brand + Model + Year */}
         <div>
-          <h3 className="font-semibold text-foreground text-base leading-tight">
+          <h3 className="heading-sm text-foreground leading-tight">
             {car.brand} {car.model}
           </h3>
-          <p className="text-sm text-muted-foreground">{car.year} · {car.color}</p>
+          <p className="text-body-sm text-muted-foreground">
+            {car.year} &middot; {car.color} &middot; {formatMileage(car.mileage)}
+          </p>
         </div>
 
-        {/* Price section */}
+        {/* Quick spec pills */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {car.fuelType && (
+            <span className="inline-flex items-center gap-1 text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded">
+              <Fuel className="size-3" />
+              {car.fuelType.charAt(0).toUpperCase() + car.fuelType.slice(1)}
+            </span>
+          )}
+          {car.transmission && (
+            <span className="inline-flex items-center gap-1 text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded">
+              {car.transmission === 'auto' ? 'Automatic' : 'Manual'}
+            </span>
+          )}
+        </div>
+
+        {/* Price section — type-specific */}
         {isContinueLoan ? (
-          <div className="rounded-lg border border-gold/30 bg-gold/5 p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Takeover / Deposit</span>
-              <span className="text-sm font-semibold text-gold">
-                {formatPrice(car.deposit || 0)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Monthly Installment</span>
-              <span className="text-sm font-semibold text-foreground">
-                {formatPrice(car.monthlyInstallment || 0)}/mo
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Remaining</span>
-              <span className="text-xs text-muted-foreground">
-                {car.remainingMonths} months · {formatPrice(car.remainingBalance || 0)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Bank</span>
-              <span className="text-xs font-medium text-foreground">{car.bankName}</span>
-            </div>
-          </div>
+          <ContinueLoanDetails car={car} />
         ) : isAuction ? (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Current Bid</span>
-              <span className="text-lg font-bold gold-text">
+              <span className="text-overline text-muted-foreground">Current Bid</span>
+              <span className="heading-sm gold-text">
                 {formatPrice(car.currentBid || 0)}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Starting Bid</span>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-overline text-muted-foreground">Starting Bid</span>
+              <span className="text-body-sm text-muted-foreground">
                 {formatPrice(car.auctionStartBid || 0)}
               </span>
             </div>
@@ -314,44 +449,15 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
               <Gavel className="size-4" />
               Place Bid
             </Button>
-            {/* Vehicle condition details for auction */}
-            {conditionInfo && (
-              <div className="space-y-1 mt-1 p-2 rounded border border-[#2a2a2a] bg-[#0a0a0a]/50 text-[10px]">
-                {(car as any).runningStatus && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Status</span>
-                    <span className={(car as any).runningStatus === 'running' ? 'text-emerald-400 font-medium' : 'text-red-400 font-medium'}>
-                      {(car as any).runningStatus === 'running' ? 'Running' : 'Non-Running'}
-                    </span>
-                  </div>
-                )}
-                {(car as any).salvageStatus && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Title</span>
-                    <span className="text-muted-foreground capitalize">{(car as any).salvageStatus}</span>
-                  </div>
-                )}
-                {(car as any).repairEstimate && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Repair Est.</span>
-                    <span className="text-orange-400 font-medium">RM {(car as any).repairEstimate.toLocaleString()}</span>
-                  </div>
-                )}
-                {(car as any).damageDescription && (
-                  <p className="text-muted-foreground line-clamp-2 pt-1 border-t border-[#2a2a2a]">
-                    {(car as any).damageDescription}
-                  </p>
-                )}
-              </div>
-            )}
+            <AuctionConditionDetails car={car} />
           </div>
         ) : (
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold gold-text">
+            <span className="heading-md gold-text">
               {formatPrice(car.price)}
             </span>
             {type === 'rent' && (
-              <span className="text-sm text-muted-foreground">/day</span>
+              <span className="text-body-sm text-muted-foreground">/day</span>
             )}
           </div>
         )}
@@ -359,68 +465,190 @@ function CarCard({ car, type }: { car: CarData; type: string }) {
         {/* Location */}
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <MapPin className="size-3.5 shrink-0" />
-          <span className="text-xs truncate">{car.location}</span>
+          <span className="text-caption truncate">{car.location || car.city}</span>
         </div>
 
         <div className="h-px bg-border" />
 
         {/* Dealer + Rating */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{car.dealerName}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-caption text-muted-foreground truncate">
+              {car.dealerName}
+            </span>
             {car.dealerVerified && (
-              <ShieldCheck className="size-3.5 text-gold" />
+              <ShieldCheck className="size-3.5 text-gold shrink-0" />
             )}
           </div>
-          <StarRating rating={car.rating} />
+          <StarRating rating={car.rating} size="sm" />
         </div>
       </CardContent>
     </Card>
   )
 }
 
-// Condition category badge config
-const conditionCategoryConfig: Record<string, { label: string; icon: any; color: string; bgColor: string }> = {
-  running: { label: 'Running', icon: Car, color: 'text-emerald-400', bgColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  used: { label: 'Used', icon: Clock, color: 'text-blue-400', bgColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  accident: { label: 'Accident', icon: AlertTriangle, color: 'text-orange-400', bgColor: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  wreck: { label: 'Wreck', icon: ShieldAlert, color: 'text-red-400', bgColor: 'bg-red-500/20 text-red-400 border-red-500/30' },
-  salvage: { label: 'Salvage', icon: FileWarning, color: 'text-purple-400', bgColor: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  insurance_writeoff: { label: 'Insurance Write-off', icon: ShieldAlert, color: 'text-pink-400', bgColor: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
-  rebuild_project: { label: 'Rebuild Project', icon: Recycle, color: 'text-cyan-400', bgColor: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
+/** Pagination controls */
+function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}) {
+  // Build visible page range (max 5 pages shown)
+  const pages = useMemo(() => {
+    const range: number[] = []
+    const maxVisible = 5
+    let start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+    const end = Math.min(totalPages, start + maxVisible - 1)
+    start = Math.max(1, end - maxVisible + 1)
+    for (let i = start; i <= end; i++) range.push(i)
+    return range
+  }, [currentPage, totalPages])
+
+  if (totalPages <= 1) return null
+
+  return (
+    <nav
+      className="flex items-center justify-center gap-1.5 mt-8"
+      aria-label="Pagination"
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="size-9"
+        aria-label="Previous page"
+      >
+        <ChevronLeft className="size-4" />
+      </Button>
+
+      {pages[0] > 1 && (
+        <>
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(1)}
+            className="size-9"
+          >
+            1
+          </Button>
+          {pages[0] > 2 && (
+            <span className="text-muted-foreground px-1 select-none">&hellip;</span>
+          )}
+        </>
+      )}
+
+      {pages.map((page) => (
+        <Button
+          key={page}
+          variant={currentPage === page ? 'default' : 'outline'}
+          size="icon"
+          onClick={() => onPageChange(page)}
+          className={`size-9 ${
+            currentPage === page
+              ? 'bg-gold text-gold-dark hover:bg-gold-light'
+              : ''
+          }`}
+          aria-current={currentPage === page ? 'page' : undefined}
+        >
+          {page}
+        </Button>
+      ))}
+
+      {pages[pages.length - 1] < totalPages && (
+        <>
+          {pages[pages.length - 1] < totalPages - 1 && (
+            <span className="text-muted-foreground px-1 select-none">&hellip;</span>
+          )}
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => onPageChange(totalPages)}
+            className="size-9"
+          >
+            {totalPages}
+          </Button>
+        </>
+      )}
+
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="size-9"
+        aria-label="Next page"
+      >
+        <ChevronRight className="size-4" />
+      </Button>
+    </nav>
+  )
 }
 
+/** Active filter badge row */
+function ActiveFilterBadge({
+  label,
+  onRemove,
+}: {
+  label: string
+  onRemove: () => void
+}) {
+  return (
+    <Badge variant="secondary" className="gap-1 text-xs">
+      {label}
+      <X
+        className="size-3 cursor-pointer hover:text-foreground"
+        onClick={onRemove}
+      />
+    </Badge>
+  )
+}
+
+// ============================================================
+// Main Component
+// ============================================================
+
 export default function CarListing({ type, conditionCategory }: CarListingProps) {
-  const { searchQuery, selectedCity, selectCar } = useAppStore()
+  const { searchQuery } = useAppStore()
+
+  // Filters
   const [brandFilter, setBrandFilter] = useState('All Brands')
   const [cityFilter, setCityFilter] = useState('All Cities')
   const [transmissionFilter, setTransmissionFilter] = useState('all')
   const [fuelFilter, setFuelFilter] = useState('all')
-  const [priceRange, setPriceRange] = useState<'all' | 'low' | 'mid' | 'high'>('all')
+  const [priceRange, setPriceRange] = useState<PriceRange>('all')
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
 
-  // API data state
-  const [cars, setCars] = useState<CarData[]>([])
+  // Data
+  const [cars, setCars] = useState<NormalizedCar[]>([])
   const [loading, setLoading] = useState(true)
   const [totalCars, setTotalCars] = useState(0)
+
+  // Derived
+  const meta = TYPE_META[type] ?? TYPE_META.sale
+  const totalPages = Math.max(1, Math.ceil(totalCars / PAGE_SIZE))
 
   // Fetch cars from API
   const fetchCars = useCallback(async () => {
     setLoading(true)
     try {
-      const params: Record<string, string | number | boolean> = {
+      const params: Record<string, string | number | boolean | undefined> = {
         page: currentPage,
         limit: PAGE_SIZE,
         status: 'approved',
+        type,
       }
-      if (type !== 'all') params.type = type
+
       if (conditionCategory) params.conditionCategory = conditionCategory
       if (brandFilter !== 'All Brands') params.brand = brandFilter
       if (cityFilter !== 'All Cities') params.city = cityFilter
       if (searchQuery) params.search = searchQuery
 
-      // Price range filters
       if (priceRange === 'low') {
         params.maxPrice = 99999
       } else if (priceRange === 'mid') {
@@ -432,22 +660,22 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
 
       const result = await carsApi.list(params)
       const rawCars = result.data || []
-      const normalized = rawCars.map(normalizeCar)
+      let normalized = rawCars.map(normalizeCar)
 
-      // Client-side filtering for transmission and fuel (API doesn't support these directly)
-      let filtered = normalized
+      // Client-side filtering for transmission and fuel
       if (transmissionFilter !== 'all') {
-        filtered = filtered.filter((car) => car.transmission === transmissionFilter)
+        normalized = normalized.filter((c) => c.transmission === transmissionFilter)
       }
       if (fuelFilter !== 'all') {
-        filtered = filtered.filter((car) => car.fuelType === fuelFilter)
+        normalized = normalized.filter((c) => c.fuelType === fuelFilter)
       }
 
-      setCars(filtered)
+      setCars(normalized)
       setTotalCars(result.pagination?.total || 0)
-    } catch (e) {
-      console.error('Failed to fetch cars:', e)
+    } catch {
+      // Silent error handling — show empty state
       setCars([])
+      setTotalCars(0)
     } finally {
       setLoading(false)
     }
@@ -457,15 +685,23 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
     fetchCars()
   }, [fetchCars])
 
-  // Helper to set filter and reset page
-  const updateFilter = (setter: (val: string) => void, value: string) => {
-    setter(value)
+  /** Update a filter and reset to page 1 */
+  const updateFilter = useCallback(
+    (setter: (val: string) => void, value: string) => {
+      setter(value)
+      setCurrentPage(1)
+    },
+    []
+  )
+
+  const clearFilters = useCallback(() => {
+    setBrandFilter('All Brands')
+    setCityFilter('All Cities')
+    setTransmissionFilter('all')
+    setFuelFilter('all')
+    setPriceRange('all')
     setCurrentPage(1)
-  }
-
-  const config = typeConfig[type] || typeConfig.all
-
-  const totalPages = Math.max(1, Math.ceil(totalCars / PAGE_SIZE))
+  }, [])
 
   const hasActiveFilters =
     brandFilter !== 'All Brands' ||
@@ -474,41 +710,45 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
     fuelFilter !== 'all' ||
     priceRange !== 'all'
 
-  const clearFilters = () => {
-    setBrandFilter('All Brands')
-    setCityFilter('All Cities')
-    setTransmissionFilter('all')
-    setFuelFilter('all')
-    setPriceRange('all')
-  }
+  // Choose skeleton variant based on type
+  const SkeletonCard = type === 'auction'
+    ? AuctionCardSkeleton
+    : type === 'continueLoan'
+      ? ContinueLoanCardSkeleton
+      : CarCardSkeleton
+
+  // Condition category label for the header subtitle
+  const conditionLabel = conditionCategory
+    ? CONDITION_CATEGORIES.find((c) => c.key === conditionCategory)?.label
+    : null
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card/50">
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold gold-text sm:text-4xl">{config.title}</h1>
-          <p className="mt-2 text-muted-foreground text-sm sm:text-base">{config.subtitle}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
+        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <h1 className="heading-lg gold-text">{meta.title}</h1>
+          <p className="mt-2 text-body-sm text-muted-foreground sm:text-body">
+            {conditionLabel ? `${conditionLabel} — ${meta.subtitle}` : meta.subtitle}
+          </p>
+          <p className="mt-1 text-body-sm text-muted-foreground">
             {totalCars} vehicle{totalCars !== 1 ? 's' : ''} available
           </p>
         </div>
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Filter toggle for mobile */}
+        {/* Mobile filter toggle */}
         <div className="flex items-center justify-between mb-4 lg:hidden">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setShowFilters(!showFilters)}
+            onClick={() => setShowFilters((v) => !v)}
             className="gap-2"
           >
             <SlidersHorizontal className="size-4" />
             Filters
-            {hasActiveFilters && (
-              <span className="size-2 rounded-full bg-gold" />
-            )}
+            {hasActiveFilters && <span className="size-2 rounded-full bg-gold" />}
           </Button>
           {hasActiveFilters && (
             <Button
@@ -526,7 +766,9 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
         {/* Filter bar */}
         <div
           className={`grid gap-3 mb-6 transition-all duration-300 ${
-            showFilters ? 'grid-cols-1 sm:grid-cols-2' : 'hidden lg:grid lg:grid-cols-5'
+            showFilters
+              ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-5'
+              : 'hidden lg:grid lg:grid-cols-5'
           }`}
         >
           {/* Brand */}
@@ -535,7 +777,7 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
               <SelectValue placeholder="All Brands" />
             </SelectTrigger>
             <SelectContent>
-              {brands.map((brand) => (
+              {BRANDS.map((brand) => (
                 <SelectItem key={brand} value={brand}>
                   {brand}
                 </SelectItem>
@@ -549,7 +791,7 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
               <SelectValue placeholder="All Cities" />
             </SelectTrigger>
             <SelectContent>
-              {cities.map((city) => (
+              {CITIES.map((city) => (
                 <SelectItem key={city} value={city}>
                   {city}
                 </SelectItem>
@@ -558,15 +800,19 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
           </Select>
 
           {/* Price Range */}
-          <Select value={priceRange} onValueChange={(v) => updateFilter((val) => setPriceRange(val as typeof priceRange), v)}>
+          <Select
+            value={priceRange}
+            onValueChange={(v) => updateFilter((val) => setPriceRange(val as PriceRange), v)}
+          >
             <SelectTrigger className="w-full">
               <SelectValue placeholder="Price Range" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Prices</SelectItem>
-              <SelectItem value="low">Under RM 100K</SelectItem>
-              <SelectItem value="mid">RM 100K - 500K</SelectItem>
-              <SelectItem value="high">Above RM 500K</SelectItem>
+              {PRICE_RANGES.map((pr) => (
+                <SelectItem key={pr.key} value={pr.key}>
+                  {pr.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -576,9 +822,11 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
               <SelectValue placeholder="Transmission" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Transmissions</SelectItem>
-              <SelectItem value="auto">Automatic</SelectItem>
-              <SelectItem value="manual">Manual</SelectItem>
+              {TRANSMISSION_OPTIONS.map((opt) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -588,141 +836,108 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
               <SelectValue placeholder="Fuel Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Fuel Types</SelectItem>
-              <SelectItem value="petrol">Petrol</SelectItem>
-              <SelectItem value="diesel">Diesel</SelectItem>
-              <SelectItem value="hybrid">Hybrid</SelectItem>
-              <SelectItem value="electric">Electric</SelectItem>
+              {FUEL_OPTIONS.map((opt) => (
+                <SelectItem key={opt.key} value={opt.key}>
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Active filters indicators */}
+        {/* Active filter indicators (desktop) */}
         {hasActiveFilters && (
-          <div className="hidden lg:flex items-center gap-2 mb-4">
-            <span className="text-xs text-muted-foreground">Active filters:</span>
+          <div className="hidden lg:flex items-center gap-2 mb-4 flex-wrap">
+            <span className="text-overline text-muted-foreground">Active filters:</span>
             {brandFilter !== 'All Brands' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {brandFilter}
-                <X className="size-3 cursor-pointer" onClick={() => updateFilter(setBrandFilter, 'All Brands')} />
-              </Badge>
+              <ActiveFilterBadge
+                label={brandFilter}
+                onRemove={() => updateFilter(setBrandFilter, 'All Brands')}
+              />
             )}
             {cityFilter !== 'All Cities' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {cityFilter}
-                <X className="size-3 cursor-pointer" onClick={() => updateFilter(setCityFilter, 'All Cities')} />
-              </Badge>
+              <ActiveFilterBadge
+                label={cityFilter}
+                onRemove={() => updateFilter(setCityFilter, 'All Cities')}
+              />
             )}
             {transmissionFilter !== 'all' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {transmissionFilter === 'auto' ? 'Automatic' : 'Manual'}
-                <X className="size-3 cursor-pointer" onClick={() => updateFilter(setTransmissionFilter, 'all')} />
-              </Badge>
+              <ActiveFilterBadge
+                label={transmissionFilter === 'auto' ? 'Automatic' : 'Manual'}
+                onRemove={() => updateFilter(setTransmissionFilter, 'all')}
+              />
             )}
             {fuelFilter !== 'all' && (
-              <Badge variant="secondary" className="gap-1 text-xs capitalize">
-                {fuelFilter}
-                <X className="size-3 cursor-pointer" onClick={() => updateFilter(setFuelFilter, 'all')} />
-              </Badge>
+              <ActiveFilterBadge
+                label={fuelFilter.charAt(0).toUpperCase() + fuelFilter.slice(1)}
+                onRemove={() => updateFilter(setFuelFilter, 'all')}
+              />
             )}
             {priceRange !== 'all' && (
-              <Badge variant="secondary" className="gap-1 text-xs">
-                {priceRange === 'low' ? '< RM 100K' : priceRange === 'mid' ? 'RM 100K-500K' : '> RM 500K'}
-                <X className="size-3 cursor-pointer" onClick={() => updateFilter((val) => setPriceRange(val as typeof priceRange), 'all')} />
-              </Badge>
+              <ActiveFilterBadge
+                label={
+                  priceRange === 'low'
+                    ? '< RM 100K'
+                    : priceRange === 'mid'
+                      ? 'RM 100K–500K'
+                      : '> RM 500K'
+                }
+                onRemove={() => {
+                  setPriceRange('all')
+                  setCurrentPage(1)
+                }}
+              />
             )}
             <Button
               variant="ghost"
               size="sm"
               onClick={clearFilters}
-              className="text-xs text-muted-foreground h-6 px-2"
+              className="text-caption text-muted-foreground h-6 px-2"
             >
               Clear all
             </Button>
           </div>
         )}
 
-        {/* Loading state */}
+        {/* Content area */}
         {loading ? (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-              <Card key={i} className="luxury-card overflow-hidden bg-card py-0 gap-0 animate-pulse">
-                <div className="aspect-[16/10] bg-muted" />
-                <CardContent className="p-4 space-y-3">
-                  <div className="h-5 bg-muted rounded w-3/4" />
-                  <div className="h-4 bg-muted rounded w-1/2" />
-                  <div className="h-6 bg-muted rounded w-1/3" />
-                  <div className="h-4 bg-muted rounded w-2/3" />
-                </CardContent>
-              </Card>
+              <SkeletonCard key={i} />
             ))}
           </div>
         ) : cars.length > 0 ? (
-          /* Car grid */
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2">
-            {cars.map((car) => (
-              <CarCard key={car.id} car={car} type={type} />
-            ))}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="size-20 rounded-full bg-muted flex items-center justify-center mb-4">
-              <Search className="size-8 text-muted-foreground" />
+          <>
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {cars.map((car) => (
+                <CarCard key={car.id} car={car} type={type} />
+              ))}
             </div>
-            <h3 className="text-lg font-semibold text-foreground">No vehicles found</h3>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-              Try adjusting your filters or search criteria to find what you&apos;re looking for.
-            </p>
-            {hasActiveFilters && (
-              <Button
-                variant="outline"
-                className="mt-4 gap-2"
-                onClick={clearFilters}
-              >
-                <X className="size-4" />
-                Clear all filters
-              </Button>
-            )}
-          </div>
-        )}
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-8">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="size-9"
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <Button
-                key={page}
-                variant={currentPage === page ? 'default' : 'outline'}
-                size="icon"
-                onClick={() => setCurrentPage(page)}
-                className={`size-9 ${
-                  currentPage === page
-                    ? 'bg-gold text-gold-dark hover:bg-gold-light'
-                    : ''
-                }`}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className="size-9"
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+            />
+          </>
+        ) : (
+          <EmptyState
+            icon={<Search className="size-8 text-muted-foreground" />}
+            title="No vehicles found"
+            description="Try adjusting your filters or search criteria to find what you're looking for."
+            action={
+              hasActiveFilters ? (
+                <Button
+                  variant="outline"
+                  className="mt-2 gap-2"
+                  onClick={clearFilters}
+                >
+                  <X className="size-4" />
+                  Clear all filters
+                </Button>
+              ) : undefined
+            }
+          />
         )}
       </div>
     </div>

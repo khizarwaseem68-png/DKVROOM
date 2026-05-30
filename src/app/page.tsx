@@ -1,24 +1,27 @@
 'use client'
 
 import { useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import { useAppStore } from '@/lib/store'
 import { Header } from '@/components/header'
-import HomePage from '@/components/home-page'
-import CarListing from '@/components/car-listing'
-import CarDetail from '@/components/car-detail'
-import RepairPage from '@/components/repair-page'
-import InsurancePage from '@/components/insurance-page'
-import AuctionPage from '@/components/auction-page'
-import LoanPage from '@/components/loan-page'
-import LoanApplication from '@/components/loan-application'
-import DealerDashboard from '@/components/dealer-dashboard'
-import AdminDashboard from '@/components/admin-dashboard'
-import AuthPage from '@/components/auth-page'
-import PaymentPage from '@/components/payment-page'
-import ContinueLoanEnquiry from '@/components/continue-loan-enquiry'
+
+// Dynamic imports for code splitting — only load what's needed
+const HomePage = dynamic(() => import('@/components/home-page'), { ssr: false })
+const CarListing = dynamic(() => import('@/components/car-listing'), { ssr: false })
+const CarDetail = dynamic(() => import('@/components/car-detail'), { ssr: false })
+const RepairPage = dynamic(() => import('@/components/repair-page'), { ssr: false })
+const InsurancePage = dynamic(() => import('@/components/insurance-page'), { ssr: false })
+const AuctionPage = dynamic(() => import('@/components/auction-page'), { ssr: false })
+const LoanPage = dynamic(() => import('@/components/loan-page'), { ssr: false })
+const LoanApplication = dynamic(() => import('@/components/loan-application'), { ssr: false })
+const DealerDashboard = dynamic(() => import('@/components/dealer-dashboard'), { ssr: false })
+const AdminDashboard = dynamic(() => import('@/components/admin-dashboard'), { ssr: false })
+const AuthPage = dynamic(() => import('@/components/auth-page'), { ssr: false })
+const PaymentPage = dynamic(() => import('@/components/payment-page'), { ssr: false })
+const ContinueLoanEnquiry = dynamic(() => import('@/components/continue-loan-enquiry'), { ssr: false })
 
 function ViewRenderer() {
-  const { currentView } = useAppStore()
+  const currentView = useAppStore((state) => state.currentView)
 
   switch (currentView) {
     case 'home':
@@ -48,7 +51,6 @@ function ViewRenderer() {
       return <AdminDashboard />
     case 'login':
     case 'register':
-      return <AuthPage />
     case 'profile':
       return <AuthPage />
     case 'payment':
@@ -61,17 +63,27 @@ function ViewRenderer() {
 }
 
 export default function Home() {
-  const { currentView, checkAuth } = useAppStore()
+  const currentView = useAppStore((state) => state.currentView)
+  const checkAuth = useAppStore((state) => state.checkAuth)
   const isAuthPage = currentView === 'login' || currentView === 'register'
   const isDashboard = currentView === 'dealerDashboard' || currentView === 'adminDashboard'
 
-  // Check auth state on app load
+  // Check auth state once on app load
   useEffect(() => {
     checkAuth()
   }, [checkAuth])
 
+  // Listen for auth expiration events
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      useAppStore.getState().logout()
+    }
+    window.addEventListener('auth:expired', handleAuthExpired)
+    return () => window.removeEventListener('auth:expired', handleAuthExpired)
+  }, [])
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0a] text-[#f5f0e8]">
+    <div className="min-h-screen flex flex-col bg-background text-foreground">
       {!isAuthPage && !isDashboard && <Header />}
       <main className="flex-1">
         <ViewRenderer />

@@ -1,9 +1,19 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAppStore } from '@/lib/store'
 import { carsApi, bookingsApi } from '@/lib/api'
-import { type CarData } from '@/lib/mock-data'
+import { formatPrice, formatMileage, formatDate } from '@/lib/constants'
+import {
+  StarRating,
+  LoadingState,
+  EmptyState,
+  VehicleTypeBadge,
+  ConditionCategoryBadge,
+  RunningStatusBadge,
+  SalvageStatusBadge,
+  CountdownTimer,
+} from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,9 +22,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   ArrowLeft,
   MapPin,
-  Star,
   ShieldCheck,
   Phone,
   MessageCircle,
@@ -34,11 +48,9 @@ import {
   ChevronLeft,
   ChevronRight,
   CheckCircle2,
-  AlertCircle,
   ExternalLink,
   Lock,
   Unlock,
-  Eye,
   Info,
   Handshake,
   Wallet,
@@ -48,64 +60,134 @@ import {
   Shield,
   Send,
   Loader2,
+  Truck,
+  Wrench,
+  X,
 } from 'lucide-react'
 
-// Normalize API car data to CarData shape
-function normalizeCar(apiCar: any): CarData {
-  const photos = typeof apiCar.photos === 'string'
-    ? (() => { try { return JSON.parse(apiCar.photos) } catch { return [] } })()
-    : Array.isArray(apiCar.photos) ? apiCar.photos : []
-  const features = typeof apiCar.features === 'string'
-    ? (() => { try { return JSON.parse(apiCar.features) } catch { return [] } })()
-    : Array.isArray(apiCar.features) ? apiCar.features : []
+// ─── Interfaces ────────────────────────────────────────────────────────────────
 
+interface NormalizedCar {
+  id: string
+  brand: string
+  model: string
+  year: number
+  color: string
+  mileage: number
+  fuelType: string
+  transmission: string
+  seats: number
+  condition: string
+  price: number
+  weeklyPrice: number | null
+  monthlyPrice: number | null
+  deposit: number | null
+  bookingFee: number | null
+  monthlyInstallment: number | null
+  remainingMonths: number | null
+  remainingBalance: number | null
+  takeoverAmount: number | null
+  bankName: string | null
+  location: string
+  city: string
+  description: string
+  features: string[]
+  photos: string[]
+  featured: boolean
+  type: 'rent' | 'sale' | 'auction' | 'continueLoan'
+  dealerName: string
+  dealerId: string
+  dealerVerified: boolean
+  rating: number
+  vehicleCondition: string | null
+  requiredDocs: string[] | null
+  auctionEnd: string | null
+  auctionStartBid: number | null
+  currentBid: number | null
+  conditionCategory: string | null
+  damageDescription: string | null
+  runningStatus: string | null
+  salvageStatus: string | null
+  repairEstimate: number | null
+  rentalTerms: string | null
+  pickupAvailable: boolean
+  deliveryAvailable: boolean
+  deliveryFee: number | null
+  availableFrom: string | null
+  availableTo: string | null
+}
+
+interface BookingPayload {
+  carId: string
+  type: string
+  totalAmount: number
+  startDate?: string
+  endDate?: string
+}
+
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+
+function safeJsonParse<T>(value: unknown, fallback: T): T {
+  if (Array.isArray(value)) return value as T
+  if (typeof value === 'string') {
+    try { return JSON.parse(value) as T } catch { return fallback }
+  }
+  return fallback
+}
+
+function normalizeCar(apiCar: Record<string, unknown>): NormalizedCar {
+  const dealer = apiCar.dealer as Record<string, unknown> | undefined
   return {
-    id: apiCar.id,
-    brand: apiCar.brand,
-    model: apiCar.model,
-    year: apiCar.year,
-    color: apiCar.color || 'N/A',
-    mileage: apiCar.mileage || 0,
-    fuelType: apiCar.fuelType || 'petrol',
-    transmission: apiCar.transmission || 'auto',
-    seats: apiCar.seats || 5,
-    condition: apiCar.condition || 'used',
-    price: apiCar.price || 0,
-    deposit: apiCar.deposit ?? undefined,
-    monthlyInstallment: apiCar.monthlyInstallment ?? undefined,
-    remainingMonths: apiCar.remainingMonths ?? undefined,
-    remainingBalance: apiCar.remainingBalance ?? undefined,
-    bankName: apiCar.bankName ?? undefined,
-    location: apiCar.location || apiCar.city || '',
-    city: apiCar.city || '',
-    description: apiCar.description || '',
-    features,
-    photos,
-    featured: apiCar.featured || false,
-    type: apiCar.type,
-    dealerName: apiCar.dealer?.companyName || '',
-    dealerId: apiCar.dealer?.id || apiCar.dealerId || '',
-    dealerVerified: apiCar.dealer?.verified || false,
-    rating: apiCar.dealer?.rating || 0,
-    vehicleCondition: apiCar.vehicleCondition ?? undefined,
-    requiredDocs: typeof apiCar.requiredDocs === 'string'
-      ? (() => { try { return JSON.parse(apiCar.requiredDocs) } catch { return undefined } })()
-      : Array.isArray(apiCar.requiredDocs) ? apiCar.requiredDocs : undefined,
-    auctionEnd: apiCar.auctionEnd ? new Date(apiCar.auctionEnd).toISOString() : undefined,
-    auctionStartBid: apiCar.auctionStartBid ?? undefined,
-    currentBid: apiCar.currentBid ?? undefined,
+    id: String(apiCar.id ?? ''),
+    brand: String(apiCar.brand ?? ''),
+    model: String(apiCar.model ?? ''),
+    year: Number(apiCar.year ?? 0),
+    color: String(apiCar.color ?? 'N/A'),
+    mileage: Number(apiCar.mileage ?? 0),
+    fuelType: String(apiCar.fuelType ?? 'petrol'),
+    transmission: String(apiCar.transmission ?? 'auto'),
+    seats: Number(apiCar.seats ?? 5),
+    condition: String(apiCar.condition ?? 'used'),
+    price: Number(apiCar.price ?? 0),
+    weeklyPrice: apiCar.weeklyPrice != null ? Number(apiCar.weeklyPrice) : null,
+    monthlyPrice: apiCar.monthlyPrice != null ? Number(apiCar.monthlyPrice) : null,
+    deposit: apiCar.deposit != null ? Number(apiCar.deposit) : null,
+    bookingFee: apiCar.bookingFee != null ? Number(apiCar.bookingFee) : null,
+    monthlyInstallment: apiCar.monthlyInstallment != null ? Number(apiCar.monthlyInstallment) : null,
+    remainingMonths: apiCar.remainingMonths != null ? Number(apiCar.remainingMonths) : null,
+    remainingBalance: apiCar.remainingBalance != null ? Number(apiCar.remainingBalance) : null,
+    takeoverAmount: apiCar.takeoverAmount != null ? Number(apiCar.takeoverAmount) : null,
+    bankName: apiCar.bankName != null ? String(apiCar.bankName) : null,
+    location: String(apiCar.location ?? apiCar.city ?? ''),
+    city: String(apiCar.city ?? ''),
+    description: String(apiCar.description ?? ''),
+    features: safeJsonParse<string[]>(apiCar.features, []),
+    photos: safeJsonParse<string[]>(apiCar.photos, []),
+    featured: Boolean(apiCar.featured ?? false),
+    type: String(apiCar.type ?? 'sale') as NormalizedCar['type'],
+    dealerName: String(dealer?.companyName ?? ''),
+    dealerId: String(dealer?.id ?? apiCar.dealerId ?? ''),
+    dealerVerified: Boolean(dealer?.verified ?? false),
+    rating: Number(dealer?.rating ?? 0),
+    vehicleCondition: apiCar.vehicleCondition != null ? String(apiCar.vehicleCondition) : null,
+    requiredDocs: safeJsonParse<string[] | null>(apiCar.requiredDocs, null),
+    auctionEnd: apiCar.auctionEnd ? new Date(String(apiCar.auctionEnd)).toISOString() : null,
+    auctionStartBid: apiCar.auctionStartBid != null ? Number(apiCar.auctionStartBid) : null,
+    currentBid: apiCar.currentBid != null ? Number(apiCar.currentBid) : null,
+    conditionCategory: apiCar.conditionCategory != null ? String(apiCar.conditionCategory) : null,
+    damageDescription: apiCar.damageDescription != null ? String(apiCar.damageDescription) : null,
+    runningStatus: apiCar.runningStatus != null ? String(apiCar.runningStatus) : null,
+    salvageStatus: apiCar.salvageStatus != null ? String(apiCar.salvageStatus) : null,
+    repairEstimate: apiCar.repairEstimate != null ? Number(apiCar.repairEstimate) : null,
+    rentalTerms: apiCar.rentalTerms != null ? String(apiCar.rentalTerms) : null,
+    pickupAvailable: Boolean(apiCar.pickupAvailable ?? false),
+    deliveryAvailable: Boolean(apiCar.deliveryAvailable ?? false),
+    deliveryFee: apiCar.deliveryFee != null ? Number(apiCar.deliveryFee) : null,
+    availableFrom: apiCar.availableFrom != null ? String(apiCar.availableFrom) : null,
+    availableTo: apiCar.availableTo != null ? String(apiCar.availableTo) : null,
   }
 }
 
-function formatPrice(amount: number): string {
-  return `RM ${amount.toLocaleString('en-MY')}`
-}
-
-function formatMileage(km: number): string {
-  return `${km.toLocaleString('en-MY')} km`
-}
-
-// Generate a deterministic mock phone number from dealer ID
 function getDealerPhone(dealerId: string): string {
   const seed = dealerId.charCodeAt(1) || 1
   const prefix = '01'
@@ -114,71 +196,525 @@ function getDealerPhone(dealerId: string): string {
   return `${prefix}${mid}-${suffix.slice(0, 4)} ${suffix.slice(4)}`
 }
 
-// Generate a deterministic WhatsApp link
 function getWhatsAppLink(dealerId: string, carName: string): string {
   const phone = getDealerPhone(dealerId).replace(/[-\s]/g, '')
-  const message = encodeURIComponent(`Hi, I'm interested in the ${carName} listed on DK Vroom. Is it still available?`)
+  const message = encodeURIComponent(
+    `Hi, I'm interested in the ${carName} listed on DK Vroom. Is it still available?`
+  )
   return `https://wa.me/6${phone}?text=${message}`
 }
 
-function CountdownTimer({ endDate }: { endDate: string }) {
-  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: false })
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
 
-  useEffect(() => {
-    const updateTimer = () => {
-      const now = new Date().getTime()
-      const end = new Date(endDate).getTime()
-      const diff = end - now
+// ─── Image Gallery with Lightbox ───────────────────────────────────────────────
 
-      if (diff <= 0) {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, ended: true })
-        return
-      }
+function ImageGallery({ car }: { car: NormalizedCar }) {
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const photos = car.photos.length > 0 ? car.photos : []
 
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((diff % (1000 * 60)) / 1000),
-        ended: false,
-      })
-    }
+  const openLightbox = useCallback((index: number) => {
+    setSelectedIndex(index)
+    setLightboxOpen(true)
+  }, [])
 
-    updateTimer()
-    const interval = setInterval(updateTimer, 1000)
-    return () => clearInterval(interval)
-  }, [endDate])
-
-  if (timeLeft.ended) {
-    return <span className="text-destructive font-semibold">Auction Ended</span>
-  }
+  const navigateImage = useCallback(
+    (direction: 'prev' | 'next') => {
+      setSelectedIndex((prev) =>
+        direction === 'prev'
+          ? prev > 0 ? prev - 1 : photos.length - 1
+          : prev < photos.length - 1 ? prev + 1 : 0
+      )
+    },
+    [photos.length]
+  )
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {[
-        { value: timeLeft.days, label: 'Days' },
-        { value: timeLeft.hours, label: 'Hours' },
-        { value: timeLeft.minutes, label: 'Mins' },
-        { value: timeLeft.seconds, label: 'Secs' },
-      ].map((item) => (
-        <div key={item.label} className="text-center rounded-lg bg-background/60 p-2">
-          <div className="text-2xl font-bold gold-text">{String(item.value).padStart(2, '0')}</div>
-          <div className="text-xs text-muted-foreground">{item.label}</div>
+    <div className="space-y-4">
+      {/* Main image */}
+      <div
+        className="relative aspect-[16/10] overflow-hidden rounded-xl border border-border bg-muted cursor-pointer group"
+        onClick={() => photos.length > 0 && openLightbox(selectedIndex)}
+        role={photos.length > 0 ? 'button' : undefined}
+        tabIndex={photos.length > 0 ? 0 : undefined}
+        aria-label={photos.length > 0 ? 'View full image' : undefined}
+      >
+        {photos.length > 0 ? (
+          <img
+            src={photos[selectedIndex]}
+            alt={`${car.brand} ${car.model} - photo ${selectedIndex + 1}`}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          />
+        ) : (
+          <div className="h-full w-full flex flex-col items-center justify-center text-muted-foreground gap-2">
+            <Car className="size-16" />
+            <span className="text-body-sm">No photos available</span>
+          </div>
+        )}
+
+        {/* Navigation arrows */}
+        {photos.length > 1 && (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-foreground size-9 rounded-full"
+              onClick={(e) => { e.stopPropagation(); navigateImage('prev') }}
+              aria-label="Previous image"
+            >
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-foreground size-9 rounded-full"
+              onClick={(e) => { e.stopPropagation(); navigateImage('next') }}
+              aria-label="Next image"
+            >
+              <ChevronRight className="size-4" />
+            </Button>
+          </>
+        )}
+
+        {/* Zoom hint overlay */}
+        {photos.length > 0 && (
+          <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-md bg-black/60 px-2.5 py-1.5 text-xs text-foreground/80">
+            <ZoomIn className="size-3.5" />
+            View full size
+          </div>
+        )}
+
+        {/* Image counter */}
+        {photos.length > 1 && (
+          <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2.5 py-1.5 text-xs text-foreground/80">
+            {selectedIndex + 1} / {photos.length}
+          </div>
+        )}
+      </div>
+
+      {/* Thumbnail gallery */}
+      {photos.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {photos.map((photo, index) => (
+            <button
+              key={index}
+              className={`relative shrink-0 aspect-[16/10] w-20 sm:w-28 overflow-hidden rounded-lg border-2 transition-all ${
+                selectedIndex === index
+                  ? 'border-gold shadow-md shadow-gold/20'
+                  : 'border-border hover:border-gold/50 opacity-70 hover:opacity-100'
+              }`}
+              onClick={() => setSelectedIndex(index)}
+              aria-label={`View photo ${index + 1}`}
+            >
+              <img
+                src={photo}
+                alt={`${car.brand} ${car.model} - thumbnail ${index + 1}`}
+                className="h-full w-full object-cover"
+              />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Lightbox Dialog */}
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent className="max-w-5xl w-full bg-background/95 border-border p-0 overflow-hidden" showCloseButton={false}>
+          <DialogTitle className="sr-only">
+            {car.brand} {car.model} - Photo {selectedIndex + 1}
+          </DialogTitle>
+          <div className="relative aspect-[16/10] w-full">
+            {photos.length > 0 && (
+              <img
+                src={photos[selectedIndex]}
+                alt={`${car.brand} ${car.model} - full size ${selectedIndex + 1}`}
+                className="h-full w-full object-contain bg-black/20"
+              />
+            )}
+
+            {/* Close button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-3 right-3 bg-black/50 hover:bg-black/70 text-foreground size-9 rounded-full"
+              onClick={() => setLightboxOpen(false)}
+              aria-label="Close lightbox"
+            >
+              <X className="size-4" />
+            </Button>
+
+            {/* Lightbox navigation */}
+            {photos.length > 1 && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-foreground size-10 rounded-full"
+                  onClick={() => navigateImage('prev')}
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="size-5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-foreground size-10 rounded-full"
+                  onClick={() => navigateImage('next')}
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="size-5" />
+                </Button>
+                {/* Counter */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-black/60 px-4 py-1.5 text-sm text-foreground/80 font-medium">
+                  {selectedIndex + 1} / {photos.length}
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ─── Vehicle Specs Section ─────────────────────────────────────────────────────
+
+function VehicleSpecsSection({ car }: { car: NormalizedCar }) {
+  const specItems = [
+    { icon: Calendar, label: 'Year', value: String(car.year) },
+    { icon: Palette, label: 'Color', value: car.color },
+    { icon: Gauge, label: 'Mileage', value: formatMileage(car.mileage) },
+    { icon: Fuel, label: 'Fuel', value: capitalize(car.fuelType) },
+    { icon: Settings2, label: 'Transmission', value: car.transmission === 'auto' ? 'Automatic' : 'Manual' },
+    { icon: Users, label: 'Seats', value: String(car.seats) },
+    { icon: ClipboardCheck, label: 'Condition', value: capitalize(car.condition) },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {specItems.map((spec) => (
+        <div key={spec.label} className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3">
+          <spec.icon className="size-4 text-gold mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-overline text-muted-foreground">{spec.label}</p>
+            <p className="text-body-sm font-medium text-foreground truncate">{spec.value}</p>
+          </div>
         </div>
       ))}
     </div>
   )
 }
 
-// ─── Dealer Info Card with Unlock Logic ────────────────────────────────────────
-function DealerInfoCard({ car, contactUnlocked }: { car: CarData; contactUnlocked: boolean }) {
-  const carName = `${car.brand} ${car.model}`
-  const dealerInitials = car.dealerName.split(' ').map((n) => n[0]).join('').slice(0, 2)
+// ─── Auction Condition Section ─────────────────────────────────────────────────
+
+function AuctionConditionSection({ car }: { car: NormalizedCar }) {
+  return (
+    <Card className="border-border bg-card overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+        <CardTitle className="text-foreground flex items-center gap-2 heading-sm">
+          <ClipboardCheck className="size-5 text-gold" />
+          Vehicle Condition
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 p-4 sm:p-6 pt-3">
+        {/* Badges row */}
+        <div className="flex flex-wrap gap-2">
+          {car.conditionCategory && (
+            <ConditionCategoryBadge category={car.conditionCategory} />
+          )}
+          {car.runningStatus && (
+            <RunningStatusBadge status={car.runningStatus} />
+          )}
+          {car.salvageStatus && (
+            <SalvageStatusBadge status={car.salvageStatus} />
+          )}
+        </div>
+
+        {/* Condition description */}
+        {car.vehicleCondition && (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-overline text-muted-foreground mb-1">Condition Details</p>
+            <p className="text-body-sm text-foreground leading-relaxed">{car.vehicleCondition}</p>
+          </div>
+        )}
+
+        {/* Damage description */}
+        {car.damageDescription && (
+          <div className="rounded-lg bg-destructive/5 border border-destructive/20 p-3">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="size-4 text-destructive shrink-0" />
+              <p className="text-overline text-destructive">Damage Description</p>
+            </div>
+            <p className="text-body-sm text-foreground leading-relaxed">{car.damageDescription}</p>
+          </div>
+        )}
+
+        {/* Repair estimate */}
+        {car.repairEstimate != null && car.repairEstimate > 0 && (
+          <div className="flex items-center justify-between rounded-lg bg-muted/50 p-3">
+            <div className="flex items-center gap-2">
+              <Wrench className="size-4 text-gold shrink-0" />
+              <span className="text-body-sm text-muted-foreground">Estimated Repair Cost</span>
+            </div>
+            <span className="text-body-sm font-bold text-gold">{formatPrice(car.repairEstimate)}</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Auction Details Card ──────────────────────────────────────────────────────
+
+function AuctionDetailsCard({ car }: { car: NormalizedCar }) {
+  const depositAmount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
 
   return (
-    <Card className="border-gold/20 bg-card overflow-hidden">
-      {/* Dealer header */}
+    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+        <CardTitle className="text-gold flex items-center gap-2 heading-sm">
+          <Gavel className="size-5" />
+          Auction Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4 p-4 sm:p-6 pt-3">
+        <div>
+          <p className="text-overline text-muted-foreground mb-1">Current Bid</p>
+          <p className="heading-lg gold-text">{formatPrice(car.currentBid || 0)}</p>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-body-sm text-muted-foreground">Starting Bid</span>
+          <span className="text-body-sm font-medium text-foreground">{formatPrice(car.auctionStartBid || 0)}</span>
+        </div>
+        <Separator className="bg-border/50" />
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="size-4 text-gold" />
+            <span className="text-body-sm font-medium text-foreground">Time Remaining</span>
+          </div>
+          {car.auctionEnd && <CountdownTimer targetDate={car.auctionEnd} />}
+        </div>
+        <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
+          <div className="flex items-center gap-2">
+            <Wallet className="size-4 text-gold" />
+            <span className="text-body-sm text-muted-foreground">Required Deposit (10%)</span>
+          </div>
+          <span className="text-body-sm font-bold text-gold">{formatPrice(depositAmount)}</span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Sale Pricing Card ─────────────────────────────────────────────────────────
+
+function SalePricingCard({ car }: { car: NormalizedCar }) {
+  return (
+    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+        <CardTitle className="text-gold flex items-center gap-2 heading-sm">
+          <Banknote className="size-5" />
+          Purchase Price
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
+        <div className="rounded-lg bg-background/60 p-4 text-center">
+          <p className="text-overline text-muted-foreground mb-1">Asking Price</p>
+          <p className="heading-lg gold-text">{formatPrice(car.price)}</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg bg-gold/10 p-3">
+          <Info className="size-4 text-gold shrink-0" />
+          <p className="text-body-sm text-gold/80">
+            Send an enquiry with a RM 100 booking fee to unlock dealer contact details and WhatsApp.
+          </p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Continue Loan Card ────────────────────────────────────────────────────────
+
+function ContinueLoanCard({ car }: { car: NormalizedCar }) {
+  const totalMonths = 60
+  const paidMonths = car.remainingMonths ? totalMonths - car.remainingMonths : 0
+  const progressPercent = car.remainingMonths ? (paidMonths / totalMonths) * 100 : 0
+
+  return (
+    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+        <CardTitle className="text-gold flex items-center gap-2 heading-sm">
+          <FileText className="size-5" />
+          Loan Takeover Details
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3">
+          <div className="rounded-lg bg-background/60 p-3">
+            <p className="text-overline text-muted-foreground">Takeover Amount</p>
+            <p className="heading-sm text-gold">{formatPrice(car.takeoverAmount || car.deposit || 0)}</p>
+          </div>
+          <div className="rounded-lg bg-background/60 p-3">
+            <p className="text-overline text-muted-foreground">Monthly Installment</p>
+            <p className="heading-sm text-foreground">{formatPrice(car.monthlyInstallment || 0, 'continueLoan')}</p>
+          </div>
+          <div className="rounded-lg bg-background/60 p-3">
+            <p className="text-overline text-muted-foreground">Remaining Months</p>
+            <p className="heading-sm text-foreground">{car.remainingMonths ?? '—'} months</p>
+          </div>
+          <div className="rounded-lg bg-background/60 p-3">
+            <p className="text-overline text-muted-foreground">Remaining Balance</p>
+            <p className="heading-sm text-foreground">{formatPrice(car.remainingBalance || 0)}</p>
+          </div>
+        </div>
+
+        {car.bankName && (
+          <div className="flex items-center gap-2 rounded-lg bg-background/60 p-3">
+            <Building2 className="size-4 text-gold shrink-0" />
+            <span className="text-body-sm text-muted-foreground">Bank:</span>
+            <span className="text-body-sm font-semibold text-foreground">{car.bankName}</span>
+          </div>
+        )}
+
+        {/* Loan progress */}
+        <div>
+          <div className="flex justify-between text-overline text-muted-foreground mb-1.5">
+            <span>Loan Progress</span>
+            <span>{paidMonths > 0 ? `${paidMonths} of ${totalMonths} months paid` : ''}</span>
+          </div>
+          <Progress value={progressPercent} className="h-2" />
+        </div>
+
+        {/* Required Documents */}
+        {car.requiredDocs && car.requiredDocs.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-overline text-muted-foreground">Required Documents</p>
+            {car.requiredDocs.map((doc, index) => (
+              <div
+                key={index}
+                className="flex items-center gap-3 rounded-lg bg-muted/50 p-2.5"
+              >
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold text-xs font-bold">
+                  {index + 1}
+                </div>
+                <span className="text-body-sm text-foreground">{doc}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Rental Pricing Card ───────────────────────────────────────────────────────
+
+function RentalPricingCard({ car }: { car: NormalizedCar }) {
+  const daily = car.price
+  const weekly = car.weeklyPrice ?? Math.round(daily * 6.5)
+  const monthly = car.monthlyPrice ?? Math.round(daily * 25)
+
+  return (
+    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
+      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+        <CardTitle className="text-gold flex items-center gap-2 heading-sm">
+          <Calendar className="size-5" />
+          Rental Pricing
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-lg bg-background/60 p-3 text-center">
+            <p className="text-overline text-muted-foreground mb-1">Daily</p>
+            <p className="heading-sm gold-text">{formatPrice(daily, 'rent')}</p>
+          </div>
+          <div className="rounded-lg bg-background/60 p-3 text-center">
+            <p className="text-overline text-muted-foreground mb-1">Weekly</p>
+            <p className="heading-sm text-foreground">{formatPrice(weekly)}</p>
+          </div>
+          <div className="rounded-lg bg-background/60 p-3 text-center">
+            <p className="text-overline text-muted-foreground mb-1">Monthly</p>
+            <p className="heading-sm text-foreground">{formatPrice(monthly)}</p>
+          </div>
+        </div>
+
+        {/* Security deposit */}
+        {(car.deposit ?? 0) > 0 && (
+          <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
+            <div className="flex items-center gap-2">
+              <Wallet className="size-4 text-gold" />
+              <span className="text-body-sm text-muted-foreground">Security Deposit</span>
+            </div>
+            <span className="text-body-sm font-bold text-foreground">{formatPrice(car.deposit ?? 0)}</span>
+          </div>
+        )}
+
+        {/* Pickup / Delivery */}
+        {(car.pickupAvailable || car.deliveryAvailable) && (
+          <div className="space-y-2">
+            {car.pickupAvailable && (
+              <div className="flex items-center gap-2 rounded-lg bg-background/60 p-3">
+                <Car className="size-4 text-gold shrink-0" />
+                <span className="text-body-sm text-foreground">Self Pickup Available</span>
+              </div>
+            )}
+            {car.deliveryAvailable && (
+              <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
+                <div className="flex items-center gap-2">
+                  <Truck className="size-4 text-gold shrink-0" />
+                  <span className="text-body-sm text-foreground">Delivery Available</span>
+                </div>
+                {car.deliveryFee != null && car.deliveryFee > 0 && (
+                  <span className="text-body-sm font-bold text-foreground">{formatPrice(car.deliveryFee)}</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Available dates */}
+        {(car.availableFrom || car.availableTo) && (
+          <div className="flex items-center gap-2 rounded-lg bg-background/60 p-3">
+            <Calendar className="size-4 text-gold shrink-0" />
+            <span className="text-body-sm text-muted-foreground">Available:</span>
+            <span className="text-body-sm font-semibold text-foreground">
+              {car.availableFrom && car.availableTo
+                ? `${formatDate(car.availableFrom)} — ${formatDate(car.availableTo)}`
+                : car.availableFrom
+                ? `From ${formatDate(car.availableFrom)}`
+                : `Until ${formatDate(car.availableTo!)}`}
+            </span>
+          </div>
+        )}
+
+        {/* Rental terms */}
+        {car.rentalTerms && (
+          <div className="rounded-lg bg-muted/50 p-3">
+            <p className="text-overline text-muted-foreground mb-1">Rental Terms</p>
+            <p className="text-body-sm text-foreground leading-relaxed">{car.rentalTerms}</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ─── Dealer Info Card ──────────────────────────────────────────────────────────
+
+function DealerInfoCard({ car, contactUnlocked }: { car: NormalizedCar; contactUnlocked: boolean }) {
+  const carName = `${car.brand} ${car.model}`
+  const dealerInitials = car.dealerName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()
+
+  return (
+    <Card className="border-border bg-card overflow-hidden">
       <CardContent className="p-4 sm:p-6">
+        {/* Dealer header */}
         <div className="flex items-center gap-3 mb-4">
           <Avatar className="size-12 border border-gold/30">
             <AvatarFallback className="bg-gold/10 text-gold font-bold text-sm">
@@ -187,41 +723,24 @@ function DealerInfoCard({ car, contactUnlocked }: { car: CarData; contactUnlocke
           </Avatar>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-semibold text-foreground truncate">{car.dealerName}</span>
-              {car.dealerVerified && (
-                <ShieldCheck className="size-4 text-gold shrink-0" />
-              )}
+              <span className="font-semibold text-foreground truncate text-body">{car.dealerName}</span>
+              {car.dealerVerified && <ShieldCheck className="size-4 text-gold shrink-0" />}
             </div>
-            <div className="flex items-center gap-1 mt-0.5">
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Star
-                  key={star}
-                  className={`size-3 ${
-                    star <= Math.floor(car.rating)
-                      ? 'fill-gold text-gold'
-                      : star <= car.rating
-                      ? 'fill-gold/50 text-gold'
-                      : 'text-muted-foreground/30'
-                  }`}
-                />
-              ))}
-              <span className="text-xs text-muted-foreground ml-1">{car.rating.toFixed(1)}</span>
-            </div>
+            <StarRating rating={car.rating} size="sm" />
           </div>
         </div>
 
-        {/* Contact Section - with unlock logic */}
+        {/* Contact section */}
         <div className="space-y-3">
-          {/* Section label */}
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-medium text-foreground">Contact Information</h4>
+            <h4 className="text-body-sm font-medium text-foreground">Contact Information</h4>
             {contactUnlocked ? (
-              <Badge className="bg-green-600/20 text-green-400 border-green-600/30 gap-1 text-[10px] px-2 py-0.5">
+              <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-600/30 gap-1 text-overline px-2 py-0.5">
                 <Unlock className="size-3" />
                 Unlocked
               </Badge>
             ) : (
-              <Badge className="bg-gold/10 text-gold border-gold/30 gap-1 text-[10px] px-2 py-0.5">
+              <Badge className="bg-gold/10 text-gold border-gold/30 gap-1 text-overline px-2 py-0.5">
                 <Lock className="size-3" />
                 Locked
               </Badge>
@@ -232,104 +751,87 @@ function DealerInfoCard({ car, contactUnlocked }: { car: CarData; contactUnlocke
 
           {/* Phone */}
           <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-            {contactUnlocked ? (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-green-600/20 shrink-0">
-                  <Phone className="size-4 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Phone</p>
-                  <p className="text-sm font-semibold text-foreground">{getDealerPhone(car.dealerId)}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-gold/10 shrink-0">
-                  <Phone className="size-4 text-gold/50" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Phone</p>
+            <div className={`flex size-8 items-center justify-center rounded-full shrink-0 ${
+              contactUnlocked ? 'bg-emerald-600/20' : 'bg-gold/10'
+            }`}>
+              <Phone className={`size-4 ${contactUnlocked ? 'text-emerald-400' : 'text-gold/50'}`} />
+            </div>
+            <div>
+              <p className="text-overline text-muted-foreground">Phone</p>
+              {contactUnlocked ? (
+                <p className="text-body-sm font-semibold text-foreground">{getDealerPhone(car.dealerId)}</p>
+              ) : (
+                <>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-semibold text-muted-foreground/60 blur-[3px] select-none">
+                    <span className="text-body-sm font-semibold text-muted-foreground/60 blur-[3px] select-none">
                       012-3456 7890
                     </span>
                     <Lock className="size-3 text-gold/60" />
                   </div>
-                  <p className="text-[10px] text-gold/70 mt-0.5">Unlocked after payment verification</p>
-                </div>
-              </>
-            )}
+                  <p className="text-caption text-gold/70 mt-0.5">Unlocked after payment verification</p>
+                </>
+              )}
+            </div>
           </div>
 
           {/* WhatsApp */}
           <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
+            <div className={`flex size-8 items-center justify-center rounded-full shrink-0 ${
+              contactUnlocked ? 'bg-emerald-600/20' : 'bg-muted'
+            }`}>
+              <MessageCircle className={`size-4 ${contactUnlocked ? 'text-emerald-400' : 'text-muted-foreground/50'}`} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-overline text-muted-foreground">WhatsApp</p>
+              {contactUnlocked ? (
+                <p className="text-body-sm font-semibold text-foreground">{getDealerPhone(car.dealerId)}</p>
+              ) : (
+                <p className="text-caption text-gold/70">Unlock after payment verification</p>
+              )}
+            </div>
             {contactUnlocked ? (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-green-600/20 shrink-0">
-                  <MessageCircle className="size-4 text-green-400" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">WhatsApp</p>
-                  <p className="text-sm font-semibold text-foreground">{getDealerPhone(car.dealerId)}</p>
-                </div>
-                <a
-                  href={getWhatsAppLink(car.dealerId, carName)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5 shrink-0">
-                    <MessageCircle className="size-4" />
-                    Chat Now
-                  </Button>
-                </a>
-              </>
-            ) : (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-gray-600/20 shrink-0">
-                  <MessageCircle className="size-4 text-gray-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">WhatsApp</p>
-                  <p className="text-[10px] text-gold/70">Unlock WhatsApp after payment verification</p>
-                </div>
-                <Button size="sm" disabled className="bg-gray-700/50 text-gray-500 gap-1.5 shrink-0 cursor-not-allowed">
-                  <Lock className="size-3.5" />
-                  Unlock
+              <a
+                href={getWhatsAppLink(car.dealerId, carName)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-foreground gap-1.5 shrink-0">
+                  <MessageCircle className="size-4" />
+                  Chat
                 </Button>
-              </>
+              </a>
+            ) : (
+              <Button size="sm" disabled className="bg-muted text-muted-foreground gap-1.5 shrink-0">
+                <Lock className="size-3.5" />
+                Unlock
+              </Button>
             )}
           </div>
 
           {/* Location */}
           <div className="flex items-center gap-3 rounded-lg bg-muted/50 p-3">
-            {contactUnlocked ? (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-green-600/20 shrink-0">
-                  <MapPin className="size-4 text-green-400" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Exact Location</p>
-                  <p className="text-sm font-semibold text-foreground">{car.location}</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex size-8 items-center justify-center rounded-full bg-gold/10 shrink-0">
-                  <MapPin className="size-4 text-gold/50" />
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Location</p>
-                  <p className="text-sm font-semibold text-foreground">{car.city}</p>
-                  <p className="text-[10px] text-gold/70 mt-0.5">
-                    Exact location unlocked after payment
-                  </p>
-                </div>
-              </>
-            )}
+            <div className={`flex size-8 items-center justify-center rounded-full shrink-0 ${
+              contactUnlocked ? 'bg-emerald-600/20' : 'bg-gold/10'
+            }`}>
+              <MapPin className={`size-4 ${contactUnlocked ? 'text-emerald-400' : 'text-gold/50'}`} />
+            </div>
+            <div>
+              <p className="text-overline text-muted-foreground">
+                {contactUnlocked ? 'Exact Location' : 'Location'}
+              </p>
+              {contactUnlocked ? (
+                <p className="text-body-sm font-semibold text-foreground">{car.location}</p>
+              ) : (
+                <>
+                  <p className="text-body-sm font-semibold text-foreground">{car.city}</p>
+                  <p className="text-caption text-gold/70 mt-0.5">Exact location unlocked after payment</p>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* View Profile button - always visible */}
+        {/* View Profile */}
         <Button
           variant="outline"
           className="w-full mt-4 border-gold/30 text-gold hover:bg-gold/10 hover:text-gold-light gap-2"
@@ -342,196 +844,40 @@ function DealerInfoCard({ car, contactUnlocked }: { car: CarData; contactUnlocke
   )
 }
 
-// ─── Rental Pricing Card ───────────────────────────────────────────────────────
-function RentalPricingCard({ car }: { car: CarData }) {
-  const daily = car.price
-  const weekly = Math.round(daily * 6.5)
-  const monthly = Math.round(daily * 25)
+// ─── Status Banners ────────────────────────────────────────────────────────────
 
-  return (
-    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
-      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
-        <CardTitle className="text-gold flex items-center gap-2 text-lg">
-          <Calendar className="size-5" />
-          Rental Pricing
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <div className="rounded-lg bg-background/60 p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Daily</p>
-            <p className="text-base sm:text-lg font-bold gold-text">{formatPrice(daily)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Weekly</p>
-            <p className="text-base sm:text-lg font-bold text-foreground">{formatPrice(weekly)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 p-3 text-center">
-            <p className="text-xs text-muted-foreground mb-1">Monthly</p>
-            <p className="text-base sm:text-lg font-bold text-foreground">{formatPrice(monthly)}</p>
-          </div>
-        </div>
-        {(car.deposit ?? 0) > 0 && (
-          <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
-            <div className="flex items-center gap-2">
-              <Wallet className="size-4 text-gold" />
-              <span className="text-sm text-muted-foreground">Security Deposit</span>
-            </div>
-            <span className="text-sm font-bold text-foreground">{formatPrice(car.deposit ?? 0)}</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── Sale Pricing Card ──────────────────────────────────────────────────────────
-function SalePricingCard({ car }: { car: CarData }) {
-  return (
-    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
-      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
-        <CardTitle className="text-gold flex items-center gap-2 text-lg">
-          <Banknote className="size-5" />
-          Purchase Price
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
-        <div className="rounded-lg bg-background/60 p-4 text-center">
-          <p className="text-xs text-muted-foreground mb-1">Asking Price</p>
-          <p className="text-3xl font-bold gold-text">{formatPrice(car.price)}</p>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg bg-gold/10 p-3">
-          <Info className="size-4 text-gold shrink-0" />
-          <p className="text-xs text-gold/80">
-            Send an enquiry with a RM 100 booking fee to unlock dealer contact details and WhatsApp.
-          </p>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── Continue Loan Card ─────────────────────────────────────────────────────────
-function ContinueLoanCard({ car }: { car: CarData }) {
-  return (
-    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
-      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
-        <CardTitle className="text-gold flex items-center gap-2 text-lg">
-          <FileText className="size-5" />
-          Loan Takeover Details
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4 sm:p-6 pt-3">
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <div className="rounded-lg bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Deposit / Takeover</p>
-            <p className="text-lg font-bold text-gold">{formatPrice(car.deposit || 0)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Monthly Installment</p>
-            <p className="text-lg font-bold text-foreground">{formatPrice(car.monthlyInstallment || 0)}</p>
-          </div>
-          <div className="rounded-lg bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Remaining Months</p>
-            <p className="text-lg font-bold text-foreground">{car.remainingMonths} months</p>
-          </div>
-          <div className="rounded-lg bg-background/60 p-3">
-            <p className="text-xs text-muted-foreground">Remaining Balance</p>
-            <p className="text-lg font-bold text-foreground">{formatPrice(car.remainingBalance || 0)}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 rounded-lg bg-background/60 p-3">
-          <Building2 className="size-4 text-gold shrink-0" />
-          <span className="text-xs text-muted-foreground">Bank:</span>
-          <span className="text-sm font-semibold text-foreground">{car.bankName}</span>
-        </div>
-        {/* Loan progress */}
-        <div>
-          <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-            <span>Loan Progress</span>
-            <span>{car.remainingMonths ? `${60 - car.remainingMonths} of 60 months paid` : ''}</span>
-          </div>
-          <Progress
-            value={car.remainingMonths ? ((60 - car.remainingMonths) / 60) * 100 : 0}
-            className="h-2"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── Auction Card ───────────────────────────────────────────────────────────────
-function AuctionCard({ car }: { car: CarData }) {
-  const depositAmount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
-
-  return (
-    <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
-      <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
-        <CardTitle className="text-gold flex items-center gap-2 text-lg">
-          <Gavel className="size-5" />
-          Auction Details
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4 p-4 sm:p-6 pt-3">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Current Bid</p>
-          <p className="text-3xl font-bold gold-text">{formatPrice(car.currentBid || 0)}</p>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Starting Bid</span>
-          <span className="text-sm font-medium">{formatPrice(car.auctionStartBid || 0)}</span>
-        </div>
-        <Separator className="bg-border/50" />
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <Clock className="size-4 text-gold" />
-            <span className="text-sm font-medium text-foreground">Time Remaining</span>
-          </div>
-          {car.auctionEnd && <CountdownTimer endDate={car.auctionEnd} />}
-        </div>
-        <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
-          <div className="flex items-center gap-2">
-            <Wallet className="size-4 text-gold" />
-            <span className="text-sm text-muted-foreground">Required Deposit (10%)</span>
-          </div>
-          <span className="text-sm font-bold text-gold">{formatPrice(depositAmount)}</span>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ─── Booking Confirmed Banner ───────────────────────────────────────────────────
 function BookingConfirmedBanner() {
   return (
-    <div className="rounded-xl border border-green-600/40 bg-green-600/10 p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
-      <div className="flex size-10 items-center justify-center rounded-full bg-green-600/20 shrink-0">
-        <CheckCircle2 className="size-5 text-green-400" />
+    <div className="rounded-xl border border-emerald-600/40 bg-emerald-600/10 p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-500">
+      <div className="flex size-10 items-center justify-center rounded-full bg-emerald-600/20 shrink-0">
+        <CheckCircle2 className="size-5 text-emerald-400" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-green-400">Booking Confirmed</p>
-        <p className="text-xs text-green-400/70">Dealer contact details have been unlocked. You can now reach out directly.</p>
+        <p className="text-body-sm font-semibold text-emerald-400">Booking Confirmed</p>
+        <p className="text-caption text-emerald-400/70">Dealer contact details have been unlocked. You can now reach out directly.</p>
       </div>
     </div>
   )
 }
 
-// ─── Locked Contact Notice ──────────────────────────────────────────────────────
+function UnlockBanner() {
+  return (
+    <div className="rounded-xl border border-emerald-500/50 bg-emerald-500/10 p-4 text-center animate-in zoom-in-95 fade-in duration-300">
+      <Unlock className="size-8 text-emerald-400 mx-auto mb-2" />
+      <p className="text-body-sm font-bold text-emerald-400">Contact Details Unlocked!</p>
+      <p className="text-caption text-emerald-400/70 mt-1">
+        You can now view the dealer&apos;s phone, WhatsApp, and exact location.
+      </p>
+    </div>
+  )
+}
+
 function LockedContactNotice({ carType }: { carType: string }) {
-  const getNoticeText = () => {
-    switch (carType) {
-      case 'rent':
-        return 'Complete your booking payment to unlock the dealer\'s phone number, WhatsApp, and exact location.'
-      case 'sale':
-        return 'Pay the RM 100 enquiry fee to unlock the dealer\'s phone number, WhatsApp, and exact location.'
-      case 'auction':
-        return 'Pay the auction deposit to unlock the dealer\'s phone number, WhatsApp, and exact location.'
-      case 'continueLoan':
-        return 'Submit your enquiry to start the process. Dealer contact will be unlocked after verification.'
-      default:
-        return 'Complete payment to unlock dealer contact details.'
-    }
+  const noticeText: Record<string, string> = {
+    rent: 'Complete your booking payment to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    sale: 'Pay the RM 100 enquiry fee to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    auction: 'Pay the auction deposit to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    continueLoan: 'Submit your enquiry to start the process. Dealer contact will be unlocked after verification.',
   }
 
   return (
@@ -540,14 +886,13 @@ function LockedContactNotice({ carType }: { carType: string }) {
         <Lock className="size-4 text-gold" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-gold">Contact Details Locked</p>
-        <p className="text-xs text-gold/70 mt-0.5">{getNoticeText()}</p>
+        <p className="text-body-sm font-semibold text-gold">Contact Details Locked</p>
+        <p className="text-caption text-gold/70 mt-0.5">{noticeText[carType] ?? 'Complete payment to unlock dealer contact details.'}</p>
       </div>
     </div>
   )
 }
 
-// ─── Marketplace Disclaimer (Continue Loan) ─────────────────────────────────────
 function MarketplaceDisclaimer() {
   return (
     <div className="rounded-xl border border-amber-600/40 bg-amber-600/5 p-4 flex items-start gap-3">
@@ -555,8 +900,8 @@ function MarketplaceDisclaimer() {
         <AlertTriangle className="size-4 text-amber-500" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-amber-500">Marketplace Notice</p>
-        <p className="text-xs text-amber-500/70 mt-0.5">
+        <p className="text-body-sm font-semibold text-amber-500">Marketplace Notice</p>
+        <p className="text-caption text-amber-500/70 mt-0.5">
           DK Vroom acts as a marketplace platform only. All transactions are between the vehicle owner and the buyer. DK Vroom does not guarantee or assume responsibility for the condition, legality, or completion of any transaction.
         </p>
       </div>
@@ -564,7 +909,8 @@ function MarketplaceDisclaimer() {
   )
 }
 
-// ─── Continue Loan Process Flow ──────────────────────────────────────────────────
+// ─── Continue Loan Process Flow ────────────────────────────────────────────────
+
 function ContinueLoanProcessFlow() {
   const steps = [
     { icon: Car, label: 'Owner Lists', desc: 'Vehicle listed on platform' },
@@ -578,7 +924,7 @@ function ContinueLoanProcessFlow() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
+      <h2 className="heading-sm text-foreground mb-3 flex items-center gap-2">
         <Handshake className="size-5 text-gold" />
         How It Works
       </h2>
@@ -593,10 +939,10 @@ function ContinueLoanProcessFlow() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-bold text-gold/70">STEP {index + 1}</span>
-                <span className="text-sm font-medium text-foreground">{step.label}</span>
+                <span className="text-overline text-gold/70">Step {index + 1}</span>
+                <span className="text-body-sm font-medium text-foreground">{step.label}</span>
               </div>
-              <p className="text-xs text-muted-foreground">{step.desc}</p>
+              <p className="text-caption text-muted-foreground">{step.desc}</p>
             </div>
           </div>
         ))}
@@ -605,86 +951,100 @@ function ContinueLoanProcessFlow() {
   )
 }
 
-// ─── Main Car Detail Component ──────────────────────────────────────────────────
+// ─── Main Car Detail Component ─────────────────────────────────────────────────
+
 export default function CarDetail() {
   const {
     selectedCarId,
-    selectedCarType,
     goBack,
     navigate,
     isLoggedIn,
     booking,
     startBooking,
-    user,
   } = useAppStore()
 
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-  const [isZoomed, setIsZoomed] = useState(false)
-  const [car, setCar] = useState<CarData | null>(null)
+  const [car, setCar] = useState<NormalizedCar | null>(null)
   const [loading, setLoading] = useState(true)
   const [bookingLoading, setBookingLoading] = useState(false)
+  const [showUnlockBanner, setShowUnlockBanner] = useState(false)
 
-  // Fetch car data from API
+  // Fetch car data
   useEffect(() => {
     if (!selectedCarId) {
       setLoading(false)
       return
     }
 
+    let cancelled = false
+
     async function fetchCar() {
       try {
         const result = await carsApi.get(selectedCarId!)
-        if (result.data) {
-          setCar(normalizeCar(result.data))
+        if (!cancelled && result.data) {
+          setCar(normalizeCar(result.data as Record<string, unknown>))
         }
-      } catch (e) {
-        console.error('Failed to fetch car:', e)
+      } catch {
+        // Silent error handling — car stays null, empty state shown
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
 
     fetchCar()
+    return () => { cancelled = true }
   }, [selectedCarId])
 
   // Determine if contact is unlocked for this car
   const contactUnlocked = useMemo(() => {
     if (!car) return false
-    return booking.contactUnlocked === true &&
+    return (
+      booking.contactUnlocked === true &&
       booking.bookingType === car.type &&
       booking.paymentStatus === 'verified'
+    )
   }, [booking, car])
 
-  // Loading state
+  // Show unlock banner once when contact becomes unlocked
+  useEffect(() => {
+    if (contactUnlocked && !showUnlockBanner) {
+      setShowUnlockBanner(true)
+      const timer = setTimeout(() => setShowUnlockBanner(false), 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [contactUnlocked, showUnlockBanner])
+
+  // ─── Loading & Empty States ──────────────────────────────────────────────
+
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <Loader2 className="size-12 text-gold animate-spin" />
-        <p className="text-muted-foreground">Loading vehicle details...</p>
-      </div>
-    )
+    return <LoadingState message="Loading vehicle details..." className="min-h-screen" />
   }
 
   if (!car) {
     return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-        <AlertCircle className="size-12 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">Vehicle not found</h2>
-        <p className="text-muted-foreground text-sm">The vehicle you&apos;re looking for doesn&apos;t exist.</p>
-        <Button variant="outline" onClick={goBack} className="gap-2">
-          <ArrowLeft className="size-4" />
-          Go Back
-        </Button>
-      </div>
+      <EmptyState
+        icon={<Car className="size-12" />}
+        title="Vehicle not found"
+        description="The vehicle you're looking for doesn't exist or has been removed."
+        action={
+          <Button variant="outline" onClick={goBack} className="gap-2">
+            <ArrowLeft className="size-4" />
+            Go Back
+          </Button>
+        }
+        className="min-h-screen"
+      />
     )
   }
+
+  // ─── Derived booleans ────────────────────────────────────────────────────
 
   const isContinueLoan = car.type === 'continueLoan'
   const isAuction = car.type === 'auction'
   const isRent = car.type === 'rent'
   const isSale = car.type === 'sale'
 
-  // CTA logic per car type — creates a real booking via API
+  // ─── Booking CTA ─────────────────────────────────────────────────────────
+
   const handlePrimaryCta = async () => {
     if (!isLoggedIn) {
       navigate('login')
@@ -693,7 +1053,6 @@ export default function CarDetail() {
 
     setBookingLoading(true)
     try {
-      // Determine booking type and amount
       let bookingType: string = car.type
       let amount = car.price
 
@@ -701,25 +1060,22 @@ export default function CarDetail() {
         amount = car.deposit || car.price
       } else if (isSale) {
         bookingType = 'purchase'
-        amount = 100 // enquiry fee
+        amount = 100
       } else if (isAuction) {
         amount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
       } else if (isContinueLoan) {
-        // Continue loan uses different flow
         navigate('continueLoanEnquiry')
         setBookingLoading(false)
         return
       }
 
-      // Create booking via API
-      const bookingData: any = {
+      const bookingData: BookingPayload = {
         carId: car.id,
         type: bookingType,
         totalAmount: amount,
       }
 
       if (isRent) {
-        // For rental, default to 1 day booking
         const today = new Date()
         const tomorrow = new Date(today)
         tomorrow.setDate(tomorrow.getDate() + 1)
@@ -728,58 +1084,49 @@ export default function CarDetail() {
       }
 
       const result = await bookingsApi.create(bookingData)
-      const newBooking = result.data
+      const newBooking = result.data as Record<string, unknown> | undefined
+      const payments = newBooking?.payments as Array<Record<string, unknown>> | undefined
 
-      // Extract booking and payment IDs from the response
-      const bookingId = newBooking?.id
-      const paymentId = newBooking?.payments?.[0]?.id
-
-      // Update store with booking info and navigate to payment
       startBooking(
         bookingType as 'rent' | 'sale' | 'continueLoan' | 'auction',
         amount,
-        bookingId,
-        paymentId
+        newBooking?.id as string | undefined,
+        payments?.[0]?.id as string | undefined
       )
-    } catch (e: any) {
-      console.error('Failed to create booking:', e)
-      alert(e.message || 'Failed to create booking. Please try again.')
+    } catch {
+      // Silent error handling — user can retry
     } finally {
       setBookingLoading(false)
     }
   }
 
-  // CTA label per car type
-  const getCtaLabel = () => {
-    if (isAuction) return 'Place Bid'
-    if (isContinueLoan) return 'Submit Enquiry'
-    if (isRent) return 'Book Now'
-    if (isSale) return 'Send Enquiry'
-    return 'Contact Dealer'
-  }
+  const ctaLabel = isAuction
+    ? 'Place Bid'
+    : isContinueLoan
+    ? 'Submit Enquiry'
+    : isRent
+    ? 'Book Now'
+    : isSale
+    ? 'Send Enquiry'
+    : 'Contact Dealer'
 
-  const getCtaIcon = () => {
-    if (bookingLoading) return <Loader2 className="size-5 animate-spin" />
-    if (isAuction) return <Gavel className="size-5" />
-    if (isContinueLoan) return <Send className="size-5" />
-    if (isRent) return <Calendar className="size-5" />
-    if (isSale) return <Send className="size-5" />
-    return <Phone className="size-5" />
-  }
+  const ctaIcon = bookingLoading
+    ? <Loader2 className="size-5 animate-spin" />
+    : isAuction
+    ? <Gavel className="size-5" />
+    : isContinueLoan
+    ? <Send className="size-5" />
+    : isRent
+    ? <Calendar className="size-5" />
+    : isSale
+    ? <Send className="size-5" />
+    : <Phone className="size-5" />
 
-  const specItems = [
-    { icon: Calendar, label: 'Year', value: car.year },
-    { icon: Palette, label: 'Color', value: car.color },
-    { icon: Gauge, label: 'Mileage', value: formatMileage(car.mileage) },
-    { icon: Fuel, label: 'Fuel', value: car.fuelType.charAt(0).toUpperCase() + car.fuelType.slice(1) },
-    { icon: Settings2, label: 'Transmission', value: car.transmission === 'auto' ? 'Automatic' : 'Manual' },
-    { icon: Users, label: 'Seats', value: car.seats },
-    { icon: ClipboardCheck, label: 'Condition', value: car.condition.charAt(0).toUpperCase() + car.condition.slice(1) },
-  ]
+  // ─── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Top bar */}
+      {/* Sticky top bar */}
       <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground hover:text-foreground">
@@ -791,149 +1138,63 @@ export default function CarDetail() {
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-          {/* ─── LEFT COLUMN - Images ─── */}
-          <div className="space-y-4">
-            {/* Main image */}
-            <div
-              className="relative aspect-[16/10] overflow-hidden rounded-xl border border-border bg-muted cursor-zoom-in"
-              onClick={() => setIsZoomed(!isZoomed)}
-            >
-              {car.photos.length > 0 ? (
-                <img
-                  src={car.photos[selectedImageIndex]}
-                  alt={`${car.brand} ${car.model}`}
-                  className={`h-full w-full object-cover transition-transform duration-500 ${
-                    isZoomed ? 'scale-150' : 'scale-100'
-                  }`}
-                />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-muted-foreground">
-                  <Car className="size-16" />
-                </div>
-              )}
-              {/* Image navigation arrows */}
-              {car.photos.length > 1 && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white size-8 rounded-full"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedImageIndex((i) => (i > 0 ? i - 1 : car.photos.length - 1))
-                    }}
-                  >
-                    <ChevronLeft className="size-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white size-8 rounded-full"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedImageIndex((i) => (i < car.photos.length - 1 ? i + 1 : 0))
-                    }}
-                  >
-                    <ChevronRight className="size-4" />
-                  </Button>
-                </>
-              )}
-              {/* Zoom hint */}
-              <div className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80">
-                <ZoomIn className="size-3.5" />
-                {isZoomed ? 'Click to reset' : 'Click to zoom'}
-              </div>
-              {/* Image counter */}
-              <div className="absolute bottom-3 left-3 rounded-md bg-black/60 px-2 py-1 text-xs text-white/80">
-                {selectedImageIndex + 1} / {car.photos.length}
-              </div>
-            </div>
+          {/* ─── LEFT COLUMN — Images ─── */}
+          <ImageGallery car={car} />
 
-            {/* Thumbnail gallery */}
-            <div className="flex gap-3 overflow-x-auto pb-2">
-              {car.photos.map((photo, index) => (
-                <button
-                  key={index}
-                  className={`relative shrink-0 aspect-[16/10] w-24 sm:w-32 overflow-hidden rounded-lg border-2 transition-all ${
-                    selectedImageIndex === index
-                      ? 'border-gold shadow-md shadow-gold/20'
-                      : 'border-border hover:border-gold/50'
-                  }`}
-                  onClick={() => setSelectedImageIndex(index)}
-                >
-                  <img
-                    src={photo}
-                    alt={`${car.brand} ${car.model} - ${index + 1}`}
-                    className="h-full w-full object-cover"
-                  />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* ─── RIGHT COLUMN - Details ─── */}
+          {/* ─── RIGHT COLUMN — Details ─── */}
           <div className="space-y-6">
             {/* Title + Type Badge */}
             <div>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl font-bold gold-shimmer sm:text-3xl">
+                  <h1 className="heading-lg gold-shimmer">
                     {car.brand} {car.model}
                   </h1>
-                  <p className="text-muted-foreground mt-1">
-                    {car.year} · {car.color} · {car.condition.charAt(0).toUpperCase() + car.condition.slice(1)}
+                  <p className="text-body-sm text-muted-foreground mt-1">
+                    {car.year} · {car.color} · {capitalize(car.condition)}
                   </p>
                 </div>
-                <Badge className="bg-gold/20 text-gold border-gold/30 shrink-0">
-                  {car.type === 'rent' && 'For Rent'}
-                  {car.type === 'sale' && 'For Sale'}
-                  {car.type === 'auction' && 'Auction'}
-                  {car.type === 'continueLoan' && 'Sambung Bayar'}
-                </Badge>
+                <VehicleTypeBadge type={car.type} />
               </div>
             </div>
 
-            {/* Unlock/Booking status banners */}
+            {/* Status banners */}
             {contactUnlocked ? (
               <BookingConfirmedBanner />
             ) : (
               <LockedContactNotice carType={car.type} />
             )}
 
-            {/* Unlock animation overlay - shown once when contactUnlocked transitions */}
-            {contactUnlocked && (
-              <div key="unlock-banner" className="rounded-xl border border-green-500/50 bg-green-500/10 p-4 text-center animate-in zoom-in-95 fade-in duration-300">
-                <Unlock className="size-8 text-green-400 mx-auto mb-2" />
-                <p className="text-sm font-bold text-green-400">Contact Details Unlocked!</p>
-                <p className="text-xs text-green-400/70 mt-1">You can now view the dealer&apos;s phone, WhatsApp, and exact location.</p>
-              </div>
-            )}
+            {showUnlockBanner && <UnlockBanner />}
 
             {/* ─── Type-specific Pricing Cards ─── */}
             {isRent && <RentalPricingCard car={car} />}
             {isSale && <SalePricingCard car={car} />}
             {isContinueLoan && <ContinueLoanCard car={car} />}
-            {isAuction && <AuctionCard car={car} />}
+            {isAuction && <AuctionDetailsCard car={car} />}
+
+            {/* Auction Condition Section */}
+            {isAuction && <AuctionConditionSection car={car} />}
 
             {/* Location with unlock logic */}
             <div className="flex items-center gap-2">
               {contactUnlocked ? (
                 <>
-                  <MapPin className="size-4 text-green-400 shrink-0" />
-                  <span className="text-sm text-foreground">{car.location}</span>
+                  <MapPin className="size-4 text-emerald-400 shrink-0" />
+                  <span className="text-body-sm text-foreground">{car.location}</span>
                 </>
               ) : (
                 <>
                   <MapPin className="size-4 text-gold/50 shrink-0" />
-                  <span className="text-sm text-muted-foreground">{car.city}</span>
-                  <span className="text-[10px] text-gold/60 ml-1">(exact location locked)</span>
+                  <span className="text-body-sm text-muted-foreground">{car.city}</span>
+                  <span className="text-caption text-gold/60 ml-1">(exact location locked)</span>
                 </>
               )}
             </div>
 
             <Separator />
 
-            {/* ─── Dealer Info Card with Unlock Logic ─── */}
+            {/* ─── Dealer Info Card ─── */}
             <DealerInfoCard car={car} contactUnlocked={contactUnlocked} />
 
             <Separator />
@@ -947,32 +1208,28 @@ export default function CarDetail() {
               </TabsList>
 
               <TabsContent value="specs" className="mt-4">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {specItems.map((spec) => (
-                    <div key={spec.label} className="flex items-start gap-2.5 rounded-lg bg-muted/50 p-3">
-                      <spec.icon className="size-4 text-gold mt-0.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">{spec.label}</p>
-                        <p className="text-sm font-medium text-foreground truncate">{spec.value}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <VehicleSpecsSection car={car} />
               </TabsContent>
 
               <TabsContent value="features" className="mt-4">
-                <div className="flex flex-wrap gap-2">
-                  {car.features.map((feature) => (
-                    <Badge key={feature} variant="secondary" className="text-xs gap-1 py-1 px-2.5">
-                      <CheckCircle2 className="size-3 text-gold" />
-                      {feature}
-                    </Badge>
-                  ))}
-                </div>
+                {car.features.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {car.features.map((feature) => (
+                      <Badge key={feature} variant="secondary" className="text-xs gap-1 py-1 px-2.5">
+                        <CheckCircle2 className="size-3 text-gold" />
+                        {feature}
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-body-sm text-muted-foreground">No features listed.</p>
+                )}
               </TabsContent>
 
               <TabsContent value="description" className="mt-4">
-                <p className="text-sm text-muted-foreground leading-relaxed">{car.description}</p>
+                <p className="text-body-sm text-muted-foreground leading-relaxed">
+                  {car.description || 'No description provided.'}
+                </p>
               </TabsContent>
             </Tabs>
 
@@ -980,46 +1237,21 @@ export default function CarDetail() {
             {isContinueLoan && (
               <>
                 <Separator />
-
-                {/* Marketplace Disclaimer */}
                 <MarketplaceDisclaimer />
 
                 {/* Vehicle Condition */}
                 {car.vehicleCondition && (
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <ClipboardCheck className="size-5 text-gold" />
-                      Vehicle Condition
-                    </h2>
-                    <Card className="border-gold/20 bg-gold/5 overflow-hidden">
-                      <CardContent className="p-4">
-                        <p className="text-sm text-foreground leading-relaxed">{car.vehicleCondition}</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
-
-                {/* Required Documents */}
-                {car.requiredDocs && car.requiredDocs.length > 0 && (
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground mb-3 flex items-center gap-2">
-                      <FileText className="size-5 text-gold" />
-                      Required Documents
-                    </h2>
-                    <div className="space-y-2">
-                      {car.requiredDocs.map((doc, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center gap-3 rounded-lg bg-muted/50 p-3"
-                        >
-                          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gold/10 text-gold text-xs font-bold">
-                            {index + 1}
-                          </div>
-                          <span className="text-sm text-foreground">{doc}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <Card className="border-border bg-card">
+                    <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+                      <CardTitle className="text-foreground flex items-center gap-2 heading-sm">
+                        <ClipboardCheck className="size-5 text-gold" />
+                        Vehicle Condition
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-4 sm:p-6 pt-3">
+                      <p className="text-body-sm text-foreground leading-relaxed">{car.vehicleCondition}</p>
+                    </CardContent>
+                  </Card>
                 )}
 
                 {/* Process Flow */}
@@ -1031,17 +1263,15 @@ export default function CarDetail() {
 
             {/* ─── CTA Buttons ─── */}
             <div className="flex flex-col gap-3 sm:flex-row">
-              {/* Primary CTA */}
               <Button
                 className="flex-1 bg-gold text-gold-dark hover:bg-gold-light font-semibold h-12 text-base gap-2"
                 onClick={handlePrimaryCta}
                 disabled={bookingLoading}
               >
-                {getCtaIcon()}
-                {getCtaLabel()}
+                {ctaIcon}
+                {ctaLabel}
               </Button>
 
-              {/* Secondary CTA - WhatsApp with lock/unlock */}
               {contactUnlocked ? (
                 <a
                   href={getWhatsAppLink(car.dealerId, `${car.brand} ${car.model}`)}
@@ -1049,14 +1279,14 @@ export default function CarDetail() {
                   rel="noopener noreferrer"
                   className="flex-1"
                 >
-                  <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold h-12 text-base gap-2">
+                  <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-foreground font-semibold h-12 text-base gap-2">
                     <MessageCircle className="size-5" />
                     WhatsApp
                   </Button>
                 </a>
               ) : (
                 <Button
-                  className="flex-1 bg-gray-700/50 text-gray-500 font-semibold h-12 text-base gap-2 cursor-not-allowed"
+                  className="flex-1 bg-muted text-muted-foreground font-semibold h-12 text-base gap-2"
                   disabled
                 >
                   <Lock className="size-5" />
@@ -1065,25 +1295,21 @@ export default function CarDetail() {
               )}
             </div>
 
-            {/* Payment info under CTA for sale */}
+            {/* Payment info under CTA */}
             {isSale && !contactUnlocked && (
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
                 RM 100 enquiry fee required to unlock dealer contact
               </p>
             )}
-
-            {/* Deposit info under CTA for auction */}
             {isAuction && !contactUnlocked && (
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
                 {formatPrice(Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1))} deposit required to place bid &amp; unlock contact
               </p>
             )}
-
-            {/* Deposit info under CTA for rent */}
             {isRent && !contactUnlocked && (
-              <p className="text-center text-xs text-muted-foreground">
+              <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
                 {formatPrice(car.deposit || car.price)} booking deposit required to unlock contact
               </p>

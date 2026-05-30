@@ -51,15 +51,16 @@ export function sanitizeInput(input: string): string {
     .trim()
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function sanitizeObject(obj: any): any {
   if (typeof obj === 'string') return sanitizeInput(obj)
   if (Array.isArray(obj)) return obj.map(sanitizeObject)
   if (obj && typeof obj === 'object') {
-    const sanitized: any = {}
+    const sanitized: Record<string, unknown> = {}
     for (const [key, value] of Object.entries(obj)) {
       sanitized[key] = sanitizeObject(value)
     }
-    return sanitized
+    return sanitized as any
   }
   return obj
 }
@@ -136,7 +137,7 @@ export function securityHeaders() {
 }
 
 // Standard API response helpers
-export function apiResponse(data: any, status = 200) {
+export function apiResponse(data: Record<string, unknown>, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: {
@@ -146,7 +147,7 @@ export function apiResponse(data: any, status = 200) {
   })
 }
 
-export function apiError(message: string, status = 400, details?: any) {
+export function apiError(message: string, status = 400, details?: Record<string, unknown>) {
   return NextResponse.json({
     success: false,
     error: message,
@@ -161,7 +162,7 @@ export function apiError(message: string, status = 400, details?: any) {
 }
 
 // Paginated response helper
-export function paginatedResponse(data: any[], total: number, page: number, limit: number) {
+export function paginatedResponse(data: unknown, total: number, page: number, limit: number) {
   return apiResponse({
     success: true,
     data,

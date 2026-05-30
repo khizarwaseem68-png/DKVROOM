@@ -1,14 +1,16 @@
 import { create } from 'zustand'
 import { authApi, setToken, clearToken } from '@/lib/api'
 
-export type View = 
-  | 'home' 
-  | 'rent' 
-  | 'buy' 
-  | 'repair' 
-  | 'insurance' 
-  | 'auction' 
-  | 'loan' 
+// ===== VIEW TYPES =====
+
+export type View =
+  | 'home'
+  | 'rent'
+  | 'buy'
+  | 'repair'
+  | 'insurance'
+  | 'auction'
+  | 'loan'
   | 'continueLoan'
   | 'carDetail'
   | 'dealerDashboard'
@@ -23,6 +25,8 @@ export type View =
 
 export type PaymentStatus = 'none' | 'pending' | 'uploaded' | 'verified' | 'rejected'
 
+// ===== STATE INTERFACES =====
+
 interface BookingState {
   bookingId: string | null
   bookingType: 'rent' | 'sale' | 'continueLoan' | 'auction' | 'insurance' | 'workshop' | null
@@ -33,7 +37,7 @@ interface BookingState {
   paymentId: string | null
 }
 
-interface UserState {
+export interface UserState {
   id: string | null
   email: string | null
   name: string | null
@@ -43,40 +47,60 @@ interface UserState {
   verified: boolean
   avatar: string | null
   dealerId?: string | null
-  dealer?: any | null
+  dealer?: Record<string, unknown> | null
 }
 
 interface AppState {
+  // Navigation
   currentView: View
   previousView: View | null
   selectedCarId: string | null
   selectedCarType: string | null
+
+  // Search & Filters
   searchQuery: string
   selectedCity: string
   filterType: string
+
+  // Auth
   isLoggedIn: boolean
   user: UserState | null
+
+  // UI
   showMobileMenu: boolean
-  booking: BookingState
   loading: boolean
-  
+
+  // Booking Flow
+  booking: BookingState
+
+  // Actions — Navigation
   navigate: (view: View) => void
   goBack: () => void
   selectCar: (carId: string, carType: string) => void
+
+  // Actions — Search
   setSearch: (query: string) => void
   setCity: (city: string) => void
   setFilter: (type: string) => void
+
+  // Actions — Auth
   login: (user: UserState, token: string) => void
   logout: () => void
+  checkAuth: () => Promise<void>
+
+  // Actions — UI
   toggleMobileMenu: () => void
+  setLoading: (loading: boolean) => void
+
+  // Actions — Booking
   startBooking: (type: BookingState['bookingType'], amount: number, bookingId?: string, paymentId?: string) => void
   uploadReceipt: () => void
   verifyPayment: () => void
   rejectPayment: () => void
   resetBooking: () => void
-  setLoading: (loading: boolean) => void
-  checkAuth: () => Promise<void>
 }
+
+// ===== INITIAL STATES =====
 
 const initialBooking: BookingState = {
   bookingId: null,
@@ -101,6 +125,10 @@ const initialUser: UserState = {
   dealer: null,
 }
 
+// ===== STORE =====
+
+let authCheckPromise: Promise<void> | null = null
+
 export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'home',
   previousView: null,
@@ -112,22 +140,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   isLoggedIn: false,
   user: null,
   showMobileMenu: false,
-  booking: { ...initialBooking },
   loading: false,
+  booking: { ...initialBooking },
 
+  // Navigation
   navigate: (view) => set({ previousView: get().currentView, currentView: view, showMobileMenu: false }),
   goBack: () => set((state) => ({ currentView: state.previousView || 'home', previousView: null })),
   selectCar: (carId, carType) => set({ selectedCarId: carId, selectedCarType: carType, currentView: 'carDetail', previousView: get().currentView }),
+
+  // Search
   setSearch: (query) => set({ searchQuery: query }),
   setCity: (city) => set({ selectedCity: city }),
   setFilter: (type) => set({ filterType: type }),
-  
+
+  // Auth
   login: (user, token) => {
     setToken(token)
-    set({
-      isLoggedIn: true,
-      user,
-    })
+    set({ isLoggedIn: true, user })
   },
 
   logout: () => {
@@ -140,8 +169,47 @@ export const useAppStore = create<AppState>((set, get) => ({
     })
   },
 
+  checkAuth: async () => {
+    // Prevent duplicate auth checks
+    if (authCheckPromise) return authCheckPromise
+
+    authCheckPromise = (async () => {
+      try {
+        const data = await authApi.me()
+        if (data.user) {
+          const u = data.user
+          set({
+            isLoggedIn: true,
+            user: {
+              id: u.id,
+              email: u.email,
+              name: u.name,
+              phone: u.phone,
+              whatsapp: u.whatsapp,
+              role: u.role,
+              verified: u.verified,
+              avatar: u.avatar,
+              dealerId: u.dealer?.id || null,
+              dealer: u.dealer || null,
+            },
+          })
+        }
+      } catch {
+        clearToken()
+        set({ isLoggedIn: false, user: null })
+      } finally {
+        authCheckPromise = null
+      }
+    })()
+
+    return authCheckPromise
+  },
+
+  // UI
   toggleMobileMenu: () => set((state) => ({ showMobileMenu: !state.showMobileMenu })),
-  
+  setLoading: (loading) => set({ loading }),
+
+  // Booking Flow
   startBooking: (type, amount, bookingId, paymentId) => set({
     booking: {
       bookingId: bookingId || 'BK' + Date.now().toString(36).toUpperCase(),
@@ -155,48 +223,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     currentView: 'payment',
     previousView: get().currentView,
   }),
-  
+
   uploadReceipt: () => set((state) => ({
     booking: { ...state.booking, receiptUploaded: true, paymentStatus: 'uploaded' as PaymentStatus },
   })),
-  
+
   verifyPayment: () => set((state) => ({
     booking: { ...state.booking, paymentStatus: 'verified' as PaymentStatus, contactUnlocked: true },
   })),
-  
+
   rejectPayment: () => set((state) => ({
     booking: { ...state.booking, paymentStatus: 'rejected' as PaymentStatus, receiptUploaded: false },
   })),
-  
-  resetBooking: () => set({ booking: { ...initialBooking } }),
-  
-  setLoading: (loading) => set({ loading }),
 
-  checkAuth: async () => {
-    try {
-      const data = await authApi.me()
-      if (data.user) {
-        const u = data.user
-        set({
-          isLoggedIn: true,
-          user: {
-            id: u.id,
-            email: u.email,
-            name: u.name,
-            phone: u.phone,
-            whatsapp: u.whatsapp,
-            role: u.role,
-            verified: u.verified,
-            avatar: u.avatar,
-            dealerId: u.dealer?.id || null,
-            dealer: u.dealer || null,
-          },
-        })
-      }
-    } catch {
-      // Token invalid or expired
-      clearToken()
-      set({ isLoggedIn: false, user: null })
-    }
-  },
+  resetBooking: () => set({ booking: { ...initialBooking } }),
 }))

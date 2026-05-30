@@ -2,7 +2,26 @@ import bcrypt from 'bcryptjs'
 import { SignJWT, jwtVerify } from 'jose'
 import { db } from '@/lib/db'
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'dk-vroom-secret-key-change-in-production-2024')
+// JWT secret must be set via environment variable in production
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET environment variable is required in production')
+    }
+    // Development fallback only
+    return new TextEncoder().encode('dk-vroom-dev-secret-key-not-for-production')
+  }
+  return new TextEncoder().encode(secret)
+}
+
+let _jwtSecret: Uint8Array | null = null
+function getSecret(): Uint8Array {
+  if (!_jwtSecret) {
+    _jwtSecret = getJwtSecret()
+  }
+  return _jwtSecret
+}
 const SALT_ROUNDS = 12
 
 // Password hashing
@@ -20,13 +39,13 @@ export async function generateToken(payload: { userId: string; email: string; ro
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET)
+    .sign(getSecret())
 }
 
 // JWT Token verification
 export async function verifyToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET)
+    const { payload } = await jwtVerify(token, getSecret())
     return payload as { userId: string; email: string; role: string }
   } catch {
     return null

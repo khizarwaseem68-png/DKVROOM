@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useAppStore, type View } from '@/lib/store'
+import { useScrollPosition } from '@/hooks/use-api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -54,25 +55,11 @@ export function Header() {
     navigate,
     setSearch,
     logout,
-    checkAuth,
   } = useAppStore()
 
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
-
-  // Check auth on mount
-  useEffect(() => {
-    checkAuth()
-  }, [checkAuth])
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10)
-    }
-    window.addEventListener('scroll', handleScroll, { passive: true })
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+  const { isScrolled } = useScrollPosition()
 
   const isActive = (view: View) => currentView === view
 
@@ -108,9 +95,9 @@ export function Header() {
   return (
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-500 ${
-        scrolled
-          ? 'border-b border-gold/20 bg-[#0a0a0a]/95 shadow-[0_4px_30px_rgba(201,168,76,0.08)]'
-          : 'border-b border-transparent bg-[#0a0a0a]/80'
+        isScrolled
+          ? 'border-b border-gold/20 bg-background/95 shadow-[0_4px_30px_rgba(201,168,76,0.08)]'
+          : 'border-b border-transparent bg-background/80'
       } backdrop-blur-xl`}
     >
       {/* Top gold accent line */}
