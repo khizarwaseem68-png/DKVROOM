@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { loansApi, uploadApi } from '@/lib/api'
 import {
@@ -112,7 +113,8 @@ const STEPS = [
 // ===== COMPONENT =====
 
 export default function LoanApplication() {
-  const { goBack, user } = useAppStore()
+  const { user } = useAppStore()
+  const router = useRouter()
   const [mainTab, setMainTab] = useState('apply')
   const [currentStep, setCurrentStep] = useState(1)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
@@ -366,7 +368,7 @@ export default function LoanApplication() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" onClick={goBack} className="text-muted-foreground hover:text-gold">
+              <Button variant="ghost" size="icon" onClick={() => router.back()} className="text-muted-foreground hover:text-gold">
                 <ArrowLeft className="size-5" />
               </Button>
               <h1 className="heading-sm">

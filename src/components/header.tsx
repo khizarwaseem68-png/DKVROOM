@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useAppStore, type View } from '@/lib/store'
+import { useRouter, usePathname } from 'next/navigation'
+import { useAppStore } from '@/lib/store'
 import { useScrollPosition } from '@/hooks/use-api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,40 +32,40 @@ import {
 
 interface NavItem {
   label: string
-  view: View
+  path: string
   icon?: React.ReactNode
   badge?: string
 }
 
 const navItems: NavItem[] = [
-  { label: 'Rent', view: 'rent' },
-  { label: 'Buy', view: 'buy' },
-  { label: 'Repair', view: 'repair' },
-  { label: 'Insurance', view: 'insurance' },
-  { label: 'Auction', view: 'auction', badge: 'HOT' },
-  { label: 'Loan', view: 'loan' },
-  { label: 'Continue Loan', view: 'continueLoan' },
+  { label: 'Rent', path: '/rent' },
+  { label: 'Buy', path: '/buy' },
+  { label: 'Repair', path: '/repair' },
+  { label: 'Insurance', path: '/insurance' },
+  { label: 'Auction', path: '/auction', badge: 'HOT' },
+  { label: 'Loan', path: '/loan' },
+  { label: 'Continue Loan', path: '/continue-loan' },
 ]
 
 export function Header() {
   const {
-    currentView,
     searchQuery,
     isLoggedIn,
     user,
-    navigate,
     setSearch,
     logout,
   } = useAppStore()
 
+  const router = useRouter()
+  const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const { isScrolled } = useScrollPosition()
 
-  const isActive = (view: View) => currentView === view
+  const isActive = (path: string) => pathname === path
 
-  const handleNavClick = (view: View) => {
-    navigate(view)
+  const handleNavClick = (path: string) => {
+    router.push(path)
     setMobileOpen(false)
   }
 
@@ -92,6 +93,13 @@ export function Header() {
       .slice(0, 2)
   }
 
+  const getDashboardPath = () => {
+    if (userRole === 'admin') return '/admin-dashboard'
+    if (userRole === 'dealer') return '/dealer-dashboard'
+    if (userRole === 'customer') return '/customer-dashboard'
+    return '/'
+  }
+
   return (
     <header
       className={`sticky top-0 z-50 w-full transition-all duration-500 ${
@@ -107,7 +115,7 @@ export function Header() {
         <div className="flex h-16 items-center justify-between gap-4 lg:h-18">
           {/* Logo */}
           <button
-            onClick={() => handleNavClick('home')}
+            onClick={() => handleNavClick('/')}
             className="group flex shrink-0 items-center gap-2 transition-all duration-300 hover:scale-105"
           >
             <div className="relative flex size-9 items-center justify-center rounded-lg border border-gold/30 bg-gradient-to-br from-gold/20 to-transparent shadow-[0_0_15px_rgba(201,168,76,0.15)] transition-all duration-300 group-hover:border-gold/60 group-hover:shadow-[0_0_25px_rgba(201,168,76,0.25)]">
@@ -128,10 +136,10 @@ export function Header() {
           <nav className="hidden items-center gap-1 lg:flex">
             {navItems.map((item) => (
               <button
-                key={item.view}
-                onClick={() => handleNavClick(item.view)}
+                key={item.path}
+                onClick={() => handleNavClick(item.path)}
                 className={`group relative rounded-lg px-3 py-2 text-sm font-medium transition-all duration-300 ${
-                  isActive(item.view)
+                  isActive(item.path)
                     ? 'text-gold'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
@@ -148,13 +156,13 @@ export function Header() {
                   )}
                 </span>
                 {/* Active indicator */}
-                {isActive(item.view) && (
+                {isActive(item.path) && (
                   <span className="absolute bottom-0 left-1/2 h-[2px] w-3/4 -translate-x-1/2 rounded-full bg-gradient-to-r from-transparent via-gold to-transparent" />
                 )}
                 {/* Hover background */}
                 <span
                   className={`absolute inset-0 rounded-lg transition-all duration-300 ${
-                    isActive(item.view)
+                    isActive(item.path)
                       ? 'bg-gold/10'
                       : 'bg-transparent group-hover:bg-white/5'
                   }`}
@@ -213,26 +221,20 @@ export function Header() {
             {/* User Actions */}
             {isLoggedIn ? (
               <div className="flex items-center gap-2">
-                {/* Dashboard link for dealer/admin */}
-                {userRole && userRole !== 'customer' && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() =>
-                      handleNavClick(
-                        userRole === 'admin' ? 'adminDashboard' : 'dealerDashboard'
-                      )
-                    }
-                    className="hidden text-muted-foreground transition-colors hover:text-gold lg:flex"
-                  >
-                    <LayoutDashboard className="mr-1.5 size-4" />
-                    Dashboard
-                  </Button>
-                )}
+                {/* Dashboard link */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleNavClick(getDashboardPath())}
+                  className="hidden text-muted-foreground transition-colors hover:text-gold lg:flex"
+                >
+                  <LayoutDashboard className="mr-1.5 size-4" />
+                  Dashboard
+                </Button>
 
                 {/* User Avatar */}
                 <button
-                  onClick={() => handleNavClick('profile')}
+                  onClick={() => handleNavClick(getDashboardPath())}
                   className="group flex items-center gap-2 rounded-full p-1 pr-3 transition-all duration-300 hover:bg-white/5"
                 >
                   <Avatar className="size-8 border border-gold/30 transition-all duration-300 group-hover:border-gold/60 group-hover:shadow-[0_0_12px_rgba(201,168,76,0.2)]">
@@ -271,7 +273,7 @@ export function Header() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleNavClick('login')}
+                  onClick={() => handleNavClick('/login')}
                   className="text-muted-foreground transition-all duration-300 hover:text-gold"
                 >
                   <LogIn className="mr-1.5 size-4" />
@@ -279,7 +281,7 @@ export function Header() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => handleNavClick('register')}
+                  onClick={() => handleNavClick('/register')}
                   className="border border-gold/30 bg-gradient-to-r from-gold/90 to-gold/70 text-black shadow-[0_0_15px_rgba(201,168,76,0.2)] transition-all duration-300 hover:from-gold hover:to-gold/90 hover:shadow-[0_0_25px_rgba(201,168,76,0.3)]"
                 >
                   <UserPlus className="mr-1.5 size-4" />
@@ -319,7 +321,7 @@ export function Header() {
                 {/* Mobile Search */}
                 <div className="px-4 py-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 size-4 text-muted-foreground" />
                     <Input
                       placeholder="Search vehicles..."
                       value={searchQuery}
@@ -343,10 +345,10 @@ export function Header() {
                 <nav className="flex flex-col gap-1 overflow-y-auto px-3 py-4">
                   {navItems.map((item) => (
                     <button
-                      key={item.view}
-                      onClick={() => handleNavClick(item.view)}
+                      key={item.path}
+                      onClick={() => handleNavClick(item.path)}
                       className={`group flex items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-300 ${
-                        isActive(item.view)
+                        isActive(item.path)
                           ? 'bg-gold/10 text-gold shadow-[inset_0_0_20px_rgba(201,168,76,0.05)]'
                           : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
                       }`}
@@ -360,7 +362,7 @@ export function Header() {
                           {item.badge}
                         </Badge>
                       )}
-                      {isActive(item.view) && (
+                      {isActive(item.path) && (
                         <span className="size-1.5 rounded-full bg-gold shadow-[0_0_8px_rgba(201,168,76,0.5)]" />
                       )}
                     </button>
@@ -394,36 +396,25 @@ export function Header() {
 
                       <Button
                         variant="ghost"
-                        onClick={() => handleNavClick('profile')}
+                        onClick={() => handleNavClick(getDashboardPath())}
+                        className="justify-start text-muted-foreground hover:text-gold"
+                      >
+                        <LayoutDashboard className="mr-2 size-4" />
+                        Dashboard
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        onClick={() => handleNavClick('/customer-dashboard')}
                         className="justify-start text-muted-foreground hover:text-gold"
                       >
                         <User className="mr-2 size-4" />
                         My Profile
                       </Button>
 
-                      {userRole !== 'customer' && (
-                        <Button
-                          variant="ghost"
-                          onClick={() =>
-                            handleNavClick(
-                              userRole === 'admin'
-                                ? 'adminDashboard'
-                                : 'dealerDashboard'
-                            )
-                          }
-                          className="justify-start text-muted-foreground hover:text-gold"
-                        >
-                          <LayoutDashboard className="mr-2 size-4" />
-                          Dashboard
-                        </Button>
-                      )}
-
                       <Button
                         variant="ghost"
-                        onClick={() => {
-                          logout()
-                          setMobileOpen(false)
-                        }}
+                        onClick={() => { logout(); setMobileOpen(false) }}
                         className="justify-start text-red-400/80 hover:text-red-400 hover:bg-red-500/10"
                       >
                         <LogOut className="mr-2 size-4" />
@@ -433,14 +424,14 @@ export function Header() {
                   ) : (
                     <div className="flex flex-col gap-3">
                       <Button
-                        onClick={() => handleNavClick('login')}
+                        onClick={() => handleNavClick('/login')}
                         className="w-full border border-gold/30 bg-transparent text-gold transition-all duration-300 hover:border-gold/60 hover:bg-gold/10"
                       >
                         <LogIn className="mr-2 size-4" />
                         Login
                       </Button>
                       <Button
-                        onClick={() => handleNavClick('register')}
+                        onClick={() => handleNavClick('/register')}
                         className="w-full border border-gold/30 bg-gradient-to-r from-gold/90 to-gold/70 text-black shadow-[0_0_15px_rgba(201,168,76,0.2)] transition-all duration-300 hover:from-gold hover:to-gold/90 hover:shadow-[0_0_25px_rgba(201,168,76,0.3)]"
                       >
                         <UserPlus className="mr-2 size-4" />
@@ -462,7 +453,7 @@ export function Header() {
       {searchQuery && (
         <div className="border-t border-gold/10 bg-[#0a0a0a]/95 px-4 py-2 backdrop-blur-xl md:hidden">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gold" />
+            <Search className="absolute left-3 top-1/2 size-4 text-gold" />
             <Input
               placeholder="Search vehicles..."
               value={searchQuery}

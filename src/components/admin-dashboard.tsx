@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { adminApi } from '@/lib/api'
 import {
@@ -9,10 +10,10 @@ import {
   type VehicleType,
 } from '@/lib/constants'
 import {
-  LoadingState,
   EmptyState,
   StatusBadge,
   VehicleTypeBadge,
+  NotificationDropdown,
 } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -21,10 +22,17 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Tabs,
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import { toast } from 'sonner'
 import {
   LayoutDashboard,
   Users,
@@ -36,7 +44,6 @@ import {
   ShieldAlert,
   BarChart3,
   Settings,
-  Bell,
   Search,
   ChevronLeft,
   ChevronRight,
@@ -52,6 +59,8 @@ import {
   Clock,
   Shield,
   Loader2,
+  LogOut,
+  Copy,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -173,7 +182,9 @@ type AdminTab = (typeof sidebarItems)[number]['id']
 // ===== COMPONENT =====
 
 export default function AdminDashboard() {
-  const { user, goBack } = useAppStore()
+  const { user } = useAppStore()
+  const logout = useAppStore((state) => state.logout)
+  const router = useRouter()
   const userName = user?.name
   const [activeTab, setActiveTab] = useState<AdminTab>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -377,10 +388,14 @@ export default function AdminDashboard() {
           })}
         </nav>
         {!sidebarCollapsed && (
-          <div className="p-4 border-t border-border">
-            <Button variant="ghost" onClick={goBack} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
+          <div className="p-4 border-t border-border space-y-2">
+            <Button variant="ghost" onClick={() => router.push('/')} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
               <ChevronLeft className="size-4 mr-1" />
               Back to Site
+            </Button>
+            <Button variant="ghost" onClick={() => { logout(); router.push('/') }} className="w-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 text-sm">
+              <LogOut className="size-4 mr-1" />
+              Sign Out
             </Button>
           </div>
         )}
@@ -422,6 +437,16 @@ export default function AdminDashboard() {
                 )
               })}
             </nav>
+            <div className="p-4 border-t border-border space-y-2">
+              <Button variant="ghost" onClick={() => { setMobileSidebarOpen(false); router.push('/') }} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
+                <ChevronLeft className="size-4 mr-1" />
+                Back to Site
+              </Button>
+              <Button variant="ghost" onClick={() => { logout(); router.push('/') }} className="w-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 text-sm">
+                <LogOut className="size-4 mr-1" />
+                Sign Out
+              </Button>
+            </div>
           </aside>
         </div>
       )}
@@ -431,7 +456,7 @@ export default function AdminDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <Card className="bg-card border-border w-full max-w-md mx-4">
             <CardHeader>
-              <CardTitle className="heading-sm flex items-center gap-2">
+              <CardTitle className="dash-heading-sm flex items-center gap-2">
                 <XCircle className="size-5 text-red-400" />
                 Reject {rejectDialog.type === 'dealer' ? 'Dealer' : rejectDialog.type === 'car' ? 'Car' : 'Payment'}
               </CardTitle>
@@ -481,25 +506,31 @@ export default function AdminDashboard() {
               <Button variant="ghost" size="icon" onClick={() => setMobileSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-gold">
                 <Menu className="size-5" />
               </Button>
-              <h1 className="heading-sm">{sidebarItems.find((i) => i.id === activeTab)?.label || 'Dashboard'}</h1>
+              <h1 className="dash-heading-sm">{sidebarItems.find((i) => i.id === activeTab)?.label || 'Dashboard'}</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-gold">
-                <Bell className="size-4" />
-                <span className="absolute top-1 right-1 size-2 bg-red-500 rounded-full" />
-              </Button>
+              <NotificationDropdown />
               <Separator orientation="vertical" className="h-6 bg-border" />
-              <div className="flex items-center gap-2">
-                <Avatar className="size-8 border border-red-500/30">
-                  <AvatarFallback className="bg-red-500/10 text-red-400 text-xs font-bold">
-                    {userName?.charAt(0) || 'A'}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="hidden sm:flex flex-col">
-                  <span className="text-body-sm font-medium">{userName || 'Admin'}</span>
-                  <span className="text-overline text-red-400 font-medium">Super Admin</span>
-                </div>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2">
+                    <Avatar className="size-8 border border-red-500/30">
+                      <AvatarFallback className="bg-red-500/10 text-red-400 text-xs font-bold">
+                        {userName?.charAt(0) || 'A'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden sm:flex flex-col items-start">
+                      <span className="text-body-sm font-medium">{userName || 'Admin'}</span>
+                      <span className="text-overline text-red-400 font-medium">Super Admin</span>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { logout(); router.push('/') }}>
+                    <LogOut className="size-4 mr-2" />Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -542,7 +573,7 @@ export default function AdminDashboard() {
                               {stat.change}
                             </span>
                           </div>
-                          <div className="heading-md">{stat.value}</div>
+                          <div className="dash-heading-md">{stat.value}</div>
                           <div className="text-overline text-muted-foreground mt-1">{stat.label}</div>
                         </CardContent>
                       </Card>
@@ -555,7 +586,7 @@ export default function AdminDashboard() {
                 {/* Platform Overview */}
                 <Card className="lg:col-span-2 bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Platform Overview</CardTitle>
+                    <CardTitle className="dash-heading-sm">Platform Overview</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-0">
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 py-6">
@@ -569,7 +600,7 @@ export default function AdminDashboard() {
                         return (
                           <div key={item.label} className="text-center p-4 rounded-xl bg-secondary">
                             <Icon className={`size-6 ${item.color} mx-auto mb-2`} />
-                            <div className="heading-md">{item.value}</div>
+                            <div className="dash-heading-md">{item.value}</div>
                             <div className="text-overline text-muted-foreground">{item.label}</div>
                           </div>
                         )
@@ -581,7 +612,7 @@ export default function AdminDashboard() {
                 {/* Platform Status */}
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Platform Status</CardTitle>
+                    <CardTitle className="dash-heading-sm">Platform Status</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
                     {[
@@ -623,7 +654,7 @@ export default function AdminDashboard() {
                         </div>
                         <div>
                           <p className="text-body-sm font-semibold">{alert.label}</p>
-                          <p className={`heading-md ${alert.textColor}`}>{alert.value}</p>
+                          <p className={`dash-heading-md ${alert.textColor}`}>{alert.value}</p>
                         </div>
                       </CardContent>
                     </Card>
@@ -658,7 +689,17 @@ export default function AdminDashboard() {
               </div>
 
               {dealersLoading ? (
-                <LoadingState message="Loading dealers..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border animate-pulse">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                        <div className="h-4 bg-secondary rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : dealers.length === 0 ? (
                 <EmptyState title="No dealers found" description="No dealers match your current filters." />
               ) : (
@@ -670,6 +711,7 @@ export default function AdminDashboard() {
                         <table className="w-full text-body-sm">
                           <thead>
                             <tr className="border-b border-border">
+                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">ID</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Company Name</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">City</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Verification</th>
@@ -681,6 +723,20 @@ export default function AdminDashboard() {
                           <tbody>
                             {dealers.map((dealer) => (
                               <tr key={dealer.id} className="border-b border-border/50 hover:bg-secondary/50">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
+                                      {dealer.id.slice(0, 8)}
+                                    </code>
+                                    <button
+                                      onClick={() => { navigator.clipboard.writeText(dealer.id); toast.success('ID copied!') }}
+                                      className="text-muted-foreground hover:text-gold transition-colors"
+                                      title="Copy full ID"
+                                    >
+                                      <Copy className="size-3" />
+                                    </button>
+                                  </div>
+                                </td>
                                 <td className="py-3 px-4 font-medium">{dealer.companyName || dealer.company}</td>
                                 <td className="py-3 px-4 text-muted-foreground">{dealer.city}</td>
                                 <td className="py-3 px-4"><StatusBadge status={dealer.verified ? 'verified' : dealer.status || 'pending'} /></td>
@@ -767,7 +823,17 @@ export default function AdminDashboard() {
               </div>
 
               {carsLoading ? (
-                <LoadingState message="Loading cars..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border animate-pulse">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-14 bg-secondary rounded w-20" />
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : cars.length === 0 ? (
                 <EmptyState title="No cars found" description="No car listings match your current filters." />
               ) : (
@@ -779,6 +845,7 @@ export default function AdminDashboard() {
                         <table className="w-full text-body-sm">
                           <thead>
                             <tr className="border-b border-border">
+                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">ID</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Photo</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Brand / Model</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Dealer</th>
@@ -793,6 +860,20 @@ export default function AdminDashboard() {
                               const photoUrl = getCarPhoto(car)
                               return (
                                 <tr key={car.id} className="border-b border-border/50 hover:bg-secondary/50">
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center gap-1.5">
+                                      <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
+                                        {car.id.slice(0, 8)}
+                                      </code>
+                                      <button
+                                        onClick={() => { navigator.clipboard.writeText(car.id); toast.success('ID copied!') }}
+                                        className="text-muted-foreground hover:text-gold transition-colors"
+                                        title="Copy full ID"
+                                      >
+                                        <Copy className="size-3" />
+                                      </button>
+                                    </div>
+                                  </td>
                                   <td className="py-3 px-4">
                                     {photoUrl ? (
                                       <img src={photoUrl} alt={getCarBrand(car)} className="w-16 h-12 object-cover rounded-md" />
@@ -890,7 +971,17 @@ export default function AdminDashboard() {
           {activeTab === 'bookings' && (
             <div className="space-y-4">
               {bookingsLoading ? (
-                <LoadingState message="Loading bookings..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border animate-pulse">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                        <div className="h-4 bg-secondary rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : bookings.length === 0 ? (
                 <EmptyState title="No bookings found" description="Bookings will appear here once customers start making reservations." />
               ) : (
@@ -947,7 +1038,17 @@ export default function AdminDashboard() {
               </Tabs>
 
               {loansLoading ? (
-                <LoadingState message="Loading loans..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border animate-pulse">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                        <div className="h-4 bg-secondary rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : loans.length === 0 ? (
                 <EmptyState title="No loans found" description="Loan applications will appear here." />
               ) : (
@@ -959,6 +1060,7 @@ export default function AdminDashboard() {
                         <table className="w-full text-body-sm">
                           <thead>
                             <tr className="border-b border-border">
+                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">ID</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Applicant</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Car</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Bank</th>
@@ -971,6 +1073,20 @@ export default function AdminDashboard() {
                           <tbody>
                             {loans.map((loan) => (
                               <tr key={loan.id} className="border-b border-border/50 hover:bg-secondary/50">
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
+                                      {loan.id.slice(0, 8)}
+                                    </code>
+                                    <button
+                                      onClick={() => { navigator.clipboard.writeText(loan.id); toast.success('ID copied!') }}
+                                      className="text-muted-foreground hover:text-gold transition-colors"
+                                      title="Copy full ID"
+                                    >
+                                      <Copy className="size-3" />
+                                    </button>
+                                  </div>
+                                </td>
                                 <td className="py-3 px-4 font-medium">{loan.user?.name || loan.applicantName || 'N/A'}</td>
                                 <td className="py-3 px-4 text-muted-foreground">{loan.car?.brand} {loan.car?.model || loan.carName || 'N/A'}</td>
                                 <td className="py-3 px-4 text-muted-foreground">{loan.bankName || loan.bank || 'N/A'}</td>
@@ -1028,7 +1144,7 @@ export default function AdminDashboard() {
                   <Card key={stat.label} className="bg-card border-border">
                     <CardContent className="p-4">
                       <div className="text-overline text-muted-foreground">{stat.label}</div>
-                      <div className="heading-sm text-gold mt-1">{stat.value}</div>
+                      <div className="dash-heading-sm text-gold mt-1">{stat.value}</div>
                     </CardContent>
                   </Card>
                 ))}
@@ -1048,7 +1164,17 @@ export default function AdminDashboard() {
               </Tabs>
 
               {paymentsLoading ? (
-                <LoadingState message="Loading payments..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border animate-pulse">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                        <div className="h-4 bg-secondary rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : payments.length === 0 ? (
                 <EmptyState title="No payments found" description="Payment transactions will appear here." />
               ) : (
@@ -1060,7 +1186,7 @@ export default function AdminDashboard() {
                         <table className="w-full text-body-sm">
                           <thead>
                             <tr className="border-b border-border">
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Transaction ID</th>
+                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">ID</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">User</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Dealer</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Amount</th>
@@ -1073,7 +1199,20 @@ export default function AdminDashboard() {
                           <tbody>
                             {payments.map((txn) => (
                               <tr key={txn.id} className="border-b border-border/50 hover:bg-secondary/50">
-                                <td className="py-3 px-4 font-mono text-caption">{txn.id}</td>
+                                <td className="py-3 px-4">
+                                  <div className="flex items-center gap-1.5">
+                                    <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
+                                      {txn.id.slice(0, 8)}
+                                    </code>
+                                    <button
+                                      onClick={() => { navigator.clipboard.writeText(txn.id); toast.success('ID copied!') }}
+                                      className="text-muted-foreground hover:text-gold transition-colors"
+                                      title="Copy full ID"
+                                    >
+                                      <Copy className="size-3" />
+                                    </button>
+                                  </div>
+                                </td>
                                 <td className="py-3 px-4">{txn.user?.name || txn.userName || 'N/A'}</td>
                                 <td className="py-3 px-4 text-muted-foreground">{txn.dealer?.companyName || txn.dealerName || 'N/A'}</td>
                                 <td className="py-3 px-4 font-medium text-gold">{formatPrice(txn.amount ?? 0)}</td>
@@ -1173,7 +1312,7 @@ export default function AdminDashboard() {
             <div className="space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader className="pb-2">
-                  <CardTitle className="heading-sm">Platform Statistics</CardTitle>
+                  <CardTitle className="dash-heading-sm">Platform Statistics</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 pt-2 space-y-4">
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -1185,7 +1324,7 @@ export default function AdminDashboard() {
                     ].map((item) => (
                       <div key={item.label} className="p-4 rounded-lg bg-secondary border border-border">
                         <p className="text-overline text-muted-foreground">{item.label}</p>
-                        <p className="heading-sm text-gold mt-1">{item.value}</p>
+                        <p className="dash-heading-sm text-gold mt-1">{item.value}</p>
                       </div>
                     ))}
                   </div>
@@ -1194,11 +1333,21 @@ export default function AdminDashboard() {
 
               <Card className="bg-card border-border">
                 <CardHeader className="pb-2">
-                  <CardTitle className="heading-sm">Top Dealers</CardTitle>
+                  <CardTitle className="dash-heading-sm">Top Dealers</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
                   {dealersLoading ? (
-                    <LoadingState message="Loading dealers..." />
+                    <div className="space-y-3">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 py-2 animate-pulse">
+                          <div className="h-5 w-6 bg-secondary rounded" />
+                          <div className="space-y-2 flex-1">
+                            <div className="h-4 bg-secondary rounded w-1/2" />
+                            <div className="h-3 bg-secondary rounded w-1/3" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   ) : dealers.length === 0 ? (
                     <EmptyState title="No dealers found" />
                   ) : (
@@ -1229,7 +1378,7 @@ export default function AdminDashboard() {
             <div className="max-w-2xl mx-auto space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="heading-sm">Platform Settings</CardTitle>
+                  <CardTitle className="dash-heading-sm">Platform Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

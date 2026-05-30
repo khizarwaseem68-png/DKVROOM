@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { dealerApi, carsApi, uploadApi } from '@/lib/api'
 import {
@@ -14,6 +15,7 @@ import {
   EmptyState,
   StatusBadge,
   VehicleTypeBadge,
+  NotificationDropdown,
 } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -48,7 +50,6 @@ import {
   BarChart3,
   Wallet,
   Settings,
-  Bell,
   ChevronLeft,
   ChevronRight,
   DollarSign,
@@ -73,6 +74,7 @@ import {
   Handshake,
   Loader2,
   MoreVertical,
+  LogOut,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -145,7 +147,8 @@ type DealerTab = (typeof sidebarItems)[number]['id']
 // ===== COMPONENT =====
 
 export default function DealerDashboard() {
-  const { user, goBack } = useAppStore()
+  const router = useRouter()
+  const { user, logout } = useAppStore()
   const userName = user?.name || null
   const [activeTab, setActiveTab] = useState<DealerTab>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -221,6 +224,7 @@ export default function DealerDashboard() {
   const [carPhotos, setCarPhotos] = useState<Array<{ url: string; name: string }>>([])
   const [uploadingPhotos, setUploadingPhotos] = useState(false)
   const [deleteCarId, setDeleteCarId] = useState<string | null>(null)
+  const [editingCarId, setEditingCarId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Rental specific
@@ -272,6 +276,7 @@ export default function DealerDashboard() {
     setCarTakeoverAmount(''); setCarVehicleCondition(''); setCarBankName('')
     setCarStartingBid(''); setCarAuctionEndDate('')
     setCarReservePrice(''); setCarAuctionCondition('')
+    setEditingCarId(null)
   }
 
   const handleAddCar = async () => {
@@ -333,8 +338,13 @@ export default function DealerDashboard() {
         carData.fuelType = 'petrol'
       }
 
-      await carsApi.create(carData)
+      if (editingCarId) {
+        await carsApi.update(editingCarId, carData)
+      } else {
+        await carsApi.create(carData)
+      }
       resetForm()
+      setEditingCarId(null)
       fetchListings()
       fetchStats()
       handleTabChange('listings')
@@ -399,6 +409,34 @@ export default function DealerDashboard() {
     }
   }
 
+  // Handle edit car - populate form with car data and switch to addCar tab
+  const handleEditCar = (car: CarItem) => {
+    setEditingCarId(car.id)
+    setCarType(car.type as VehicleType)
+    setCarBrand(car.brand)
+    setCarModel(car.model)
+    setCarYear(car.year?.toString() || '')
+    setCarLocation(car.city || car.location || '')
+    setCarDescription('') // description not in CarItem type
+    const photos = parseJsonField(car.photos)
+    setCarPhotos(photos.map(url => ({ url, name: url.split('/').pop() || 'photo' })))
+    setCarSalePrice(car.type === 'sale' ? car.price.toString() : '')
+    setCarDailyPrice(car.type === 'rent' ? car.price.toString() : '')
+    setCarMileage(car.mileage?.toString() || '')
+    handleTabChange('addCar')
+  }
+
+  // Handle toggle featured
+  const handleToggleFeatured = async (carId: string, currentFeatured: boolean) => {
+    try {
+      await carsApi.update(carId, { featured: !currentFeatured })
+      fetchListings()
+      fetchStats()
+    } catch {
+      // silent
+    }
+  }
+
   // Derived stats
   const totalListings = stats?.listings?.total ?? 0
   const activeBookings = stats?.bookings?.active ?? 0
@@ -447,10 +485,14 @@ export default function DealerDashboard() {
         </nav>
 
         {!sidebarCollapsed && (
-          <div className="p-4 border-t border-border">
-            <Button variant="ghost" onClick={goBack} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
+          <div className="p-4 border-t border-border space-y-1">
+            <Button variant="ghost" onClick={() => router.push('/')} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
               <ChevronLeft className="size-4 mr-1" />
               Back to Site
+            </Button>
+            <Button variant="ghost" onClick={logout} className="w-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 text-sm">
+              <LogOut className="size-4 mr-1" />
+              Sign Out
             </Button>
           </div>
         )}
@@ -492,6 +534,16 @@ export default function DealerDashboard() {
                 )
               })}
             </nav>
+            <div className="p-4 border-t border-border space-y-1">
+              <Button variant="ghost" onClick={() => { setMobileSidebarOpen(false); router.push('/') }} className="w-full text-muted-foreground hover:text-gold hover:bg-gold/10 text-sm">
+                <ChevronLeft className="size-4 mr-1" />
+                Back to Site
+              </Button>
+              <Button variant="ghost" onClick={logout} className="w-full text-red-400/80 hover:text-red-400 hover:bg-red-500/10 text-sm">
+                <LogOut className="size-4 mr-1" />
+                Sign Out
+              </Button>
+            </div>
           </aside>
         </div>
       )}
@@ -505,22 +557,29 @@ export default function DealerDashboard() {
               <Button variant="ghost" size="icon" onClick={() => setMobileSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-gold">
                 <Menu className="size-5" />
               </Button>
-              <h1 className="heading-sm">{sidebarItems.find((i) => i.id === activeTab)?.label || 'Dashboard'}</h1>
+              <h1 className="dash-heading-sm">{sidebarItems.find((i) => i.id === activeTab)?.label || 'Dashboard'}</h1>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="relative text-muted-foreground hover:text-gold">
-                <Bell className="size-4" />
-                <span className="absolute top-1 right-1 size-2 bg-gold rounded-full" />
-              </Button>
+              <NotificationDropdown />
               <Separator orientation="vertical" className="h-6 bg-border" />
-              <div className="flex items-center gap-2">
-                <Avatar className="size-8 border border-gold/30">
-                  <AvatarFallback className="bg-gold/10 text-gold text-xs font-bold">
-                    {userName?.charAt(0) || 'D'}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-body-sm font-medium hidden sm:inline">{userName || 'Dealer'}</span>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <div className="flex items-center gap-2 cursor-pointer">
+                    <Avatar className="size-8 border border-gold/30">
+                      <AvatarFallback className="bg-gold/10 text-gold text-xs font-bold">
+                        {userName?.charAt(0) || 'D'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-body-sm font-medium hidden sm:inline">{userName || 'Dealer'}</span>
+                  </div>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="bg-card border-border" align="end">
+                  <DropdownMenuItem onClick={logout} className="text-red-400 focus:bg-red-500/10 focus:text-red-400 cursor-pointer">
+                    <LogOut className="size-4 mr-2" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         </header>
@@ -552,7 +611,7 @@ export default function DealerDashboard() {
                             {stat.change}
                           </span>
                         </div>
-                        <div className="heading-md">{stat.value}</div>
+                        <div className="dash-heading-md">{stat.value}</div>
                         <div className="text-overline text-muted-foreground mt-1">{stat.label}</div>
                       </CardContent>
                     </Card>
@@ -564,7 +623,7 @@ export default function DealerDashboard() {
                 {/* Revenue Overview */}
                 <Card className="lg:col-span-2 bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Revenue Overview</CardTitle>
+                    <CardTitle className="dash-heading-sm">Revenue Overview</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-0">
                     <div className="flex items-center justify-center h-48 text-muted-foreground text-body-sm">
@@ -584,7 +643,7 @@ export default function DealerDashboard() {
                 {/* Recent Bookings */}
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Recent Bookings</CardTitle>
+                    <CardTitle className="dash-heading-sm">Recent Bookings</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-3 max-h-72 overflow-y-auto">
                     {statsLoading ? (
@@ -663,112 +722,75 @@ export default function DealerDashboard() {
               </div>
 
               {listingsLoading ? (
-                <LoadingState message="Loading listings..." />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i} className="bg-card border-border overflow-hidden animate-pulse">
+                      <div className="aspect-[16/10] bg-secondary" />
+                      <CardContent className="p-4 space-y-3">
+                        <div className="h-5 bg-secondary rounded w-3/4" />
+                        <div className="h-4 bg-secondary rounded w-1/2" />
+                        <div className="h-7 bg-secondary rounded w-1/3" />
+                        <div className="h-4 bg-secondary rounded w-2/3" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               ) : listings.length === 0 ? (
                 <EmptyState title="No listings found" description="Add your first car listing to get started." action={
                   <Button onClick={() => handleTabChange('addCar')} className="bg-gold hover:bg-gold-dark text-primary-foreground">Add New Car</Button>
                 } />
               ) : (
-                /* Desktop table / Mobile cards */
-                <>
-                  {/* Desktop */}
-                  <Card className="bg-card border-border hidden md:block">
-                    <CardContent className="p-0">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-body-sm">
-                          <thead>
-                            <tr className="border-b border-border">
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Photo</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Brand / Model</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Type</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Price</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Status</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {listings.map((car) => {
-                              const photos = parseJsonField(car.photos)
-                              const photoUrl = photos[0] || ''
-                              return (
-                                <tr key={car.id} className="border-b border-border/50 hover:bg-secondary/50">
-                                  <td className="py-3 px-4">
-                                    {photoUrl ? (
-                                      <img src={photoUrl} alt={car.brand} className="w-16 h-12 object-cover rounded-md" />
-                                    ) : (
-                                      <div className="w-16 h-12 rounded-md bg-secondary flex items-center justify-center">
-                                        <Car className="size-5 text-muted-foreground/30" />
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-4">
-                                    <p className="font-medium">{car.brand} {car.model}</p>
-                                    {car.featured && (
-                                      <Badge className="bg-gold/20 text-gold border-gold/30 text-[10px] mt-1">
-                                        <Star className="size-2.5 mr-0.5" />Featured
-                                      </Badge>
-                                    )}
-                                  </td>
-                                  <td className="py-3 px-4"><VehicleTypeBadge type={car.type} /></td>
-                                  <td className="py-3 px-4 font-medium text-gold">{formatPrice(car.price || 0, car.type)}</td>
-                                  <td className="py-3 px-4"><StatusBadge status={car.status} /></td>
-                                  <td className="py-3 px-4">
-                                    <div className="flex items-center gap-1">
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-gold"><Edit className="size-3.5" /></Button>
-                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteCarId(car.id)}><Trash2 className="size-3.5" /></Button>
-                                      <Button variant="ghost" size="icon" className={`h-7 w-7 ${car.featured ? 'text-gold' : 'text-muted-foreground'} hover:text-gold`}>
-                                        {car.featured ? <Star className="size-3.5" /> : <StarOff className="size-3.5" />}
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Mobile cards */}
-                  <div className="md:hidden space-y-3">
-                    {listings.map((car) => {
-                      const photos = parseJsonField(car.photos)
-                      const photoUrl = photos[0] || ''
-                      return (
-                        <Card key={car.id} className="bg-card border-border">
-                          <CardContent className="p-4">
-                            <div className="flex gap-3">
-                              {photoUrl ? (
-                                <img src={photoUrl} alt={car.brand} className="w-20 h-14 object-cover rounded-md shrink-0" />
-                              ) : (
-                                <div className="w-20 h-14 rounded-md bg-secondary flex items-center justify-center shrink-0">
-                                  <Car className="size-5 text-muted-foreground/30" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <p className="font-medium truncate">{car.brand} {car.model}</p>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <VehicleTypeBadge type={car.type} />
-                                      <StatusBadge status={car.status} />
-                                    </div>
-                                  </div>
-                                  <p className="text-body-sm font-semibold text-gold shrink-0">{formatPrice(car.price || 0, car.type)}</p>
-                                </div>
-                                <div className="flex items-center gap-1 mt-2">
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-gold"><Edit className="size-3.5" /></Button>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-400" onClick={() => setDeleteCarId(car.id)}><Trash2 className="size-3.5" /></Button>
-                                </div>
-                              </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {listings.map((car) => {
+                    const photos = parseJsonField(car.photos)
+                    const photoUrl = photos[0] || ''
+                    return (
+                      <Card key={car.id} className="bg-card border-border overflow-hidden">
+                        {/* Car photo */}
+                        <div className="relative aspect-[16/10] overflow-hidden bg-secondary">
+                          {photoUrl ? (
+                            <img src={photoUrl} alt={car.brand} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Car className="size-8 text-muted-foreground/30" />
                             </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })}
-                  </div>
-                </>
+                          )}
+                          <div className="absolute top-2 left-2"><VehicleTypeBadge type={car.type} /></div>
+                          <div className="absolute top-2 right-2"><StatusBadge status={car.status} /></div>
+                          {car.featured && (
+                            <div className="absolute bottom-2 left-2">
+                              <Badge className="bg-gold text-black border-0 text-xs font-bold"><Star className="size-3 mr-0.5" />Featured</Badge>
+                            </div>
+                          )}
+                        </div>
+                        <CardContent className="p-4 space-y-3">
+                          <div>
+                            <h3 className="font-semibold text-foreground">{car.brand} {car.model}</h3>
+                            {car.year && <p className="text-caption text-muted-foreground">{car.year}</p>}
+                          </div>
+                          <p className="text-lg font-bold text-gold">{formatPrice(car.price || 0, car.type)}</p>
+                          {car.city && (
+                            <div className="flex items-center gap-1 text-caption text-muted-foreground">
+                              <MapPin className="size-3" />{car.city}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-1 pt-2 border-t border-border">
+                            <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs" onClick={() => handleEditCar(car)}>
+                              <Edit className="size-3.5 mr-1" />Edit
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-red-400 text-xs" onClick={() => setDeleteCarId(car.id)}>
+                              <Trash2 className="size-3.5 mr-1" />Delete
+                            </Button>
+                            <Button variant="ghost" size="sm" className={`h-7 ${car.featured ? 'text-gold' : 'text-muted-foreground'} hover:text-gold text-xs ml-auto`} onClick={() => handleToggleFeatured(car.id, car.featured)}>
+                              {car.featured ? <Star className="size-3.5 mr-1" /> : <StarOff className="size-3.5 mr-1" />}
+                              {car.featured ? 'Featured' : 'Feature'}
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
+                </div>
               )}
             </div>
           )}
@@ -778,7 +800,7 @@ export default function DealerDashboard() {
             <div className="max-w-3xl mx-auto space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="heading-md"><span className="gold-text">Add New Car</span></CardTitle>
+                  <CardTitle className="dash-heading-md"><span className="gold-text">{editingCarId ? 'Edit Car' : 'Add New Car'}</span></CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-6">
                   {/* Listing Type */}
@@ -1155,13 +1177,20 @@ export default function DealerDashboard() {
                   </div>
 
                   {/* Submit */}
-                  <Button className="w-full bg-gold hover:bg-gold-dark text-primary-foreground font-semibold h-12 text-base" onClick={handleAddCar} disabled={submitting}>
-                    {submitting ? (
-                      <><Loader2 className="size-5 mr-2 animate-spin" />Submitting...</>
-                    ) : (
-                      <><PlusCircle className="size-5 mr-2" />Add {VEHICLE_TYPE_CONFIG[carType]?.label ?? 'Car'} Listing</>
+                  <div className="flex gap-3">
+                    <Button className="flex-1 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold h-12 text-base" onClick={handleAddCar} disabled={submitting}>
+                      {submitting ? (
+                        <><Loader2 className="size-5 mr-2 animate-spin" />Submitting...</>
+                      ) : (
+                        <><PlusCircle className="size-5 mr-2" />{editingCarId ? 'Update' : 'Add'} {VEHICLE_TYPE_CONFIG[carType]?.label ?? 'Car'} Listing</>
+                      )}
+                    </Button>
+                    {editingCarId && (
+                      <Button variant="outline" className="h-12 text-base border-border text-muted-foreground hover:text-foreground" onClick={() => { resetForm(); setEditingCarId(null) }}>
+                        Cancel
+                      </Button>
                     )}
-                  </Button>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1312,7 +1341,7 @@ export default function DealerDashboard() {
                   <Card key={stat.label} className="bg-card border-border">
                     <CardContent className="p-4 sm:p-6">
                       <div className="text-overline text-muted-foreground mb-1">{stat.label}</div>
-                      <div className="heading-md">{stat.value}</div>
+                      <div className="dash-heading-md">{stat.value}</div>
                       <span className="flex items-center text-overline text-emerald-400">
                         <ArrowUpRight className="size-3" />{stat.change}
                       </span>
@@ -1324,7 +1353,7 @@ export default function DealerDashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Top Cars by Views</CardTitle>
+                    <CardTitle className="dash-heading-sm">Top Cars by Views</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
                     {statsLoading ? (
@@ -1347,7 +1376,7 @@ export default function DealerDashboard() {
 
                 <Card className="bg-card border-border">
                   <CardHeader className="pb-2">
-                    <CardTitle className="heading-sm">Revenue Breakdown</CardTitle>
+                    <CardTitle className="dash-heading-sm">Revenue Breakdown</CardTitle>
                   </CardHeader>
                   <CardContent className="p-4 sm:p-6 pt-2 space-y-4">
                     {[
@@ -1383,7 +1412,7 @@ export default function DealerDashboard() {
                   <Card key={stat.label} className="bg-card border-border">
                     <CardContent className="p-4">
                       <div className="text-overline text-muted-foreground">{stat.label}</div>
-                      <div className="heading-sm text-gold mt-1">{statsLoading ? '...' : stat.value}</div>
+                      <div className="dash-heading-sm text-gold mt-1">{statsLoading ? '...' : stat.value}</div>
                     </CardContent>
                   </Card>
                 ))}
@@ -1460,7 +1489,7 @@ export default function DealerDashboard() {
             <div className="max-w-2xl mx-auto space-y-6">
               <Card className="bg-card border-border">
                 <CardHeader>
-                  <CardTitle className="heading-sm">Profile Settings</CardTitle>
+                  <CardTitle className="dash-heading-sm">Profile Settings</CardTitle>
                 </CardHeader>
                 <CardContent className="p-4 sm:p-6 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

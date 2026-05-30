@@ -517,7 +517,7 @@ export const notificationsApi = {
   markRead: async (id?: string): Promise<ApiResponse> => {
     return apiFetch('/notifications', {
       method: 'PUT',
-      body: JSON.stringify(id ? { notificationId: id } : { markAll: true }),
+      body: JSON.stringify(id ? { notificationIds: [id] } : { markAllRead: true }),
     })
   },
 }

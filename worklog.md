@@ -79,3 +79,35 @@ Stage Summary:
 - Dealer dashboard: Real photo upload, cover photo management, delete car with confirmation
 - API: uploadApi supports category, register saves document URLs
 - Test cases: 175 TCs in /home/z/my-project/download/DK-Vroom-Test-Cases.md
+
+---
+Task ID: 2
+Agent: Main Agent
+Task: Frontend routing, dashboard UI overhaul, customer dashboard, notifications, signout
+
+Work Log:
+- Verified Next.js App Router page files already exist for all routes (rent, buy, auction, etc.)
+- Verified Zustand store already updated for URL-based routing (no more currentView/navigate)
+- Verified Header already uses useRouter and usePathname for navigation
+- Verified AppShell already conditionally hides Header on dashboard/auth routes
+- Added dashboard-specific font classes to globals.css (dash-heading-lg/md/sm) — no Playfair Display
+- Added skeleton card CSS classes (skeleton-card, skeleton-card-line, skeleton-card-img)
+- Created NotificationDropdown shared component (fetches from /api/notifications, mark as read, unread count)
+- Overhauled dealer-dashboard.tsx: normal fonts, card grid listings, working Edit button, signout, dynamic notifications
+- Overhauled admin-dashboard.tsx: normal fonts, ID column with short readable IDs + copy, card skeletons, signout, dynamic notifications
+- Created customer-dashboard.tsx: Overview, My Bookings, My Payments, My Loans, Profile tabs
+- Fixed syntax error in continue-loan-enquiry.tsx (broken destructuring)
+- Fixed loan-page.tsx and repair-page.tsx (removed old navigate() from store)
+- Fixed payment-page.tsx (router reference in sub-component)
+- Fixed notification-dropdown.tsx type assertion
+- Build passes successfully
+
+Stage Summary:
+- All dashboards now use normal sans-serif fonts (dash-heading-*) instead of luxury Playfair Display
+- Dealer listings show as responsive card grid (not table) with card-shaped skeletons
+- Dealer Edit button works: populates form, calls carsApi.update(), shows "Edit Car" title
+- Both dashboards have Sign Out in sidebar + top bar user dropdown
+- Both dashboards have dynamic NotificationDropdown replacing static bell icon
+- Admin tables show short ID (first 8 chars) with copy button
+- Customer Dashboard created with 5 tabs showing bookings, payments, loans, and profile
+- All components use Next.js App Router (useRouter, router.push) instead of store navigate()

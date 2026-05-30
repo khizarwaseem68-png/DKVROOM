@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, Fragment } from 'react'
+import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -294,9 +295,10 @@ function ReviewRow({ label, value }: { label: string; value: string | undefined 
 // Main Component
 // ============================================================
 
-export default function AuthPage() {
-  const { navigate, login } = useAppStore()
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'register' }) {
+  const { login } = useAppStore()
+  const router = useRouter()
+  const [mode, setMode] = useState<'login' | 'register'>(initialMode || 'login')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -426,9 +428,9 @@ export default function AuthPage() {
       const result = await authApi.login(data.email, data.password)
       const userState = mapUserState(result.user)
       login(userState, result.token)
-      if (result.user.role === 'admin') navigate('adminDashboard')
-      else if (result.user.role === 'dealer') navigate('dealerDashboard')
-      else navigate('home')
+      if (result.user.role === 'admin') router.push('/admin-dashboard')
+      else if (result.user.role === 'dealer') router.push('/dealer-dashboard')
+      else router.push('/')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.'
       setError(message)
@@ -458,7 +460,7 @@ export default function AuthPage() {
       const result = await authApi.register(userData)
       const userState = mapUserState(result.user)
       login(userState, result.token)
-      navigate('home')
+      router.push('/')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -492,7 +494,7 @@ export default function AuthPage() {
       const result = await authApi.register(userData)
       const userState = mapUserState(result.user)
       login(userState, result.token)
-      navigate('dealerDashboard')
+      router.push('/dealer-dashboard')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -564,7 +566,7 @@ export default function AuthPage() {
       <div className="relative z-10 w-full max-w-2xl">
         {/* Logo */}
         <div className="text-center mb-8">
-          <button onClick={() => navigate('home')} className="inline-flex items-center gap-2 mb-4" type="button">
+          <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 mb-4" type="button">
             <div className="flex size-10 items-center justify-center rounded-lg border border-gold/30 bg-gradient-to-br from-gold/20 to-transparent">
               <Car className="size-5 text-gold" />
             </div>

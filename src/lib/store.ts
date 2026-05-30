@@ -1,27 +1,7 @@
 import { create } from 'zustand'
 import { authApi, setToken, clearToken } from '@/lib/api'
 
-// ===== VIEW TYPES =====
-
-export type View =
-  | 'home'
-  | 'rent'
-  | 'buy'
-  | 'repair'
-  | 'insurance'
-  | 'auction'
-  | 'loan'
-  | 'continueLoan'
-  | 'carDetail'
-  | 'dealerDashboard'
-  | 'adminDashboard'
-  | 'login'
-  | 'register'
-  | 'profile'
-  | 'applyLoan'
-  | 'trackStatus'
-  | 'payment'
-  | 'continueLoanEnquiry'
+// ===== VIEW TYPES (kept for reference, navigation now uses URLs) =====
 
 export type PaymentStatus = 'none' | 'pending' | 'uploaded' | 'verified' | 'rejected'
 
@@ -51,9 +31,7 @@ export interface UserState {
 }
 
 interface AppState {
-  // Navigation
-  currentView: View
-  previousView: View | null
+  // Navigation (URL-based now, no more view state)
   selectedCarId: string | null
   selectedCarType: string | null
 
@@ -73,9 +51,7 @@ interface AppState {
   // Booking Flow
   booking: BookingState
 
-  // Actions — Navigation
-  navigate: (view: View) => void
-  goBack: () => void
+  // Actions — Car selection
   selectCar: (carId: string, carType: string) => void
 
   // Actions — Search
@@ -130,8 +106,6 @@ const initialUser: UserState = {
 let authCheckPromise: Promise<void> | null = null
 
 export const useAppStore = create<AppState>((set, get) => ({
-  currentView: 'home',
-  previousView: null,
   selectedCarId: null,
   selectedCarType: null,
   searchQuery: '',
@@ -143,10 +117,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   loading: false,
   booking: { ...initialBooking },
 
-  // Navigation
-  navigate: (view) => set({ previousView: get().currentView, currentView: view, showMobileMenu: false }),
-  goBack: () => set((state) => ({ currentView: state.previousView || 'home', previousView: null })),
-  selectCar: (carId, carType) => set({ selectedCarId: carId, selectedCarType: carType, currentView: 'carDetail', previousView: get().currentView }),
+  // Car selection — stores car ID, navigation happens via router
+  selectCar: (carId, carType) => set({ selectedCarId: carId, selectedCarType: carType }),
 
   // Search
   setSearch: (query) => set({ searchQuery: query }),
@@ -164,9 +136,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       isLoggedIn: false,
       user: null,
-      currentView: 'home',
       booking: { ...initialBooking },
     })
+    // Redirect to home page
+    if (typeof window !== 'undefined') {
+      window.location.href = '/'
+    }
   },
 
   checkAuth: async () => {
@@ -220,8 +195,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       contactUnlocked: false,
       paymentId: paymentId || null,
     },
-    currentView: 'payment',
-    previousView: get().currentView,
   }),
 
   uploadReceipt: () => set((state) => ({

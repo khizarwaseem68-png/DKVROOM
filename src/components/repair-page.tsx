@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { workshopsApi } from '@/lib/api'
 import { CITIES, SERVICE_TYPES } from '@/lib/constants'
@@ -125,7 +126,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ===== MAIN COMPONENT =====
 
 export default function RepairPage() {
-  const { navigate, user } = useAppStore()
+  const { user } = useAppStore()
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [workshops, setWorkshops] = useState<WorkshopData[]>(DEFAULT_WORKSHOPS)
@@ -568,7 +570,7 @@ export default function RepairPage() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              onClick={() => navigate('register')}
+              onClick={() => router.push('/register')}
               size="lg"
               className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-8 h-12 rounded-lg"
             >

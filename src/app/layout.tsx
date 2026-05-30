@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono, Playfair_Display } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
+import AppShellWrapper from "@/components/app-shell";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -77,7 +78,7 @@ export default function RootLayout({
       <body
         className={`${plusJakarta.variable} ${geistMono.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}
       >
-        {children}
+        <AppShellWrapper>{children}</AppShellWrapper>
         <Toaster
           position="top-right"
           richColors

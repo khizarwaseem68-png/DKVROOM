@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { carsApi, bookingsApi } from '@/lib/api'
 import { formatPrice, formatMileage, formatDate } from '@/lib/constants'
@@ -956,12 +957,11 @@ function ContinueLoanProcessFlow() {
 export default function CarDetail() {
   const {
     selectedCarId,
-    goBack,
-    navigate,
     isLoggedIn,
     booking,
     startBooking,
   } = useAppStore()
+  const router = useRouter()
 
   const [car, setCar] = useState<NormalizedCar | null>(null)
   const [loading, setLoading] = useState(true)
@@ -1026,7 +1026,7 @@ export default function CarDetail() {
         title="Vehicle not found"
         description="The vehicle you're looking for doesn't exist or has been removed."
         action={
-          <Button variant="outline" onClick={goBack} className="gap-2">
+          <Button variant="outline" onClick={() => router.back()} className="gap-2">
             <ArrowLeft className="size-4" />
             Go Back
           </Button>
@@ -1047,7 +1047,7 @@ export default function CarDetail() {
 
   const handlePrimaryCta = async () => {
     if (!isLoggedIn) {
-      navigate('login')
+      router.push('/login')
       return
     }
 
@@ -1064,7 +1064,7 @@ export default function CarDetail() {
       } else if (isAuction) {
         amount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
       } else if (isContinueLoan) {
-        navigate('continueLoanEnquiry')
+        router.push('/continue-loan-enquiry')
         setBookingLoading(false)
         return
       }
@@ -1129,7 +1129,7 @@ export default function CarDetail() {
       {/* Sticky top bar */}
       <div className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
-          <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" onClick={() => router.back()} className="gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" />
             Back
           </Button>

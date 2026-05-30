@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { carsApi, type CarData } from '@/lib/api'
 import {
@@ -348,13 +349,14 @@ function ContinueLoanDetails({ car }: { car: NormalizedCar }) {
 /** Single car card in the grid */
 function CarCard({ car, type }: { car: NormalizedCar; type: CarListingProps['type'] }) {
   const { selectCar } = useAppStore()
+  const router = useRouter()
   const isAuction = car.type === 'auction'
   const isContinueLoan = car.type === 'continueLoan'
 
   return (
     <Card
       className="luxury-card cursor-pointer overflow-hidden bg-card py-0 gap-0"
-      onClick={() => selectCar(car.id, car.type)}
+      onClick={() => { selectCar(car.id, car.type); router.push(`/car/${car.id}`) }}
     >
       {/* Image */}
       <div className="relative aspect-[16/10] overflow-hidden">
@@ -443,7 +445,7 @@ function CarCard({ car, type }: { car: NormalizedCar; type: CarListingProps['typ
               size="sm"
               onClick={(e) => {
                 e.stopPropagation()
-                selectCar(car.id, car.type)
+                selectCar(car.id, car.type); router.push(`/car/${car.id}`)
               }}
             >
               <Gavel className="size-4" />

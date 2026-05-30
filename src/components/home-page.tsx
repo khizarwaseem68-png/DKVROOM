@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAppStore, type View } from '@/lib/store'
+import { useRouter } from 'next/navigation'
+import { useAppStore } from '@/lib/store'
 import { carsApi } from '@/lib/api'
 import { CITIES, formatPrice, formatMileage, type VehicleType } from '@/lib/constants'
 import { StarRating, EmptyState, VehicleTypeBadge } from '@/components/shared'
@@ -88,7 +89,7 @@ interface ServiceItem {
   icon: LucideIcon
   title: string
   description: string
-  view: View
+  path: string
 }
 
 interface WhyChooseItem {
@@ -110,43 +111,43 @@ const services: ServiceItem[] = [
     icon: Car,
     title: 'Rent',
     description: 'Premium car rentals by the hour, day, or week. From daily drivers to luxury exotics, find your perfect ride.',
-    view: 'rent',
+    path: '/rent',
   },
   {
     icon: ShoppingCart,
     title: 'Buy',
     description: 'Browse certified pre-owned and brand-new vehicles from verified dealers across Malaysia. Best prices guaranteed.',
-    view: 'buy',
+    path: '/buy',
   },
   {
     icon: Wrench,
     title: 'Repair',
     description: 'Connect with trusted workshops and certified mechanics. Get transparent quotes and track your repairs in real time.',
-    view: 'repair',
+    path: '/repair',
   },
   {
     icon: Shield,
     title: 'Insure',
     description: 'Compare comprehensive motor insurance plans from top providers. Protect your investment with the right coverage.',
-    view: 'insurance',
+    path: '/insurance',
   },
   {
     icon: Gavel,
     title: 'Auction',
     description: 'Bid on exclusive and rare vehicles in our live auctions. Find unique deals you won\'t see anywhere else.',
-    view: 'auction',
+    path: '/auction',
   },
   {
     icon: Banknote,
     title: 'Loan',
     description: 'Apply for competitive car loans with fast approval from partner banks. Flexible terms and low interest rates.',
-    view: 'loan',
+    path: '/loan',
   },
   {
     icon: FileText,
     title: 'Continue Loan',
     description: 'Take over existing car loans with easy bank approval. Lower deposits, transparent terms, and a smoother process.',
-    view: 'continueLoan',
+    path: '/continue-loan',
   },
 ]
 
@@ -198,26 +199,26 @@ const heroStats = [
 
 const footerLinks = {
   about: [
-    { label: 'About DK Vroom', view: 'home' as View },
-    { label: 'Our Story', view: 'home' as View },
-    { label: 'Careers', view: 'home' as View },
-    { label: 'Press & Media', view: 'home' as View },
-    { label: 'Investor Relations', view: 'home' as View },
+    { label: 'About DK Vroom', path: '/' },
+    { label: 'Our Story', path: '/' },
+    { label: 'Careers', path: '/' },
+    { label: 'Press & Media', path: '/' },
+    { label: 'Investor Relations', path: '/' },
   ],
   services: [
-    { label: 'Car Rental', view: 'rent' as View },
-    { label: 'Buy a Car', view: 'buy' as View },
-    { label: 'Car Repair', view: 'repair' as View },
-    { label: 'Insurance', view: 'insurance' as View },
-    { label: 'Auction', view: 'auction' as View },
-    { label: 'Car Loan', view: 'loan' as View },
+    { label: 'Car Rental', path: '/rent' },
+    { label: 'Buy a Car', path: '/buy' },
+    { label: 'Car Repair', path: '/repair' },
+    { label: 'Insurance', path: '/insurance' },
+    { label: 'Auction', path: '/auction' },
+    { label: 'Car Loan', path: '/loan' },
   ],
   support: [
-    { label: 'Help Center', view: 'home' as View },
-    { label: 'Safety Guidelines', view: 'home' as View },
-    { label: 'Terms of Service', view: 'home' as View },
-    { label: 'Privacy Policy', view: 'home' as View },
-    { label: 'Refund Policy', view: 'home' as View },
+    { label: 'Help Center', path: '/' },
+    { label: 'Safety Guidelines', path: '/' },
+    { label: 'Terms of Service', path: '/' },
+    { label: 'Privacy Policy', path: '/' },
+    { label: 'Refund Policy', path: '/' },
   ],
 }
 
@@ -293,7 +294,8 @@ function SectionHeader({ overline, titlePrefix, titleAccent, description }: {
 // ===== MAIN COMPONENT =====
 
 export default function HomePage() {
-  const { navigate, selectCar, setSearch, setCity, isLoggedIn, user, searchQuery, selectedCity } = useAppStore()
+  const { selectCar, setSearch, setCity, isLoggedIn, user, searchQuery, selectedCity } = useAppStore()
+  const router = useRouter()
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [localCity, setLocalCity] = useState(selectedCity || 'All Cities')
   const [featuredCars, setFeaturedCars] = useState<FeaturedCar[]>([])
@@ -378,7 +380,7 @@ export default function HomePage() {
   const handleSearch = () => {
     setSearch(localSearch)
     setCity(localCity === 'All Cities' ? '' : localCity)
-    navigate('buy')
+    router.push('/buy')
   }
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -464,7 +466,7 @@ export default function HomePage() {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Button
-                onClick={() => navigate('buy')}
+                onClick={() => router.push('/buy')}
                 size="lg"
                 className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-8 h-12 rounded-lg"
               >
@@ -472,7 +474,7 @@ export default function HomePage() {
                 <ArrowRight className="size-4 ml-1" />
               </Button>
               <Button
-                onClick={() => navigate('register')}
+                onClick={() => router.push('/register')}
                 size="lg"
                 variant="outline"
                 className="border-gold text-gold hover:bg-gold/10 font-semibold px-8 h-12 rounded-lg"
@@ -513,7 +515,7 @@ export default function HomePage() {
                 <Card
                   key={service.title}
                   className="luxury-card bg-card border-border cursor-pointer group rounded-xl overflow-hidden"
-                  onClick={() => navigate(service.view)}
+                  onClick={() => router.push(service.path)}
                 >
                   <CardContent className="p-6">
                     <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center mb-5 group-hover:bg-gold/20 transition-colors">
@@ -555,7 +557,7 @@ export default function HomePage() {
                   description="Check back soon for new listings!"
                   action={
                     <Button
-                      onClick={() => navigate('buy')}
+                      onClick={() => router.push('/buy')}
                       variant="outline"
                       className="border-gold text-gold hover:bg-gold/10"
                     >
@@ -666,7 +668,7 @@ export default function HomePage() {
           {/* View All Button */}
           <div className="text-center mt-12">
             <Button
-              onClick={() => navigate('buy')}
+              onClick={() => router.push('/buy')}
               variant="outline"
               size="lg"
               className="border-gold text-gold hover:bg-gold/10 font-semibold px-10 h-12 rounded-lg"
@@ -853,7 +855,7 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
               {isLoggedIn && user?.role === 'dealer' ? (
                 <Button
-                  onClick={() => navigate('dealerDashboard')}
+                  onClick={() => router.push('/dealer-dashboard')}
                   size="lg"
                   className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-10 h-12 rounded-lg"
                 >
@@ -863,7 +865,7 @@ export default function HomePage() {
               ) : (
                 <>
                   <Button
-                    onClick={() => navigate('register')}
+                    onClick={() => router.push('/register')}
                     size="lg"
                     className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-10 h-12 rounded-lg"
                   >
@@ -923,7 +925,7 @@ export default function HomePage() {
                 {footerLinks.about.map((link) => (
                   <li key={link.label}>
                     <button
-                      onClick={() => navigate(link.view)}
+                      onClick={() => router.push(link.path)}
                       className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
                     >
                       {link.label}
@@ -940,7 +942,7 @@ export default function HomePage() {
                 {footerLinks.services.map((link) => (
                   <li key={link.label}>
                     <button
-                      onClick={() => navigate(link.view)}
+                      onClick={() => router.push(link.path)}
                       className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
                     >
                       {link.label}
@@ -957,7 +959,7 @@ export default function HomePage() {
                 {footerLinks.support.map((link) => (
                   <li key={link.label}>
                     <button
-                      onClick={() => navigate(link.view)}
+                      onClick={() => router.push(link.path)}
                       className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
                     >
                       {link.label}
@@ -1022,9 +1024,9 @@ export default function HomePage() {
                 &copy; {new Date().getFullYear()} DK Vroom. All Rights Reserved.
               </p>
               <div className="flex gap-6 text-body-sm text-muted-foreground">
-                <button onClick={() => navigate('home')} className="hover:text-gold transition-colors">Privacy</button>
-                <button onClick={() => navigate('home')} className="hover:text-gold transition-colors">Terms</button>
-                <button onClick={() => navigate('home')} className="hover:text-gold transition-colors">Cookies</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Privacy</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Terms</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Cookies</button>
               </div>
             </div>
           </div>

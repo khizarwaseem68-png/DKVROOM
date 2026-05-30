@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { continueLoanApi, carsApi, uploadApi, type CarData } from '@/lib/api'
 import {
@@ -92,7 +93,8 @@ const DEFAULT_REQUIRED_DOCS = [
 // ===== COMPONENT =====
 
 export default function ContinueLoanEnquiry() {
-  const { selectedCarId, goBack, navigate, user } = useAppStore()
+  const { selectedCarId, user } = useAppStore()
+  const router = useRouter()
   const [car, setCar] = useState<ParsedCarData | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -315,7 +317,7 @@ export default function ContinueLoanEnquiry() {
           title="Vehicle not found"
           description="The vehicle you are looking for could not be found. Please go back and try again."
           action={
-            <Button variant="outline" onClick={goBack} className="gap-2">
+            <Button variant="outline" onClick={router.back} className="gap-2">
               <ArrowLeft className="size-4" />
               Go Back
             </Button>
@@ -384,7 +386,7 @@ export default function ContinueLoanEnquiry() {
       {/* Top bar */}
       <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto max-w-3xl px-4 py-3 sm:px-6 flex items-center gap-3">
-          <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground hover:text-foreground">
+          <Button variant="ghost" onClick={router.back} className="gap-2 text-muted-foreground hover:text-foreground">
             <ArrowLeft className="size-4" />
             Back
           </Button>
@@ -818,11 +820,11 @@ export default function ContinueLoanEnquiry() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4 justify-center">
-                <Button onClick={() => navigate('continueLoan')} className="gap-2 bg-gold hover:bg-gold-light text-gold-dark">
+                <Button onClick={() => router.push('/continue-loan')} className="gap-2 bg-gold hover:bg-gold-light text-gold-dark">
                   <Car className="size-4" />
                   Browse More Vehicles
                 </Button>
-                <Button variant="outline" onClick={goBack} className="gap-2 border-border">
+                <Button variant="outline" onClick={router.back} className="gap-2 border-border">
                   <ArrowLeft className="size-4" />
                   Go Back
                 </Button>

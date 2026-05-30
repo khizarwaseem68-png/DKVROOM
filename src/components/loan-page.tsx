@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { loansApi } from '@/lib/api'
 import { formatPrice } from '@/lib/constants'
@@ -88,7 +89,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ===== MAIN COMPONENT =====
 
 export default function LoanPage() {
-  const { navigate, user } = useAppStore()
+  const { user } = useAppStore()
+  const router = useRouter()
   const [carPrice, setCarPrice] = useState('100000')
   const [downPaymentPercent, setDownPaymentPercent] = useState([30])
   const [tenure, setTenure] = useState('7')
@@ -283,7 +285,7 @@ export default function LoanPage() {
                 </div>
 
                 <Button
-                  onClick={() => navigate('applyLoan')}
+                  onClick={() => router.push('/apply-loan')}
                   className="w-full mt-6 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold h-11 rounded-lg"
                 >
                   Apply Now
@@ -452,7 +454,7 @@ export default function LoanPage() {
                   </p>
                 </div>
                 <Button
-                  onClick={() => navigate('continueLoan')}
+                  onClick={() => router.push('/continue-loan')}
                   size="lg"
                   className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-8 h-12 rounded-lg shrink-0"
                 >
@@ -481,7 +483,7 @@ export default function LoanPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              onClick={() => navigate('applyLoan')}
+              onClick={() => router.push('/apply-loan')}
               size="lg"
               className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-8 h-12 rounded-lg"
             >

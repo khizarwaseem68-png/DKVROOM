@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { paymentsApi, uploadApi } from '@/lib/api'
 import { formatPrice, PAYMENT_METHODS } from '@/lib/constants'
@@ -70,11 +71,11 @@ function getStatusStep(paymentStatus: string, receiptUploaded: boolean): number 
 
 // ===== SUB-COMPONENTS =====
 
-function VerifiedView({ navigate }: { navigate: (view: 'home') => void }) {
+function VerifiedView({ onHome }: { onHome: () => void }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-        <Button variant="ghost" onClick={() => navigate('home')} className="gap-2 text-muted-foreground hover:text-gold mb-6">
+        <Button variant="ghost" onClick={onHome} className="gap-2 text-muted-foreground hover:text-gold mb-6">
           <ArrowLeft className="size-4" />
           Back to Home
         </Button>
@@ -131,7 +132,7 @@ function VerifiedView({ navigate }: { navigate: (view: 'home') => void }) {
         </Card>
 
         <Button
-          onClick={() => navigate('home')}
+          onClick={onHome}
           className="w-full bg-gold hover:bg-gold-dark text-primary-foreground font-semibold h-11"
         >
           Continue to Dashboard
@@ -175,7 +176,8 @@ function ProgressSteps({ steps, currentStep }: { steps: PaymentStep[]; currentSt
 // ===== MAIN COMPONENT =====
 
 export default function PaymentPage() {
-  const { booking, goBack, uploadReceipt, verifyPayment, navigate, user } = useAppStore()
+  const { booking, uploadReceipt, verifyPayment, user } = useAppStore()
+  const router = useRouter()
   const [uploaded, setUploaded] = useState(booking.receiptUploaded)
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -238,7 +240,7 @@ export default function PaymentPage() {
 
   // ===== VERIFIED STATE =====
   if (booking.contactUnlocked) {
-    return <VerifiedView navigate={navigate} />
+    return <VerifiedView onHome={() => router.push('/')} />
   }
 
   // ===== PAYMENT FLOW =====
@@ -246,7 +248,7 @@ export default function PaymentPage() {
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
         {/* Back button */}
-        <Button variant="ghost" onClick={goBack} className="gap-2 text-muted-foreground hover:text-gold mb-6">
+        <Button variant="ghost" onClick={() => router.back()} className="gap-2 text-muted-foreground hover:text-gold mb-6">
           <ArrowLeft className="size-4" />
           Back
         </Button>

@@ -9,3 +9,4 @@ export {
   SalvageStatusBadge,
 } from './badges'
 export { CountdownTimer } from './countdown-timer'
+export { NotificationDropdown } from './notification-dropdown'
