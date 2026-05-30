@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useAppStore } from '@/lib/store'
 import { Header } from '@/components/header'
@@ -19,6 +19,32 @@ const AdminDashboard = dynamic(() => import('@/components/admin-dashboard'), { s
 const AuthPage = dynamic(() => import('@/components/auth-page'), { ssr: false })
 const PaymentPage = dynamic(() => import('@/components/payment-page'), { ssr: false })
 const ContinueLoanEnquiry = dynamic(() => import('@/components/continue-loan-enquiry'), { ssr: false })
+
+// Map hash to view and vice versa
+const HASH_VIEW_MAP: Record<string, string> = {
+  '': 'home',
+  'rent': 'rent',
+  'buy': 'buy',
+  'continue-loan': 'continueLoan',
+  'car': 'carDetail',
+  'repair': 'repair',
+  'insurance': 'insurance',
+  'auction': 'auction',
+  'loan': 'loan',
+  'apply-loan': 'applyLoan',
+  'track-status': 'trackStatus',
+  'dealer': 'dealerDashboard',
+  'admin': 'adminDashboard',
+  'login': 'login',
+  'register': 'register',
+  'profile': 'profile',
+  'payment': 'payment',
+  'continue-loan-enquiry': 'continueLoanEnquiry',
+}
+
+const VIEW_HASH_MAP: Record<string, string> = Object.fromEntries(
+  Object.entries(HASH_VIEW_MAP).map(([k, v]) => [v, k])
+)
 
 function ViewRenderer() {
   const currentView = useAppStore((state) => state.currentView)
@@ -64,6 +90,7 @@ function ViewRenderer() {
 
 export default function Home() {
   const currentView = useAppStore((state) => state.currentView)
+  const navigate = useAppStore((state) => state.navigate)
   const checkAuth = useAppStore((state) => state.checkAuth)
   const isAuthPage = currentView === 'login' || currentView === 'register'
   const isDashboard = currentView === 'dealerDashboard' || currentView === 'adminDashboard'
@@ -81,6 +108,40 @@ export default function Home() {
     window.addEventListener('auth:expired', handleAuthExpired)
     return () => window.removeEventListener('auth:expired', handleAuthExpired)
   }, [])
+
+  // On mount, read URL hash and navigate to that view
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    const view = HASH_VIEW_MAP[hash]
+    if (view && view !== 'home') {
+      navigate(view as any)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // When currentView changes, update URL hash (but skip initial mount)
+  const isInitialMount = useRef(true)
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+    const hash = VIEW_HASH_MAP[currentView] || ''
+    window.history.replaceState(null, '', hash ? `#${hash}` : window.location.pathname)
+  }, [currentView])
+
+  // Listen for browser back/forward
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '')
+      const view = HASH_VIEW_MAP[hash] || 'home'
+      const currentStoreView = useAppStore.getState().currentView
+      if (view !== currentStoreView) {
+        navigate(view as any)
+      }
+    }
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [navigate])
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">

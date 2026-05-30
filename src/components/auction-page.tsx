@@ -106,8 +106,6 @@ export default function AuctionPage() {
       {/* ===== HERO SECTION ===== */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-gold/10 via-transparent to-gold/5" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gold/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-gold/3 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-10">
           {/* Badge */}
@@ -180,8 +178,8 @@ export default function AuctionPage() {
               onClick={() => setSelectedCategory('all')}
               className={`shrink-0 h-8 gap-1.5 text-caption rounded-full ${
                 selectedCategory === 'all'
-                  ? 'bg-gold text-gold-dark hover:bg-gold-light border-gold'
-                  : 'border-border text-muted-foreground hover:text-foreground hover:border-gold/40 text-gold'
+                  ? 'bg-gold text-black hover:bg-gold-light border-gold'
+                  : 'border-border text-muted-foreground hover:text-foreground hover:border-gold/40'
               }`}
             >
               <Gavel className="size-3" />
@@ -200,7 +198,7 @@ export default function AuctionPage() {
                   onClick={() => setSelectedCategory(cat.key)}
                   className={`shrink-0 h-8 gap-1.5 text-caption rounded-full ${
                     isSelected
-                      ? 'bg-gold text-gold-dark hover:bg-gold-light border-gold'
+                      ? 'bg-gold text-black hover:bg-gold-light border-gold'
                       : `border-border text-muted-foreground hover:text-foreground hover:border-gold/40 ${cat.color}`
                   }`}
                 >

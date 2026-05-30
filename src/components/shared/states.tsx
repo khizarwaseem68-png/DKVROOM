@@ -1,17 +1,53 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface LoadingStateProps {
   message?: string
   className?: string
+  variant?: 'default' | 'detail'
 }
 
-export function LoadingState({ message = 'Loading...', className = '' }: LoadingStateProps) {
+export function LoadingState({ message, className = '', variant = 'default' }: LoadingStateProps) {
+  if (variant === 'detail') {
+    return (
+      <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 ${className}`}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-4">
+            <Skeleton className="aspect-[16/10] w-full rounded-xl" />
+            <div className="flex gap-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="w-20 h-14 rounded-lg" />
+              ))}
+            </div>
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-3/4" />
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-32 w-full rounded-xl" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // default skeleton
   return (
-    <div className={`flex flex-col items-center justify-center py-20 ${className}`}>
-      <Loader2 className="size-8 animate-spin text-[#c9a84c] mb-4" />
-      <p className="text-muted-foreground text-sm">{message}</p>
+    <div className={`space-y-4 py-8 ${className}`}>
+      <Skeleton className="h-8 w-1/3" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="space-y-3 rounded-xl border border-border bg-card p-0 overflow-hidden">
+            <Skeleton className="aspect-[16/10] w-full rounded-none" />
+            <div className="p-4 space-y-2">
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-7 w-1/3" />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

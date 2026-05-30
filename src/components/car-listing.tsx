@@ -376,7 +376,7 @@ function CarCard({ car, type }: { car: NormalizedCar; type: CarListingProps['typ
         {/* Featured badge */}
         {car.featured && (
           <div className="absolute top-3 right-3">
-            <Badge className="bg-gold text-gold-dark border-0 text-xs font-bold">
+            <Badge className="bg-gold text-black border-0 text-xs font-bold">
               &#9733; Featured
             </Badge>
           </div>
@@ -439,7 +439,7 @@ function CarCard({ car, type }: { car: NormalizedCar; type: CarListingProps['typ
               </span>
             </div>
             <Button
-              className="w-full bg-gold text-gold-dark hover:bg-gold-light font-semibold"
+              className="w-full bg-gold text-black hover:bg-gold-light font-bold"
               size="sm"
               onClick={(e) => {
                 e.stopPropagation()
@@ -550,7 +550,7 @@ function Pagination({
           onClick={() => onPageChange(page)}
           className={`size-9 ${
             currentPage === page
-              ? 'bg-gold text-gold-dark hover:bg-gold-light'
+              ? 'bg-gold text-black hover:bg-gold-light'
               : ''
           }`}
           aria-current={currentPage === page ? 'page' : undefined}

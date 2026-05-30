@@ -763,8 +763,8 @@ function DealerInfoCard({ car, contactUnlocked }: { car: NormalizedCar; contactU
               ) : (
                 <>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-body-sm font-semibold text-muted-foreground/60 blur-[3px] select-none">
-                      012-3456 7890
+                    <span className="text-body-sm font-semibold text-muted-foreground/40">
+                      01X-XXXX XXXX
                     </span>
                     <Lock className="size-3 text-gold/60" />
                   </div>
@@ -1016,7 +1016,7 @@ export default function CarDetail() {
   // ─── Loading & Empty States ──────────────────────────────────────────────
 
   if (loading) {
-    return <LoadingState message="Loading vehicle details..." className="min-h-screen" />
+    return <LoadingState variant="detail" className="min-h-screen" />
   }
 
   if (!car) {
@@ -1207,11 +1207,11 @@ export default function CarDetail() {
                 <TabsTrigger value="description" className="flex-1">Description</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="specs" className="mt-4">
+              <TabsContent value="specs" className="mt-4 min-h-[280px]">
                 <VehicleSpecsSection car={car} />
               </TabsContent>
 
-              <TabsContent value="features" className="mt-4">
+              <TabsContent value="features" className="mt-4 min-h-[280px]">
                 {car.features.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {car.features.map((feature) => (
@@ -1226,7 +1226,7 @@ export default function CarDetail() {
                 )}
               </TabsContent>
 
-              <TabsContent value="description" className="mt-4">
+              <TabsContent value="description" className="mt-4 min-h-[280px]">
                 <p className="text-body-sm text-muted-foreground leading-relaxed">
                   {car.description || 'No description provided.'}
                 </p>
@@ -1264,7 +1264,7 @@ export default function CarDetail() {
             {/* ─── CTA Buttons ─── */}
             <div className="flex flex-col gap-3 sm:flex-row">
               <Button
-                className="flex-1 bg-gold text-gold-dark hover:bg-gold-light font-semibold h-12 text-base gap-2"
+                className="flex-1 bg-gold text-black hover:bg-gold-light font-bold h-12 text-base gap-2"
                 onClick={handlePrimaryCta}
                 disabled={bookingLoading}
               >

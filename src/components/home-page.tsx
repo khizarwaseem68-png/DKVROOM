@@ -436,11 +436,11 @@ export default function HomePage() {
                   value={localSearch}
                   onChange={(e) => setLocalSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
-                  className="pl-12 h-13 bg-card/90 border-gold/40 text-foreground placeholder:text-muted-foreground focus-visible:border-gold focus-visible:ring-gold/30 text-base rounded-lg"
+                  className="pl-12 h-12 bg-card/90 border-gold/40 text-foreground placeholder:text-muted-foreground focus-visible:border-gold focus-visible:ring-gold/30 text-base rounded-lg"
                 />
               </div>
               <Select value={localCity} onValueChange={setLocalCity}>
-                <SelectTrigger className="w-full sm:w-48 h-13 bg-card/90 border-gold/40 text-foreground rounded-lg">
+                <SelectTrigger className="w-full sm:w-48 h-12 bg-card/90 border-gold/40 text-foreground rounded-lg">
                   <MapPin className="size-4 text-gold mr-1" />
                   <SelectValue placeholder="Select City" />
                 </SelectTrigger>
@@ -454,7 +454,7 @@ export default function HomePage() {
               </Select>
               <Button
                 onClick={handleSearch}
-                className="h-13 px-8 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold rounded-lg"
+                className="h-12 px-8 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold rounded-lg"
               >
                 <Search className="size-4" />
                 Search
@@ -822,11 +822,6 @@ export default function HomePage() {
 
       {/* ===== PARTNER WITH US SECTION ===== */}
       <section className="py-20 sm:py-28 relative overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute inset-0 bg-gradient-to-br from-gold/5 via-transparent to-gold/3" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-gold/5 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-gold/3 rounded-full blur-3xl" />
-
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-3xl mx-auto text-center">
             {/* Section Header */}
