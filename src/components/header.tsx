@@ -243,7 +243,7 @@ export function Header() {
                     </AvatarFallback>
                   </Avatar>
                   <div className="hidden flex-col items-start xl:flex">
-                    <span className="text-xs font-medium text-foreground leading-tight">
+                    <span className="text-xs font-medium text-foreground leading-tight whitespace-nowrap">
                       {userName}
                     </span>
                     <Badge
@@ -382,7 +382,7 @@ export function Header() {
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex flex-col">
-                          <span className="text-sm font-medium text-foreground">
+                          <span className="text-sm font-medium text-foreground whitespace-nowrap">
                             {userName}
                           </span>
                           <Badge
