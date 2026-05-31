@@ -8,7 +8,7 @@ import { Header } from '@/components/header'
 
 // Routes where the main Header should be hidden
 const HIDE_HEADER_ROUTES = ['/login', '/register', '/dealer-dashboard', '/admin-dashboard', '/customer-dashboard']
-const PROTECTED_ROUTES = ['/dealer-dashboard', '/admin-dashboard', '/customer-dashboard']
+const PROTECTED_ROUTES = ['/dealer-dashboard', '/dealer-status', '/admin-dashboard', '/customer-dashboard']
 
 type ProtectedRole = 'dealer' | 'admin' | 'customer'
 
@@ -19,9 +19,16 @@ function isProtectedRoute(pathname: string | null): boolean {
 function getRequiredRole(pathname: string | null): ProtectedRole | null {
   if (!pathname) return null
   if (pathname.startsWith('/admin-dashboard')) return 'admin'
-  if (pathname.startsWith('/dealer-dashboard')) return 'dealer'
+  if (pathname.startsWith('/dealer-dashboard') || pathname.startsWith('/dealer-status')) return 'dealer'
   if (pathname.startsWith('/customer-dashboard')) return 'customer'
   return null
+}
+
+function getDealerStatus(user: { dealer?: Record<string, unknown> | null } | null): 'verified' | 'rejected' | 'pending' {
+  const dealer = user?.dealer
+  if (dealer?.rejectedAt) return 'rejected'
+  if (dealer?.verified) return 'verified'
+  return 'pending'
 }
 
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -71,6 +78,11 @@ function AppShell({ children }: { children: React.ReactNode }) {
     const requiredRole = getRequiredRole(pathname)
     if (requiredRole && user.role !== requiredRole) {
       router.replace('/')
+      return
+    }
+
+    if (pathname?.startsWith('/dealer-dashboard') && user.role === 'dealer' && getDealerStatus(user) !== 'verified') {
+      router.replace('/dealer-status')
     }
   }, [authReady, isLoggedIn, pathname, router, user])
 

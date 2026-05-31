@@ -878,7 +878,7 @@ export default function HomePage() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center mt-12">
               {isLoggedIn && user?.role === 'dealer' ? (
                 <Button
-                  onClick={() => router.push('/dealer-dashboard')}
+                  onClick={() => router.push(user?.dealer?.verified && !user?.dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status')}
                   size="lg"
                   className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold px-10 h-12 rounded-lg"
                 >

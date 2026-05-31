@@ -437,7 +437,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     role: 'customer' | 'dealer' | 'admin'
     verified: boolean
     avatar: string | null
-    dealer?: { id: string; companyName: string; verified: boolean; rating: number; [key: string]: unknown } | null
+    dealer?: { id: string; companyName: string; verified: boolean; rejectedAt?: string | null; rating: number; [key: string]: unknown } | null
   }): UserState {
     return {
       id: u.id,
@@ -451,6 +451,11 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
       dealerId: u.dealer?.id || null,
       dealer: u.dealer || null,
     }
+  }
+
+  function getDealerDestination(user: { role: string; dealer?: { verified?: boolean; rejectedAt?: string | null } | null }) {
+    if (user.role !== 'dealer') return '/'
+    return user.dealer?.verified && !user.dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status'
   }
 
   const startOtpFlow = async (
@@ -483,7 +488,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     const result = await authApi.register({ ...payload, emailVerificationToken })
     const userState = mapUserState(result.user)
     login(userState, result.token)
-    if (result.user.role === 'dealer') router.push('/dealer-dashboard')
+    if (result.user.role === 'dealer') router.push(getDealerDestination(result.user))
     else router.push('/')
   }
 
@@ -555,7 +560,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
       const userState = mapUserState(result.user)
       login(userState, result.token)
       if (result.user.role === 'admin') router.push('/admin-dashboard')
-      else if (result.user.role === 'dealer') router.push('/dealer-dashboard')
+      else if (result.user.role === 'dealer') router.push(getDealerDestination(result.user))
       else router.push('/')
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Login failed. Please try again.'

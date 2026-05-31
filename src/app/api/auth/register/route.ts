@@ -93,6 +93,8 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    let dealerProfile = null
+
     // If dealer, create dealer record
     if (userRole === 'dealer') {
       const dealerCompanyName = companyName || businessName
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
         return apiError('Company name is required for dealer registration', 400)
       }
 
-      await db.dealer.create({
+      dealerProfile = await db.dealer.create({
         data: {
           userId: user.id,
           companyName: sanitizeInput(dealerCompanyName),
@@ -158,13 +160,16 @@ export async function POST(request: NextRequest) {
 
     // Return user data (without password)
     const { password: _, ...userWithoutPassword } = user
+    const userResponse = userRole === 'dealer'
+      ? { ...userWithoutPassword, dealer: dealerProfile }
+      : userWithoutPassword
 
     return apiResponse({
       success: true,
       message: userRole === 'dealer'
         ? 'Registration successful! Your dealer account is pending verification.'
         : 'Registration successful!',
-      user: userWithoutPassword,
+      user: userResponse,
       token,
     }, 201)
 

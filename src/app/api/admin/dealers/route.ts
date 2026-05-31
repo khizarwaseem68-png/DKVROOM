@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { sendDealerVerificationEmail } from '@/lib/email/email-service'
 
 // GET /api/admin/dealers - List all dealers with filters (admin only)
 export async function GET(request: NextRequest) {
@@ -127,9 +128,20 @@ export async function PUT(request: NextRequest) {
         title: 'Dealer Account Verified!',
         message: `Your dealer account "${dealer.companyName}" has been verified. You can now list cars and receive bookings.`,
         type: 'success',
-        link: '/dealer/dashboard',
+        link: '/dealer-dashboard',
       }
     })
+
+    try {
+      await sendDealerVerificationEmail({
+        email: dealer.user.email,
+        name: dealer.user.name,
+        companyName: dealer.companyName,
+        status: 'verified',
+      })
+    } catch (emailError) {
+      console.error('Dealer approval email failed:', emailError)
+    }
 
     // Audit log
     await db.auditLog.create({
@@ -159,9 +171,21 @@ export async function PUT(request: NextRequest) {
         title: 'Dealer Account Rejected',
         message: `Your dealer account "${dealer.companyName}" has been rejected. Reason: ${rejectionReason}`,
         type: 'error',
-        link: '/dealer/dashboard',
+        link: '/dealer-status',
       }
     })
+
+    try {
+      await sendDealerVerificationEmail({
+        email: dealer.user.email,
+        name: dealer.user.name,
+        companyName: dealer.companyName,
+        status: 'rejected',
+        reason: rejectionReason,
+      })
+    } catch (emailError) {
+      console.error('Dealer rejection email failed:', emailError)
+    }
 
     // Audit log
     await db.auditLog.create({

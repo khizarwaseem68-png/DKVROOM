@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
-import { rateLimit, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
+import { rateLimit, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
 
 // ============================================================
@@ -19,6 +19,8 @@ export async function GET(request: NextRequest) {
     if (!user) return apiError('Unauthorized', 401)
     if (!requireRole(user, ['dealer'])) return apiError('Forbidden: dealer access required', 403)
     if (!user.dealer) return apiError('Dealer profile not found', 404)
+    if (user.dealer.rejectedAt) return apiError('Dealer account rejected', 403)
+    if (!user.dealer.verified) return apiError('Dealer account pending verification', 403)
 
     const { searchParams } = new URL(request.url)
 

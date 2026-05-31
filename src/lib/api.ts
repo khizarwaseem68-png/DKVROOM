@@ -4,7 +4,7 @@ const API_BASE = '/api'
 // ===== TOKEN MANAGEMENT =====
 
 const TOKEN_KEY = 'dkvroom_token'
-const PROTECTED_CLIENT_ROUTES = ['/admin-dashboard', '/dealer-dashboard', '/customer-dashboard']
+const PROTECTED_CLIENT_ROUTES = ['/admin-dashboard', '/dealer-dashboard', '/dealer-status', '/customer-dashboard']
 
 let authToken: string | null = null
 
@@ -79,6 +79,8 @@ export interface LoginResponse {
       id: string
       companyName: string
       verified: boolean
+      rejectedAt?: string | null
+      rejectionReason?: string | null
       rating: number
       [key: string]: unknown
     } | null

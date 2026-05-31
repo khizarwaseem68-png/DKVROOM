@@ -95,7 +95,10 @@ export function Header() {
 
   const getDashboardPath = () => {
     if (userRole === 'admin') return '/admin-dashboard'
-    if (userRole === 'dealer') return '/dealer-dashboard'
+    if (userRole === 'dealer') {
+      const dealer = user?.dealer
+      return dealer?.verified && !dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status'
+    }
     if (userRole === 'customer') return '/customer-dashboard'
     return '/'
   }
