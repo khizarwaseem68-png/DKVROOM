@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { adminApi } from '@/lib/api'
+import { adminApi, loansApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
@@ -80,6 +80,36 @@ interface AdminStats {
   rejectedPayments: number
 }
 
+interface AdminStatsResponse {
+  totals?: {
+    users?: number
+    dealers?: number
+    cars?: number
+    payments?: number
+    loanApplications?: number
+  }
+  dealerVerification?: {
+    pending?: number
+    rejected?: number
+  }
+  carBreakdown?: {
+    byStatus?: {
+      pending?: number
+      rejected?: number
+    }
+  }
+  paymentBreakdown?: {
+    byStatus?: {
+      pending?: number
+      uploaded?: number
+      rejected?: number
+    }
+  }
+  revenue?: {
+    total?: number
+  }
+}
+
 interface DealerItem {
   id: string
   companyName?: string
@@ -90,6 +120,8 @@ interface DealerItem {
   totalListings?: number
   listings?: number
   rating?: number
+  rejectedAt?: string | null
+  _count?: { cars?: number; bookings?: number }
 }
 
 interface CarItem {
@@ -162,6 +194,38 @@ function getCarBrand(car: CarItem): string {
   return car.brand && car.model ? `${car.brand} ${car.model}` : car.brand || 'Unknown'
 }
 
+function normalizeAdminStats(data: AdminStats | AdminStatsResponse): AdminStats {
+  if ('totalUsers' in data) return data as AdminStats
+
+  const nested = data as AdminStatsResponse
+  const pendingPayments = (nested.paymentBreakdown?.byStatus?.pending ?? 0) + (nested.paymentBreakdown?.byStatus?.uploaded ?? 0)
+
+  return {
+    totalUsers: nested.totals?.users ?? 0,
+    totalDealers: nested.totals?.dealers ?? 0,
+    totalCars: nested.totals?.cars ?? 0,
+    totalRevenue: nested.revenue?.total ?? 0,
+    totalPayments: nested.totals?.payments ?? 0,
+    totalLoans: nested.totals?.loanApplications ?? 0,
+    pendingDealers: nested.dealerVerification?.pending ?? 0,
+    pendingCars: nested.carBreakdown?.byStatus?.pending ?? 0,
+    pendingPayments,
+    rejectedDealers: nested.dealerVerification?.rejected ?? 0,
+    rejectedCars: nested.carBreakdown?.byStatus?.rejected ?? 0,
+    rejectedPayments: nested.paymentBreakdown?.byStatus?.rejected ?? 0,
+  }
+}
+
+function normalizeDealer(dealer: DealerItem): DealerItem {
+  const status = dealer.rejectedAt ? 'rejected' : dealer.verified ? 'verified' : 'pending'
+
+  return {
+    ...dealer,
+    status,
+    totalListings: dealer.totalListings ?? dealer._count?.cars ?? dealer.listings ?? 0,
+  }
+}
+
 // ===== SIDEBAR CONFIG =====
 
 const sidebarItems = [
@@ -219,7 +283,7 @@ export default function AdminDashboard() {
     setStatsLoading(true)
     try {
       const result = await adminApi.getStats()
-      setStats((result.data ?? result) as AdminStats)
+      setStats(normalizeAdminStats((result.data ?? result) as AdminStats | AdminStatsResponse))
     } catch {
       setStats({
         totalUsers: 0, totalDealers: 0, totalCars: 0, totalRevenue: 0,
@@ -239,7 +303,7 @@ export default function AdminDashboard() {
       if (dealerFilter !== 'all') params.status = dealerFilter
       if (dealerSearch) params.search = dealerSearch
       const result = await adminApi.getDealers(params)
-      setDealers((result.data ?? []) as DealerItem[])
+      setDealers(((result.data ?? []) as DealerItem[]).map(normalizeDealer))
     } catch {
       setDealers([])
     } finally {
@@ -283,7 +347,7 @@ export default function AdminDashboard() {
     try {
       const params: Record<string, string> = {}
       if (loanFilter !== 'all') params.status = loanFilter
-      const result = await adminApi.getPayments({ ...params, type: 'loan' })
+      const result = await loansApi.list(params)
       setLoans((result.data ?? []) as LoanItem[])
     } catch {
       setLoans([])
@@ -292,11 +356,25 @@ export default function AdminDashboard() {
     }
   }, [loanFilter])
 
-  useEffect(() => { fetchStats() }, [fetchStats])
-  useEffect(() => { if (activeTab === 'dealers') fetchDealers() }, [activeTab, fetchDealers])
-  useEffect(() => { if (activeTab === 'cars') fetchCars() }, [activeTab, fetchCars])
-  useEffect(() => { if (activeTab === 'payments') fetchPayments() }, [activeTab, fetchPayments])
-  useEffect(() => { if (activeTab === 'loans') fetchLoans() }, [activeTab, fetchLoans])
+  useEffect(() => {
+    queueMicrotask(() => { void fetchStats() })
+  }, [fetchStats])
+
+  useEffect(() => {
+    if (activeTab === 'dealers') queueMicrotask(() => { void fetchDealers() })
+  }, [activeTab, fetchDealers])
+
+  useEffect(() => {
+    if (activeTab === 'cars') queueMicrotask(() => { void fetchCars() })
+  }, [activeTab, fetchCars])
+
+  useEffect(() => {
+    if (activeTab === 'payments') queueMicrotask(() => { void fetchPayments() })
+  }, [activeTab, fetchPayments])
+
+  useEffect(() => {
+    if (activeTab === 'loans') queueMicrotask(() => { void fetchLoans() })
+  }, [activeTab, fetchLoans])
 
   // Action handlers
   const handleVerifyDealer = async (dealerId: string, action: 'verify' | 'reject') => {
@@ -1028,7 +1106,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Filter className="size-4 text-muted-foreground" />
                   <TabsList className="bg-secondary">
-                    {['all', 'pending', 'underReview', 'approved', 'rejected'].map((status) => (
+                    {['all', 'pending', 'reviewing', 'approved', 'rejected'].map((status) => (
                       <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
                         {status === 'all' ? 'All' : status === 'underReview' ? 'Under Review' : status.charAt(0).toUpperCase() + status.slice(1)}
                       </TabsTrigger>
