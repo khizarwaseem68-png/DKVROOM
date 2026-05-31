@@ -41,7 +41,7 @@ async function main() {
   // ============================
   // 1. CREATE ADMIN USER
   // ============================
-  const adminPassword = await hash('Admin@123', 12)
+  const adminPassword = await hash('12345678', 12)
   const admin = await prisma.user.create({
     data: {
       email: 'admin@dkvroom.com',
@@ -54,7 +54,7 @@ async function main() {
       active: true,
     }
   })
-  console.log('✅ Admin created: admin@dkvroom.com / Admin@123')
+  console.log('✅ Admin created: admin@dkvroom.com / 12345678')
 
   // ============================
   // 2. CREATE DEALER USERS + DEALER PROFILES
@@ -80,7 +80,7 @@ async function main() {
 
   const dealers: any[] = []
   for (const d of dealerData) {
-    const password = await hash('Dealer@123', 12)
+    const password = await hash('12345678', 12)
     const user = await prisma.user.create({
       data: {
         email: d.email,
@@ -119,7 +119,7 @@ async function main() {
     })
     dealers.push(dealer)
   }
-  console.log(`✅ Created ${dealers.length} dealers (login: [email] / Dealer@123)`)
+  console.log(`✅ Created ${dealers.length} dealers (login: [email] / 12345678)`)
 
   // ============================
   // 3. CREATE CUSTOMER USERS
@@ -137,7 +137,7 @@ async function main() {
 
   const customers: any[] = []
   for (const c of customerData) {
-    const password = await hash('Customer@123', 12)
+    const password = await hash('12345678', 12)
     const user = await prisma.user.create({
       data: {
         email: c.email,
@@ -155,7 +155,7 @@ async function main() {
     })
     customers.push(user)
   }
-  console.log(`✅ Created ${customers.length} customers (login: [email] / Customer@123)`)
+  console.log(`✅ Created ${customers.length} customers (login: [email] / 12345678)`)
 
   // ============================
   // 4. CREATE CAR LISTINGS
@@ -623,7 +623,7 @@ async function main() {
   // ============================
   // 14. CREATE UNVERIFIED DEALER (for testing admin flow)
   // ============================
-  const unverifiedPassword = await hash('Dealer@123', 12)
+  const unverifiedPassword = await hash('12345678', 12)
   const unverifiedUser = await prisma.user.create({
     data: {
       email: 'newdealer@dkvroom.com',
