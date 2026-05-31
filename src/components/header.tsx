@@ -321,7 +321,7 @@ export function Header() {
                 {/* Mobile Search */}
                 <div className="px-4 py-4">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 size-4 text-muted-foreground" />
+                    <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       placeholder="Search vehicles..."
                       value={searchQuery}
@@ -453,7 +453,7 @@ export function Header() {
       {searchQuery && (
         <div className="border-t border-gold/10 bg-[#0a0a0a]/95 px-4 py-2 backdrop-blur-xl md:hidden">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 size-4 text-gold" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gold" />
             <Input
               placeholder="Search vehicles..."
               value={searchQuery}
