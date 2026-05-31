@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { authApi, setToken, clearToken } from '@/lib/api'
+import { toast } from 'sonner'
+import { authApi, wishlistApi, setToken, clearToken } from '@/lib/api'
 
 // ===== VIEW TYPES (kept for reference, navigation now uses URLs) =====
 
@@ -48,6 +49,9 @@ interface AppState {
   showMobileMenu: boolean
   loading: boolean
 
+  // Wishlist
+  wishlistIds: string[]
+
   // Booking Flow
   booking: BookingState
 
@@ -67,6 +71,11 @@ interface AppState {
   // Actions — UI
   toggleMobileMenu: () => void
   setLoading: (loading: boolean) => void
+
+  // Actions — Wishlist
+  fetchWishlist: () => Promise<void>
+  toggleWishlist: (carId: string) => Promise<void>
+  isInWishlist: (carId: string) => boolean
 
   // Actions — Booking
   startBooking: (type: BookingState['bookingType'], amount: number, bookingId?: string, paymentId?: string) => void
@@ -115,6 +124,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   user: null,
   showMobileMenu: false,
   loading: false,
+  wishlistIds: [],
   booking: { ...initialBooking },
 
   // Car selection — stores car ID, navigation happens via router
@@ -129,6 +139,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   login: (user, token) => {
     setToken(token)
     set({ isLoggedIn: true, user })
+    get().fetchWishlist()
   },
 
   logout: () => {
@@ -137,6 +148,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       isLoggedIn: false,
       user: null,
       booking: { ...initialBooking },
+      wishlistIds: [],
     })
     // Redirect to home page
     if (typeof window !== 'undefined') {
@@ -144,7 +156,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  checkAuth: async () => {
+    checkAuth: async () => {
     // Prevent duplicate auth checks
     if (authCheckPromise) return authCheckPromise
 
@@ -168,6 +180,7 @@ export const useAppStore = create<AppState>((set, get) => ({
               dealer: u.dealer || null,
             },
           })
+          get().fetchWishlist()
         }
       } catch {
         clearToken()
@@ -183,6 +196,47 @@ export const useAppStore = create<AppState>((set, get) => ({
   // UI
   toggleMobileMenu: () => set((state) => ({ showMobileMenu: !state.showMobileMenu })),
   setLoading: (loading) => set({ loading }),
+
+  // Wishlist
+  fetchWishlist: async () => {
+    const { isLoggedIn } = get()
+    if (!isLoggedIn) return
+    try {
+      const result = await wishlistApi.list()
+      const items = result.data as { carId: string }[] | undefined
+      if (Array.isArray(items)) {
+        set({ wishlistIds: items.map((i) => i.carId) })
+      }
+    } catch {
+      // Silent fail
+    }
+  },
+
+  toggleWishlist: async (carId) => {
+    const { isLoggedIn, wishlistIds } = get()
+    if (!isLoggedIn) {
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login'
+      }
+      return
+    }
+
+    const exists = wishlistIds.includes(carId)
+    try {
+      if (exists) {
+        await wishlistApi.remove(carId)
+        set({ wishlistIds: wishlistIds.filter((id) => id !== carId) })
+      } else {
+        await wishlistApi.add(carId)
+        set({ wishlistIds: [...wishlistIds, carId] })
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update wishlist'
+      toast.error(msg)
+    }
+  },
+
+  isInWishlist: (carId) => get().wishlistIds.includes(carId),
 
   // Booking Flow
   startBooking: (type, amount, bookingId, paymentId) => set({

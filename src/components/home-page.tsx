@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { useAppStore } from '@/lib/store'
 import { carsApi } from '@/lib/api'
 import { CITIES, formatPrice, formatMileage, type VehicleType } from '@/lib/constants'
@@ -294,7 +295,7 @@ function SectionHeader({ overline, titlePrefix, titleAccent, description }: {
 // ===== MAIN COMPONENT =====
 
 export default function HomePage() {
-  const { selectCar, setSearch, setCity, isLoggedIn, user, searchQuery, selectedCity } = useAppStore()
+  const { selectCar, setSearch, setCity, isLoggedIn, user, searchQuery, selectedCity, toggleWishlist, isInWishlist } = useAppStore()
   const router = useRouter()
   const [localSearch, setLocalSearch] = useState(searchQuery)
   const [localCity, setLocalCity] = useState(selectedCity || 'All Cities')
@@ -571,7 +572,7 @@ export default function HomePage() {
                 <Card
                   key={car.id}
                   className="luxury-card bg-card border-border overflow-hidden group cursor-pointer rounded-xl"
-                  onClick={() => selectCar(car.id, car.type)}
+                  onClick={() => { selectCar(car.id, car.type); router.push(`/car/${car.id}`) }}
                 >
                   {/* Car Image */}
                   <div className="relative h-52 overflow-hidden">
@@ -589,10 +590,31 @@ export default function HomePage() {
                     </div>
                     {/* Quick Actions */}
                     <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button size="icon" variant="ghost" className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full">
-                        <Heart className="size-4" />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!isLoggedIn) {
+                            toast.error('Please login to save favorites')
+                            return
+                          }
+                          toggleWishlist(car.id)
+                        }}
+                      >
+                        <Heart className={`size-4 ${isInWishlist(car.id) ? 'fill-red-500 text-red-500' : ''}`} />
                       </Button>
-                      <Button size="icon" variant="ghost" className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          selectCar(car.id, car.type)
+                          router.push(`/car/${car.id}`)
+                        }}
+                      >
                         <Eye className="size-4" />
                       </Button>
                     </div>
@@ -650,10 +672,11 @@ export default function HomePage() {
 
                     {/* View Details Button (visible on hover) */}
                     <Button
-                      className="w-full mt-4 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold opacity-0 group-hover:opacity-100 transition-opacity h-9 rounded-lg"
+                      className="w-full mt-4 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold opacity-0 group-hover:opacity-100 transition-opacity h-9 rounded-lg cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation()
                         selectCar(car.id, car.type)
+                        router.push(`/car/${car.id}`)
                       }}
                     >
                       View Details

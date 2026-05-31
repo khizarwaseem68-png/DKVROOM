@@ -47,6 +47,7 @@ model User {
   workshopAppointments WorkshopAppointment[]
   insuranceEnquiries InsuranceEnquiry[]
   auctionBids     AuctionBid[]
+  wishlist        Wishlist[]
   auditLogs       AuditLog[]
 
   @@index([email])
@@ -184,6 +185,7 @@ model Car {
   auctionBids       AuctionBid[]
   reviews           Review[]
   continueLoanEnquiries ContinueLoanEnquiry[]
+  wishlist          Wishlist[]
 
   @@index([type])
   @@index([status])
@@ -191,6 +193,23 @@ model Car {
   @@index([brand])
   @@index([featured])
   @@index([dealerId])
+}
+
+// ============================================================
+// WISHLIST / FAVORITES
+// ============================================================
+
+model Wishlist {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  carId     String
+  car       Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, carId])
+  @@index([userId])
+  @@index([carId])
 }
 
 // ============================================================
