@@ -247,21 +247,18 @@ export default function ContinueLoanEnquiry() {
 
     try {
       setError('')
-      const uploadResult = await uploadApi.upload(file)
-      // Map key to API field name
       const fieldMap: Record<string, string> = {
         customerIc: 'customerIcUrl',
-        drivingLicense: 'drivingLicenseUrl',
+        drivingLicense: 'customerLicenseUrl',
         policeReport: 'policeReportUrl',
         payslip: 'payslipUrl',
         bankStatement: 'bankStatementUrl',
       }
-      await continueLoanApi.update(enquiryId, {
-        [fieldMap[key] || `${key}Url`]: uploadResult.url,
-      })
+      const result = await continueLoanApi.update(enquiryId, {}, { [key]: file }) as any
+      const url = result?.data?.[fieldMap[key] || `${key}Url`] || ''
       setUploadedFiles((prev) => ({
         ...prev,
-        [key]: { uploaded: true, url: uploadResult.url },
+        [key]: { uploaded: true, url },
       }))
     } catch {
       setError('Failed to upload document. Please try again.')

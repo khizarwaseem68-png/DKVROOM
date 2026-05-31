@@ -99,7 +99,7 @@ export function Header() {
       const dealer = user?.dealer
       return dealer?.verified && !dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status'
     }
-    if (userRole === 'customer') return '/customer-dashboard'
+    // if (userRole === 'customer') return '/customer-dashboard'
     return '/'
   }
 
@@ -222,10 +222,10 @@ export function Header() {
             <Separator orientation="vertical" className="hidden h-6 lg:block" />
 
             {/* User Actions */}
-            {isLoggedIn ? (
+            {(isLoggedIn) ? (
               <div className="flex items-center gap-2">
                 {/* Dashboard link */}
-                <Button
+                {user?.role != "customer" && <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => handleNavClick(getDashboardPath())}
@@ -233,7 +233,7 @@ export function Header() {
                 >
                   <LayoutDashboard className="mr-1.5 size-4" />
                   Dashboard
-                </Button>
+                </Button>}
 
                 {/* User Avatar */}
                 <button
@@ -397,14 +397,14 @@ className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover
                         </div>
                       </div>
 
-                      <Button
+                      {user?.role !== "customer" && <Button
                         variant="ghost"
                         onClick={() => handleNavClick(getDashboardPath())}
                         className="justify-start text-muted-foreground hover:text-gold"
                       >
                         <LayoutDashboard className="mr-2 size-4" />
                         Dashboard
-                      </Button>
+                      </Button>}
 
                       <Button
                         variant="ghost"

@@ -206,8 +206,6 @@ export default function PaymentPage() {
     setUploading(true)
     setUploadError(null)
     try {
-      // Upload file first, then attach to payment
-      await uploadApi.upload(receiptFile)
       await paymentsApi.uploadReceipt(booking.paymentId, receiptFile)
       setUploaded(true)
       uploadReceipt()

@@ -2,6 +2,17 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { saveFile, validateFile } from '@/lib/file-upload'
+
+const DOC_CATEGORIES: Record<string, { maxSizeMB: number; allowedMimes: string[]; dbField: string; subfolder: string }> = {
+  customerIc: { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], dbField: 'customerIcUrl', subfolder: 'ic' },
+  customerLicense: { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], dbField: 'customerLicenseUrl', subfolder: 'license' },
+  paymentReceipt: { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], dbField: 'paymentReceiptUrl', subfolder: 'receipts' },
+  policeReport: { maxSizeMB: 10, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], dbField: 'policeReportUrl', subfolder: 'documents' },
+  agreementDoc: { maxSizeMB: 10, allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'], dbField: 'agreementDocUrl', subfolder: 'agreements' },
+  ownerIc: { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'], dbField: 'ownerIcUrl', subfolder: 'ic' },
+  ownerAgreement: { maxSizeMB: 10, allowedMimes: ['application/pdf', 'image/jpeg', 'image/png'], dbField: 'ownerAgreementUrl', subfolder: 'agreements' },
+}
 
 // GET /api/continue-loan/[id] - Single enquiry detail
 export async function GET(
@@ -66,16 +77,55 @@ export async function PUT(
 
   if (!enquiry) return apiError('Enquiry not found', 404)
 
-  const body = await request.json()
+  const contentType = request.headers.get('content-type') || ''
+  const isMultipart = contentType.includes('multipart/form-data')
+
+  let body: Record<string, any> = {}
+  const uploadedFiles: Array<{ key: string; file: File }> = []
+
+  if (isMultipart) {
+    const formData = await request.formData()
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        if (DOC_CATEGORIES[key]) {
+          uploadedFiles.push({ key, file: value })
+        }
+      } else {
+        body[key] = value
+      }
+    }
+  } else {
+    body = await request.json()
+  }
 
   // Customer: Upload documents
   if (user.role === 'customer') {
     if (enquiry.customerId !== user.id) return apiError('Forbidden', 403)
 
-    const allowedFields = ['customerIcUrl', 'customerLicenseUrl', 'paymentReceiptUrl', 'policeReportUrl', 'agreementDocUrl']
     const updateData: any = {}
+    const dbFieldKeys = ['customerIcUrl', 'customerLicenseUrl', 'paymentReceiptUrl', 'policeReportUrl', 'agreementDocUrl']
 
-    for (const field of allowedFields) {
+    // File fields that map to DB
+    const fileDbMap: Record<string, string> = {}
+    for (const [key, cfg] of Object.entries(DOC_CATEGORIES)) {
+      if (dbFieldKeys.includes(cfg.dbField)) {
+        fileDbMap[key] = cfg.dbField
+      }
+    }
+
+    // Validate files before DB
+    for (const { key, file } of uploadedFiles) {
+      const cfg = DOC_CATEGORIES[key]
+      if (!cfg || !fileDbMap[key]) {
+        return apiError(`Invalid file field: ${key}`, 400)
+      }
+      const err = validateFile(file, cfg.maxSizeMB, cfg.allowedMimes)
+      if (err) return apiError(`${key}: ${err}`, 400)
+      // Will save after DB update
+    }
+
+    // Text fields from body
+    for (const field of dbFieldKeys) {
       if (body[field] !== undefined) {
         updateData[field] = sanitizeInput(body[field])
       }
@@ -91,14 +141,34 @@ export async function PUT(
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
+    const hasUpdates = Object.keys(updateData).length > 0 || uploadedFiles.length > 0
+
+    if (!hasUpdates) {
       return apiError('No valid fields to update', 400)
     }
 
+    // Update DB first
     const updatedEnquiry = await db.continueLoanEnquiry.update({
       where: { id },
       data: updateData,
     })
+
+    // Save files after DB update succeeds
+    for (const { key, file } of uploadedFiles) {
+      try {
+        const cfg = DOC_CATEGORIES[key]
+        const url = await saveFile(file, cfg.subfolder, `continue_loan_${id}`)
+        await db.continueLoanEnquiry.update({
+          where: { id },
+          data: { [cfg.dbField]: url },
+        })
+      } catch {
+        // File save failed but DB is already updated
+      }
+    }
+
+    // Fetch fresh data after file saves
+    const finalEnquiry = await db.continueLoanEnquiry.findUnique({ where: { id } })
 
     // Notify dealer of document upload
     if (Object.keys(updateData).some(k => k !== 'agreementStatus')) {
@@ -116,17 +186,36 @@ export async function PUT(
       }
     }
 
-    return apiResponse({ success: true, data: updatedEnquiry })
+    return apiResponse({ success: true, data: finalEnquiry || updatedEnquiry })
   }
 
   // Dealer: Upload owner documents and send agreement
   if (user.role === 'dealer' && user.dealer) {
     if (enquiry.dealerId !== user.dealer.id) return apiError('Forbidden', 403)
 
-    const allowedFields = ['ownerIcUrl', 'ownerAgreementUrl']
     const updateData: any = {}
+    const dbFieldKeys = ['ownerIcUrl', 'ownerAgreementUrl']
 
-    for (const field of allowedFields) {
+    // File fields that map to DB
+    const fileDbMap: Record<string, string> = {}
+    for (const [key, cfg] of Object.entries(DOC_CATEGORIES)) {
+      if (dbFieldKeys.includes(cfg.dbField)) {
+        fileDbMap[key] = cfg.dbField
+      }
+    }
+
+    // Validate files before DB
+    for (const { key, file } of uploadedFiles) {
+      const cfg = DOC_CATEGORIES[key]
+      if (!cfg || !fileDbMap[key]) {
+        return apiError(`Invalid file field: ${key}`, 400)
+      }
+      const err = validateFile(file, cfg.maxSizeMB, cfg.allowedMimes)
+      if (err) return apiError(`${key}: ${err}`, 400)
+    }
+
+    // Text fields from body
+    for (const field of dbFieldKeys) {
       if (body[field] !== undefined) {
         updateData[field] = sanitizeInput(body[field])
       }
@@ -142,14 +231,34 @@ export async function PUT(
       }
     }
 
-    if (Object.keys(updateData).length === 0) {
+    const hasUpdates = Object.keys(updateData).length > 0 || uploadedFiles.length > 0
+
+    if (!hasUpdates) {
       return apiError('No valid fields to update', 400)
     }
 
+    // Update DB first
     const updatedEnquiry = await db.continueLoanEnquiry.update({
       where: { id },
       data: updateData,
     })
+
+    // Save files after DB update succeeds
+    for (const { key, file } of uploadedFiles) {
+      try {
+        const cfg = DOC_CATEGORIES[key]
+        const url = await saveFile(file, cfg.subfolder, `continue_loan_${id}`)
+        await db.continueLoanEnquiry.update({
+          where: { id },
+          data: { [cfg.dbField]: url },
+        })
+      } catch {
+        // File save failed but DB is already updated
+      }
+    }
+
+    // Fetch fresh data after file saves
+    const finalEnquiry = await db.continueLoanEnquiry.findUnique({ where: { id } })
 
     // Notify customer of agreement sent or status change
     if (body.agreementStatus === 'agreement_sent') {
@@ -164,7 +273,7 @@ export async function PUT(
       })
     }
 
-    return apiResponse({ success: true, data: updatedEnquiry })
+    return apiResponse({ success: true, data: finalEnquiry || updatedEnquiry })
   }
 
   // Admin: Verify and unlock contact
