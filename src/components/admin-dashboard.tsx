@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { adminApi, loansApi } from '@/lib/api'
@@ -112,29 +112,94 @@ interface AdminStatsResponse {
 
 interface DealerItem {
   id: string
+  userId?: string
   companyName?: string
   company?: string
+  dealerType?: string
+  registrationNo?: string | null
+  registrationDocUrl?: string | null
+  contactPerson?: string | null
+  address?: string | null
   city?: string
+  state?: string | null
+  phone?: string | null
+  whatsapp?: string | null
+  description?: string | null
   verified?: boolean
   status: string
   totalListings?: number
   listings?: number
   rating?: number
+  bankName?: string | null
+  bankAccountNumber?: string | null
+  bankAccountHolder?: string | null
+  subscriptionTier?: string | null
+  operatingHours?: string | null
+  verifiedAt?: string | null
   rejectedAt?: string | null
+  rejectionReason?: string | null
+  createdAt?: string
+  user?: { name?: string; email?: string; phone?: string | null; active?: boolean; createdAt?: string }
   _count?: { cars?: number; bookings?: number }
 }
 
 interface CarItem {
   id: string
+  dealerId?: string
+  userId?: string
   brand: string
   model: string
+  year?: number
+  color?: string | null
+  mileage?: number | null
+  fuelType?: string | null
+  transmission?: string | null
+  seats?: number | null
+  condition?: string | null
   type: VehicleType | string
   price: number
+  weeklyPrice?: number | null
+  monthlyPrice?: number | null
+  deposit?: number | null
+  bookingFee?: number | null
+  monthlyInstallment?: number | null
+  remainingMonths?: number | null
+  remainingBalance?: number | null
+  takeoverAmount?: number | null
+  bankName?: string | null
+  auctionStartBid?: number | null
+  auctionReserve?: number | null
+  currentBid?: number | null
+  auctionEnd?: string | null
+  conditionCategory?: string | null
+  damageDescription?: string | null
+  repairEstimate?: number | null
+  location?: string | null
+  city?: string | null
+  state?: string | null
+  description?: string | null
+  features?: string | null
   status: string
   photos?: string
-  dealer?: { companyName: string; city: string; verified: boolean; rating: number; totalListings: number }
+  dealer?: { id?: string; companyName: string; city?: string | null; verified: boolean; rating?: number; totalListings?: number }
   dealerName?: string
-  dealerUser?: { name: string }
+  dealerUser?: { name: string; email?: string }
+  approvedAt?: string | null
+  rejectedAt?: string | null
+  rejectionReason?: string | null
+  views?: number
+  enquiries?: number
+  createdAt?: string
+  _count?: { bookings?: number; reviews?: number; auctionBids?: number; continueLoanEnquiries?: number }
+}
+
+interface PaginationState {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
 }
 
 interface PaymentItem {
@@ -226,6 +291,54 @@ function normalizeDealer(dealer: DealerItem): DealerItem {
   }
 }
 
+function DetailItem({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-secondary/40 p-3">
+      <p className="text-overline text-muted-foreground">{label}</p>
+      <div className="mt-1 text-body-sm text-foreground break-words">{value || 'N/A'}</div>
+    </div>
+  )
+}
+
+function PaginationControls({
+  pagination,
+  onPageChange,
+}: {
+  pagination: PaginationState
+  onPageChange: (page: number) => void
+}) {
+  if (pagination.totalPages <= 1) return null
+
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+      <p className="text-caption text-muted-foreground">
+        Showing page <span className="text-foreground">{pagination.page}</span> of{' '}
+        <span className="text-foreground">{pagination.totalPages}</span> ({pagination.total} total)
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!pagination.hasPrev}
+          onClick={() => onPageChange(pagination.page - 1)}
+          className="border-border text-muted-foreground hover:text-foreground"
+        >
+          <ChevronLeft className="size-4 mr-1" /> Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!pagination.hasNext}
+          onClick={() => onPageChange(pagination.page + 1)}
+          className="border-border text-muted-foreground hover:text-foreground"
+        >
+          Next <ChevronRight className="size-4 ml-1" />
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 // ===== SIDEBAR CONFIG =====
 
 const sidebarItems = [
@@ -255,17 +368,26 @@ export default function AdminDashboard() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [dealerFilter, setDealerFilter] = useState('all')
   const [dealerSearch, setDealerSearch] = useState('')
+  const [debouncedDealerSearch, setDebouncedDealerSearch] = useState('')
   const [loanFilter, setLoanFilter] = useState('all')
   const [paymentFilter, setPaymentFilter] = useState('all')
   const [carStatusFilter, setCarStatusFilter] = useState('all')
+  const [carSearch, setCarSearch] = useState('')
+  const [debouncedCarSearch, setDebouncedCarSearch] = useState('')
 
   // API data states
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [dealers, setDealers] = useState<DealerItem[]>([])
   const [dealersLoading, setDealersLoading] = useState(true)
+  const [dealerPage, setDealerPage] = useState(1)
+  const [dealerPagination, setDealerPagination] = useState<PaginationState | null>(null)
+  const [selectedDealer, setSelectedDealer] = useState<DealerItem | null>(null)
   const [cars, setCars] = useState<CarItem[]>([])
   const [carsLoading, setCarsLoading] = useState(true)
+  const [carPage, setCarPage] = useState(1)
+  const [carPagination, setCarPagination] = useState<PaginationState | null>(null)
+  const [selectedCar, setSelectedCar] = useState<CarItem | null>(null)
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
   const [loans, setLoans] = useState<LoanItem[]>([])
@@ -277,6 +399,22 @@ export default function AdminDashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment'; id: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedDealerSearch(dealerSearch.trim())
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [dealerSearch])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCarSearch(carSearch.trim())
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [carSearch])
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -299,32 +437,37 @@ export default function AdminDashboard() {
   const fetchDealers = useCallback(async () => {
     setDealersLoading(true)
     try {
-      const params: Record<string, string> = {}
+      const params: Record<string, string> = { page: String(dealerPage), limit: '10' }
       if (dealerFilter !== 'all') params.status = dealerFilter
-      if (dealerSearch) params.search = dealerSearch
+      if (debouncedDealerSearch) params.search = debouncedDealerSearch
       const result = await adminApi.getDealers(params)
       setDealers(((result.data ?? []) as DealerItem[]).map(normalizeDealer))
+      setDealerPagination(result.pagination ?? null)
     } catch {
       setDealers([])
+      setDealerPagination(null)
     } finally {
       setDealersLoading(false)
     }
-  }, [dealerFilter, dealerSearch])
+  }, [dealerFilter, debouncedDealerSearch, dealerPage])
 
   // Fetch cars
   const fetchCars = useCallback(async () => {
     setCarsLoading(true)
     try {
-      const params: Record<string, string> = {}
+      const params: Record<string, string> = { page: String(carPage), limit: '10' }
       if (carStatusFilter !== 'all') params.status = carStatusFilter
+      if (debouncedCarSearch) params.search = debouncedCarSearch
       const result = await adminApi.getCars(params)
       setCars((result.data ?? []) as CarItem[])
+      setCarPagination(result.pagination ?? null)
     } catch {
       setCars([])
+      setCarPagination(null)
     } finally {
       setCarsLoading(false)
     }
-  }, [carStatusFilter])
+  }, [carStatusFilter, debouncedCarSearch, carPage])
 
   // Fetch payments
   const fetchPayments = useCallback(async () => {
@@ -383,6 +526,15 @@ export default function AdminDashboard() {
       await adminApi.verifyDealer(dealerId, action, action === 'reject' ? rejectReason : undefined)
       await fetchDealers()
       await fetchStats()
+      if (selectedDealer?.id === dealerId) {
+        setSelectedDealer({
+          ...selectedDealer,
+          verified: action === 'verify',
+          status: action === 'verify' ? 'verified' : 'rejected',
+          rejectedAt: action === 'reject' ? new Date().toISOString() : null,
+          rejectionReason: action === 'reject' ? rejectReason : null,
+        })
+      }
       setRejectDialog(null)
       setRejectReason('')
     } catch {
@@ -398,6 +550,15 @@ export default function AdminDashboard() {
       await adminApi.approveCar(carId, action, action === 'reject' ? rejectReason : undefined)
       await fetchCars()
       await fetchStats()
+      if (selectedCar?.id === carId) {
+        setSelectedCar({
+          ...selectedCar,
+          status: action === 'approve' ? 'approved' : 'rejected',
+          approvedAt: action === 'approve' ? new Date().toISOString() : selectedCar.approvedAt,
+          rejectedAt: action === 'reject' ? new Date().toISOString() : null,
+          rejectionReason: action === 'reject' ? rejectReason : null,
+        })
+      }
       setRejectDialog(null)
       setRejectReason('')
     } catch {
@@ -425,13 +586,271 @@ export default function AdminDashboard() {
   const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab)
     setMobileSidebarOpen(false)
+    setSelectedDealer(null)
+    setSelectedCar(null)
+  }
+
+  const renderDealerDetails = (dealer: DealerItem) => (
+    <div className="space-y-5">
+      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+        <div>
+          <Button variant="ghost" onClick={() => setSelectedDealer(null)} className="mb-3 text-muted-foreground hover:text-gold">
+            <ChevronLeft className="size-4 mr-1" /> Back to dealers
+          </Button>
+          <div className="flex items-center gap-3">
+            <Avatar className="size-12 border border-gold/30">
+              <AvatarFallback className="bg-gold/10 text-gold font-bold">
+                {(dealer.companyName || dealer.company || 'D').charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="dash-heading-lg">{dealer.companyName || dealer.company}</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <StatusBadge status={dealer.status} />
+                <Badge variant="outline" className="border-border text-muted-foreground">{dealer.dealerType || 'dealer'}</Badge>
+                <span className="text-caption text-muted-foreground">{dealer.city || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {dealer.status !== 'verified' && (
+            <Button
+              disabled={actionLoading === dealer.id}
+              onClick={() => handleVerifyDealer(dealer.id, 'verify')}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white"
+            >
+              {actionLoading === dealer.id ? <Loader2 className="size-4 animate-spin mr-1" /> : <CheckCircle className="size-4 mr-1" />}
+              Verify Dealer
+            </Button>
+          )}
+          {dealer.status !== 'rejected' && (
+            <Button
+              variant="outline"
+              onClick={() => setRejectDialog({ type: 'dealer', id: dealer.id })}
+              className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+            >
+              <XCircle className="size-4 mr-1" /> Reject Dealer
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Card className="lg:col-span-2 bg-card border-border">
+          <CardHeader>
+            <CardTitle className="dash-heading-sm">Business Review</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DetailItem label="Company" value={dealer.companyName || dealer.company} />
+            <DetailItem label="Contact Person" value={dealer.contactPerson || dealer.user?.name} />
+            <DetailItem label="Registration No." value={dealer.registrationNo} />
+            <DetailItem label="Dealer Type" value={dealer.dealerType} />
+            <DetailItem label="Phone" value={dealer.phone || dealer.user?.phone} />
+            <DetailItem label="WhatsApp" value={dealer.whatsapp} />
+            <DetailItem label="Email" value={dealer.user?.email} />
+            <DetailItem label="Address" value={[dealer.address, dealer.city, dealer.state].filter(Boolean).join(', ')} />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="dash-heading-sm">Platform Signals</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <DetailItem label="Rating" value={dealer.rating?.toFixed(1) || 'N/A'} />
+            <DetailItem label="Listings" value={dealer.totalListings ?? 0} />
+            <DetailItem label="Bookings" value={dealer._count?.bookings ?? 0} />
+            <DetailItem label="Joined" value={dealer.createdAt ? formatDate(dealer.createdAt) : 'N/A'} />
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="dash-heading-sm">Bank & Payout Details</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <DetailItem label="Bank Name" value={dealer.bankName} />
+            <DetailItem label="Account Holder" value={dealer.bankAccountHolder} />
+            <DetailItem label="Account Number" value={dealer.bankAccountNumber} />
+            <DetailItem label="Subscription" value={dealer.subscriptionTier || 'basic'} />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="dash-heading-sm">Verification Notes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <DetailItem label="Verified At" value={dealer.verifiedAt ? formatDate(dealer.verifiedAt) : 'Not verified'} />
+            <DetailItem label="Rejected At" value={dealer.rejectedAt ? formatDate(dealer.rejectedAt) : 'Not rejected'} />
+            <DetailItem label="Rejection Reason" value={dealer.rejectionReason || 'None'} />
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+
+  const renderCarDetails = (car: CarItem) => {
+    const photos = parseJsonField(car.photos)
+    const features = parseJsonField(car.features)
+
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div>
+            <Button variant="ghost" onClick={() => setSelectedCar(null)} className="mb-3 text-muted-foreground hover:text-gold">
+              <ChevronLeft className="size-4 mr-1" /> Back to cars
+            </Button>
+            <h2 className="dash-heading-lg">{getCarBrand(car)} {car.year ? `(${car.year})` : ''}</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <VehicleTypeBadge type={car.type} />
+              <StatusBadge status={car.status} />
+              <span className="text-caption text-muted-foreground">{car.dealer?.companyName || car.dealerName || 'Unknown dealer'}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {car.status !== 'approved' && (
+              <Button
+                disabled={actionLoading === car.id}
+                onClick={() => handleApproveCar(car.id, 'approve')}
+                className="bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                {actionLoading === car.id ? <Loader2 className="size-4 animate-spin mr-1" /> : <CheckCircle className="size-4 mr-1" />}
+                Approve Car
+              </Button>
+            )}
+            {car.status !== 'rejected' && (
+              <Button
+                variant="outline"
+                onClick={() => setRejectDialog({ type: 'car', id: car.id })}
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+              >
+                <XCircle className="size-4 mr-1" /> Reject Car
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <Card className="bg-card border-border overflow-hidden">
+          <CardContent className="p-0">
+            <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.75fr]">
+              <div className="bg-secondary/40">
+                {photos[0] ? (
+                  <img src={photos[0]} alt={getCarBrand(car)} className="h-72 w-full object-cover" />
+                ) : (
+                  <div className="h-72 flex items-center justify-center">
+                    <Car className="size-12 text-muted-foreground/30" />
+                  </div>
+                )}
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <p className="text-overline text-muted-foreground">Listed Price</p>
+                  <p className="dash-heading-lg text-gold">{formatPrice(car.price ?? 0, car.type)}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <DetailItem label="Views" value={car.views ?? 0} />
+                  <DetailItem label="Enquiries" value={car.enquiries ?? 0} />
+                  <DetailItem label="Bookings" value={car._count?.bookings ?? 0} />
+                  <DetailItem label="Reviews" value={car._count?.reviews ?? 0} />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-2 bg-card border-border">
+            <CardHeader>
+              <CardTitle className="dash-heading-sm">Vehicle Details</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <DetailItem label="Brand" value={car.brand} />
+              <DetailItem label="Model" value={car.model} />
+              <DetailItem label="Year" value={car.year} />
+              <DetailItem label="Color" value={car.color} />
+              <DetailItem label="Mileage" value={car.mileage ? `${car.mileage.toLocaleString()} km` : 'N/A'} />
+              <DetailItem label="Fuel" value={car.fuelType} />
+              <DetailItem label="Transmission" value={car.transmission} />
+              <DetailItem label="Seats" value={car.seats} />
+              <DetailItem label="Condition" value={car.condition || car.conditionCategory} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="dash-heading-sm">Dealer</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <DetailItem label="Company" value={car.dealer?.companyName || car.dealerName} />
+              <DetailItem label="Dealer Contact" value={car.dealerUser?.name} />
+              <DetailItem label="Email" value={car.dealerUser?.email} />
+              <DetailItem label="Verified" value={car.dealer?.verified ? 'Yes' : 'No'} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="dash-heading-sm">Pricing & Module Fields</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <DetailItem label="Weekly Price" value={car.weeklyPrice ? formatPrice(car.weeklyPrice) : 'N/A'} />
+              <DetailItem label="Monthly Price" value={car.monthlyPrice ? formatPrice(car.monthlyPrice) : 'N/A'} />
+              <DetailItem label="Deposit" value={car.deposit ? formatPrice(car.deposit) : 'N/A'} />
+              <DetailItem label="Booking Fee" value={car.bookingFee ? formatPrice(car.bookingFee) : 'N/A'} />
+              <DetailItem label="Current Bid" value={car.currentBid ? formatPrice(car.currentBid) : 'N/A'} />
+              <DetailItem label="Repair Estimate" value={car.repairEstimate ? formatPrice(car.repairEstimate) : 'N/A'} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle className="dash-heading-sm">Moderation</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <DetailItem label="Submitted" value={car.createdAt ? formatDate(car.createdAt) : 'N/A'} />
+              <DetailItem label="Approved At" value={car.approvedAt ? formatDate(car.approvedAt) : 'Not approved'} />
+              <DetailItem label="Rejected At" value={car.rejectedAt ? formatDate(car.rejectedAt) : 'Not rejected'} />
+              <DetailItem label="Rejection Reason" value={car.rejectionReason || 'None'} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="bg-card border-border">
+          <CardHeader>
+            <CardTitle className="dash-heading-sm">Description & Review Notes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-body-sm text-muted-foreground leading-relaxed">{car.description || 'No description provided.'}</p>
+            {car.damageDescription && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+                <p className="text-overline text-red-400 mb-1">Damage Description</p>
+                <p className="text-body-sm text-muted-foreground">{car.damageDescription}</p>
+              </div>
+            )}
+            {features.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {features.map((feature) => (
+                  <Badge key={feature} variant="outline" className="border-border text-muted-foreground">{feature}</Badge>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   // ===== RENDER =====
   return (
     <div className="min-h-screen bg-background text-foreground flex">
       {/* Sidebar - Desktop */}
-      <aside className={`hidden lg:flex flex-col border-r border-border bg-sidebar transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
+      <aside className={`hidden lg:flex sticky top-0 h-screen shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-60'}`}>
         <div className="flex items-center justify-between p-4 border-b border-border">
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2">
@@ -743,19 +1162,27 @@ export default function AdminDashboard() {
           )}
 
           {/* ===== DEALERS ===== */}
-          {activeTab === 'dealers' && (
+          {activeTab === 'dealers' && selectedDealer && renderDealerDetails(selectedDealer)}
+
+          {activeTab === 'dealers' && !selectedDealer && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-2 flex-1 max-w-md">
                   <Search className="size-4 text-muted-foreground shrink-0" />
                   <Input
                     value={dealerSearch}
-                    onChange={(e) => setDealerSearch(e.target.value)}
+                    onChange={(e) => {
+                      setDealerSearch(e.target.value)
+                      setDealerPage(1)
+                    }}
                     placeholder="Search dealers..."
                     className="bg-secondary border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold"
                   />
                 </div>
-                <Tabs value={dealerFilter} onValueChange={setDealerFilter}>
+                <Tabs value={dealerFilter} onValueChange={(value) => {
+                  setDealerFilter(value)
+                  setDealerPage(1)
+                }}>
                   <TabsList className="bg-secondary">
                     {['all', 'verified', 'pending', 'rejected'].map((status) => (
                       <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
@@ -821,23 +1248,29 @@ export default function AdminDashboard() {
                                 <td className="py-3 px-4">{dealer.totalListings || dealer.listings || 0}</td>
                                 <td className="py-3 px-4 text-gold font-medium">{dealer.rating?.toFixed(1) || 'N/A'}</td>
                                 <td className="py-3 px-4">
-                                  {(dealer.status === 'pending' || dealer.verified === false) ? (
-                                    <div className="flex items-center gap-1">
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => setSelectedDealer(dealer)}
+                                      className="h-7 text-muted-foreground hover:text-gold text-xs"
+                                    >
+                                      <Eye className="size-3.5 mr-1" />View
+                                    </Button>
+                                    {dealer.status !== 'verified' && (
                                       <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
                                         disabled={actionLoading === dealer.id} onClick={() => handleVerifyDealer(dealer.id, 'verify')}>
                                         {actionLoading === dealer.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
                                         Verify
                                       </Button>
+                                    )}
+                                    {dealer.status !== 'rejected' && (
                                       <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
                                         onClick={() => setRejectDialog({ type: 'dealer', id: dealer.id })}>
                                         <XCircle className="size-3.5 mr-1" />Reject
                                       </Button>
-                                    </div>
-                                  ) : (
-                                    <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs">
-                                      <Eye className="size-3.5 mr-1" />View
-                                    </Button>
-                                  )}
+                                    )}
+                                  </div>
                                 </td>
                               </tr>
                             ))}
@@ -863,33 +1296,62 @@ export default function AdminDashboard() {
                               <p className="text-caption text-muted-foreground">{dealer.totalListings || dealer.listings || 0} listings</p>
                             </div>
                           </div>
-                          {(dealer.status === 'pending' || dealer.verified === false) && (
-                            <div className="flex items-center gap-2 mt-3">
+                          <div className="flex items-center gap-2 mt-3 flex-wrap">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedDealer(dealer)}
+                              className="text-muted-foreground hover:text-gold text-xs"
+                            >
+                              <Eye className="size-3.5 mr-1" />View
+                            </Button>
+                            {dealer.status !== 'verified' && (
                               <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
                                 disabled={actionLoading === dealer.id} onClick={() => handleVerifyDealer(dealer.id, 'verify')}>
                                 <CheckCircle className="size-3.5 mr-1" />Verify
                               </Button>
+                            )}
+                            {dealer.status !== 'rejected' && (
                               <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
                                 onClick={() => setRejectDialog({ type: 'dealer', id: dealer.id })}>
                                 <XCircle className="size-3.5 mr-1" />Reject
                               </Button>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </CardContent>
                       </Card>
                     ))}
                   </div>
+                  {dealerPagination && (
+                    <PaginationControls pagination={dealerPagination} onPageChange={setDealerPage} />
+                  )}
                 </>
               )}
             </div>
           )}
 
           {/* ===== CARS ===== */}
-          {activeTab === 'cars' && (
+          {activeTab === 'cars' && selectedCar && renderCarDetails(selectedCar)}
+
+          {activeTab === 'cars' && !selectedCar && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <p className="text-body-sm text-muted-foreground">{cars.length} car listings</p>
-                <Tabs value={carStatusFilter} onValueChange={setCarStatusFilter}>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={carSearch}
+                    onChange={(e) => {
+                      setCarSearch(e.target.value)
+                      setCarPage(1)
+                    }}
+                    placeholder="Search cars, dealers, city..."
+                    className="bg-secondary border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold"
+                  />
+                </div>
+                <Tabs value={carStatusFilter} onValueChange={(value) => {
+                  setCarStatusFilter(value)
+                  setCarPage(1)
+                }}>
                   <TabsList className="bg-secondary">
                     {['all', 'approved', 'pending', 'rejected'].map((status) => (
                       <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
@@ -967,23 +1429,29 @@ export default function AdminDashboard() {
                                   <td className="py-3 px-4 font-medium text-gold">{formatPrice(car.price ?? 0, car.type)}</td>
                                   <td className="py-3 px-4"><StatusBadge status={car.status} /></td>
                                   <td className="py-3 px-4">
-                                    {car.status === 'pending' ? (
-                                      <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setSelectedCar(car)}
+                                        className="h-7 text-muted-foreground hover:text-gold text-xs"
+                                      >
+                                        <Eye className="size-3.5 mr-1" />View
+                                      </Button>
+                                      {car.status !== 'approved' && (
                                         <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
                                           disabled={actionLoading === car.id} onClick={() => handleApproveCar(car.id, 'approve')}>
                                           {actionLoading === car.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
                                           Approve
                                         </Button>
+                                      )}
+                                      {car.status !== 'rejected' && (
                                         <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
                                           onClick={() => setRejectDialog({ type: 'car', id: car.id })}>
                                           <XCircle className="size-3.5 mr-1" />Reject
                                         </Button>
-                                      </div>
-                                    ) : (
-                                      <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs">
-                                        <Eye className="size-3.5 mr-1" />View
-                                      </Button>
-                                    )}
+                                      )}
+                                    </div>
                                   </td>
                                 </tr>
                               )
@@ -1021,18 +1489,28 @@ export default function AdminDashboard() {
                                   </div>
                                   <p className="text-body-sm font-semibold text-gold shrink-0">{formatPrice(car.price ?? 0, car.type)}</p>
                                 </div>
-                                {car.status === 'pending' && (
-                                  <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setSelectedCar(car)}
+                                    className="text-muted-foreground hover:text-gold text-xs h-7"
+                                  >
+                                    <Eye className="size-3.5 mr-1" />View
+                                  </Button>
+                                  {car.status !== 'approved' && (
                                     <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs h-7"
                                       disabled={actionLoading === car.id} onClick={() => handleApproveCar(car.id, 'approve')}>
                                       <CheckCircle className="size-3.5 mr-1" />Approve
                                     </Button>
+                                  )}
+                                  {car.status !== 'rejected' && (
                                     <Button variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs h-7"
                                       onClick={() => setRejectDialog({ type: 'car', id: car.id })}>
                                       <XCircle className="size-3.5 mr-1" />Reject
                                     </Button>
-                                  </div>
-                                )}
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -1040,6 +1518,9 @@ export default function AdminDashboard() {
                       )
                     })}
                   </div>
+                  {carPagination && (
+                    <PaginationControls pagination={carPagination} onPageChange={setCarPage} />
+                  )}
                 </>
               )}
             </div>

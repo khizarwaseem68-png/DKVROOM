@@ -39,16 +39,16 @@ export async function GET(request: NextRequest) {
     where.verified = verified === 'true'
   }
   if (dealerType) where.dealerType = dealerType
-  if (city) where.city = { contains: city, mode: 'insensitive' }
-  if (state) where.state = { contains: state, mode: 'insensitive' }
+  if (city) where.city = { contains: city }
+  if (state) where.state = { contains: state }
   if (subscriptionTier) where.subscriptionTier = subscriptionTier
   if (search) {
     where.OR = [
-      { companyName: { contains: search, mode: 'insensitive' } },
-      { contactPerson: { contains: search, mode: 'insensitive' } },
-      { registrationNo: { contains: search, mode: 'insensitive' } },
-      { user: { name: { contains: search, mode: 'insensitive' } } },
-      { user: { email: { contains: search, mode: 'insensitive' } } },
+      { companyName: { contains: search } },
+      { contactPerson: { contains: search } },
+      { registrationNo: { contains: search } },
+      { user: { name: { contains: search } } },
+      { user: { email: { contains: search } } },
     ]
   }
 

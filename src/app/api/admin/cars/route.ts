@@ -30,17 +30,20 @@ export async function GET(request: NextRequest) {
 
   if (status) where.status = status
   if (type) where.type = type
-  if (brand) where.brand = { contains: brand, mode: 'insensitive' }
-  if (city) where.city = { contains: city, mode: 'insensitive' }
+  if (brand) where.brand = { contains: brand }
+  if (city) where.city = { contains: city }
   if (dealerId) where.dealerId = dealerId
   if (featured !== null && featured !== undefined) {
     where.featured = featured === 'true'
   }
   if (search) {
     where.OR = [
-      { brand: { contains: search, mode: 'insensitive' } },
-      { model: { contains: search, mode: 'insensitive' } },
-      { description: { contains: search, mode: 'insensitive' } },
+      { brand: { contains: search } },
+      { model: { contains: search } },
+      { description: { contains: search } },
+      { city: { contains: search } },
+      { dealer: { companyName: { contains: search } } },
+      { dealerUser: { name: { contains: search } } },
     ]
   }
 
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         dealer: {
-          select: { id: true, companyName: true, verified: true }
+          select: { id: true, companyName: true, city: true, verified: true, rating: true, totalListings: true }
         },
         dealerUser: {
           select: { id: true, name: true, email: true }
