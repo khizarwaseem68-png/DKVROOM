@@ -61,6 +61,7 @@ import {
   Loader2,
   LogOut,
   Copy,
+  FileText,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -217,7 +218,7 @@ interface PaymentItem {
 
 interface LoanItem {
   id: string
-  user?: { name: string }
+  user?: { name: string; email?: string; phone?: string | null; whatsapp?: string | null; address?: string | null; icNumber?: string | null }
   applicantName?: string
   car?: { brand: string; model: string }
   carName?: string
@@ -225,6 +226,20 @@ interface LoanItem {
   bank?: string
   loanAmount?: number
   amount?: number
+  tenure?: number | null
+  monthlyIncome?: number | null
+  employmentType?: string | null
+  employerName?: string | null
+  documents?: string | null
+  payslipUrls?: string | null
+  bankStatementUrls?: string | null
+  epfStatementUrl?: string | null
+  approvedAmount?: number | null
+  approvedTenure?: number | null
+  interestRate?: number | null
+  monthlyRepayment?: number | null
+  rejectionReason?: string | null
+  reviewedAt?: string | null
   status: string
   createdAt?: string
 }
@@ -248,6 +263,24 @@ function parseJsonField(val: unknown, fallback: string[] = []): string[] {
     try { return JSON.parse(val) } catch { return fallback }
   }
   return Array.isArray(val) ? val : fallback
+}
+
+function parseJsonObject(val: unknown): Record<string, unknown> {
+  if (typeof val !== 'string') return {}
+  try {
+    const parsed = JSON.parse(val)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {}
+  } catch {
+    return {}
+  }
+}
+
+function getFileName(url: string): string {
+  return url.split('/').pop() || 'Document'
+}
+
+function asDisplayString(value: unknown): string {
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : ''
 }
 
 function getCarPhoto(car: CarItem): string {
@@ -392,12 +425,13 @@ export default function AdminDashboard() {
   const [paymentsLoading, setPaymentsLoading] = useState(true)
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
+  const [selectedLoan, setSelectedLoan] = useState<LoanItem | null>(null)
   const [bookings] = useState<BookingItem[]>([])
   const [bookingsLoading] = useState(false)
 
   // Action states
   const [actionLoading, setActionLoading] = useState<string | null>(null)
-  const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment'; id: string } | null>(null)
+  const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment' | 'loan'; id: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
 
   useEffect(() => {
@@ -583,11 +617,42 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleUpdateLoan = async (loanId: string, status: 'reviewing' | 'approved' | 'rejected' | 'disbursed') => {
+    setActionLoading(loanId)
+    try {
+      const loan = selectedLoan || loans.find((item) => item.id === loanId)
+      const payload: Record<string, unknown> = { status }
+      if (status === 'approved') {
+        payload.approvedAmount = loan?.approvedAmount || loan?.amount || loan?.loanAmount || 0
+        payload.approvedTenure = loan?.approvedTenure || loan?.tenure || 60
+        payload.interestRate = loan?.interestRate || 3.5
+        payload.monthlyRepayment = loan?.monthlyRepayment || Math.round(((Number(payload.approvedAmount) || 0) * 1.035) / ((Number(payload.approvedTenure) || 60)))
+        payload.bankName = loan?.bankName || loan?.bank || 'Partner Bank'
+        payload.bankResponse = 'Approved by admin review'
+      }
+      if (status === 'rejected') payload.rejectionReason = rejectReason
+
+      const result = await loansApi.update(loanId, payload)
+      const updated = (result.data ?? null) as LoanItem | null
+      await fetchLoans()
+      await fetchStats()
+      if (selectedLoan?.id === loanId && updated) setSelectedLoan({ ...selectedLoan, ...updated })
+      setRejectDialog(null)
+      setRejectReason('')
+      toast.success(`Loan marked as ${status}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update loan')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   const handleTabChange = (tab: AdminTab) => {
     setActiveTab(tab)
     setMobileSidebarOpen(false)
     setSelectedDealer(null)
     setSelectedCar(null)
+    setSelectedLoan(null)
   }
 
   const renderDealerDetails = (dealer: DealerItem) => (
@@ -665,6 +730,24 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <CardTitle className="dash-heading-sm">Registration Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dealer.registrationDocUrl ? (
+            <a href={dealer.registrationDocUrl} target="_blank" rel="noopener noreferrer">
+              <Button variant="outline" className="border-border text-muted-foreground hover:text-gold">
+                <FileText className="size-4 mr-2" />
+                View SSM / Registration Document
+              </Button>
+            </a>
+          ) : (
+            <p className="text-body-sm text-muted-foreground">No registration document uploaded.</p>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="bg-card border-border">
@@ -846,6 +929,111 @@ export default function AdminDashboard() {
     )
   }
 
+  const renderLoanDetails = (loan: LoanItem) => {
+    const documents = parseJsonObject(loan.documents)
+    const vehicle = parseJsonObject(documents.vehicle)
+    const applicant = parseJsonObject(documents.applicant)
+    const fileMap = parseJsonObject(documents.files)
+    const documentLinks = [
+      ...parseJsonField(loan.payslipUrls).map((url, index) => ({ label: `Payslip ${index + 1}`, url })),
+      ...parseJsonField(loan.bankStatementUrls).map((url, index) => ({ label: `Bank Statement ${index + 1}`, url })),
+      ...(loan.epfStatementUrl ? [{ label: 'EPF Statement', url: loan.epfStatementUrl }] : []),
+      ...Object.entries(fileMap)
+        .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && Boolean(entry[1]))
+        .map(([key, url]) => ({ label: key.replace(/([A-Z])/g, ' $1').replace(/\b\w/g, (char) => char.toUpperCase()), url })),
+    ]
+
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+          <div>
+            <Button variant="ghost" onClick={() => setSelectedLoan(null)} className="mb-3 text-muted-foreground hover:text-gold">
+              <ChevronLeft className="size-4 mr-1" /> Back to loans
+            </Button>
+            <h2 className="dash-heading-lg">Loan Application</h2>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusBadge status={loan.status} />
+              <Badge variant="outline" className="border-border text-muted-foreground">{loan.id.slice(0, 8)}</Badge>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {loan.status === 'pending' && (
+              <Button onClick={() => handleUpdateLoan(loan.id, 'reviewing')} disabled={actionLoading === loan.id} className="bg-yellow-500 hover:bg-yellow-600 text-black">
+                {actionLoading === loan.id ? <Loader2 className="size-4 animate-spin mr-1" /> : <Clock className="size-4 mr-1" />} Mark Reviewing
+              </Button>
+            )}
+            {loan.status !== 'approved' && loan.status !== 'disbursed' && (
+              <Button onClick={() => handleUpdateLoan(loan.id, 'approved')} disabled={actionLoading === loan.id} className="bg-emerald-500 hover:bg-emerald-600 text-white">
+                <CheckCircle className="size-4 mr-1" /> Approve
+              </Button>
+            )}
+            {loan.status === 'approved' && (
+              <Button onClick={() => handleUpdateLoan(loan.id, 'disbursed')} disabled={actionLoading === loan.id} className="bg-gold hover:bg-gold-dark text-primary-foreground">
+                <Banknote className="size-4 mr-1" /> Mark Disbursed
+              </Button>
+            )}
+            {loan.status !== 'rejected' && (
+              <Button variant="outline" onClick={() => setRejectDialog({ type: 'loan', id: loan.id })} className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                <XCircle className="size-4 mr-1" /> Reject
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-2 bg-card border-border">
+            <CardHeader><CardTitle className="dash-heading-sm">Applicant & Vehicle</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <DetailItem label="Applicant" value={loan.user?.name || asDisplayString(applicant.fullName) || loan.applicantName} />
+              <DetailItem label="Email" value={loan.user?.email || asDisplayString(applicant.email)} />
+              <DetailItem label="Phone" value={loan.user?.phone || asDisplayString(applicant.phone)} />
+              <DetailItem label="IC Number" value={loan.user?.icNumber || asDisplayString(applicant.icNumber)} />
+              <DetailItem label="Vehicle" value={loan.car ? `${loan.car.brand} ${loan.car.model}` : `${asDisplayString(vehicle.brand) || 'N/A'} ${asDisplayString(vehicle.model)}`} />
+              <DetailItem label="Vehicle Year" value={asDisplayString(vehicle.year) || 'N/A'} />
+              <DetailItem label="Requested Amount" value={formatPrice(loan.loanAmount ?? loan.amount ?? 0)} />
+              <DetailItem label="Tenure" value={loan.tenure ? `${loan.tenure} months` : 'N/A'} />
+              <DetailItem label="Monthly Income" value={loan.monthlyIncome ? formatPrice(loan.monthlyIncome) : 'N/A'} />
+              <DetailItem label="Employment" value={[loan.employmentType, loan.employerName].filter(Boolean).join(' - ')} />
+              <DetailItem label="Preferred Bank" value={loan.bankName || loan.bank} />
+              <DetailItem label="Submitted" value={loan.createdAt ? formatDate(loan.createdAt) : 'N/A'} />
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader><CardTitle className="dash-heading-sm">Decision</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <DetailItem label="Approved Amount" value={loan.approvedAmount ? formatPrice(loan.approvedAmount) : 'N/A'} />
+              <DetailItem label="Approved Tenure" value={loan.approvedTenure ? `${loan.approvedTenure} months` : 'N/A'} />
+              <DetailItem label="Interest Rate" value={loan.interestRate ? `${loan.interestRate}%` : 'N/A'} />
+              <DetailItem label="Monthly Repayment" value={loan.monthlyRepayment ? formatPrice(loan.monthlyRepayment) : 'N/A'} />
+              <DetailItem label="Reviewed At" value={loan.reviewedAt ? formatDate(loan.reviewedAt) : 'Not reviewed'} />
+              <DetailItem label="Rejection Reason" value={loan.rejectionReason || 'None'} />
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="bg-card border-border">
+          <CardHeader><CardTitle className="dash-heading-sm">Uploaded Documents</CardTitle></CardHeader>
+          <CardContent>
+            {documentLinks.length === 0 ? (
+              <p className="text-body-sm text-muted-foreground">No documents uploaded.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {documentLinks.map((doc) => (
+                  <a key={`${doc.label}-${doc.url}`} href={doc.url} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-border bg-secondary/40 p-3 hover:border-gold/40 transition-colors">
+                    <FileText className="size-5 text-gold mb-2" />
+                    <p className="text-body-sm text-foreground">{doc.label}</p>
+                    <p className="text-caption text-muted-foreground truncate">{getFileName(doc.url)}</p>
+                  </a>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   // ===== RENDER =====
   return (
     <div className="min-h-screen bg-background text-foreground flex">
@@ -955,7 +1143,7 @@ export default function AdminDashboard() {
             <CardHeader>
               <CardTitle className="dash-heading-sm flex items-center gap-2">
                 <XCircle className="size-5 text-red-400" />
-                Reject {rejectDialog.type === 'dealer' ? 'Dealer' : rejectDialog.type === 'car' ? 'Car' : 'Payment'}
+                Reject {rejectDialog.type === 'dealer' ? 'Dealer' : rejectDialog.type === 'car' ? 'Car' : rejectDialog.type === 'loan' ? 'Loan' : 'Payment'}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -973,6 +1161,7 @@ export default function AdminDashboard() {
                   onClick={() => {
                     if (rejectDialog.type === 'dealer') handleVerifyDealer(rejectDialog.id, 'reject')
                     else if (rejectDialog.type === 'car') handleApproveCar(rejectDialog.id, 'reject')
+                    else if (rejectDialog.type === 'loan') handleUpdateLoan(rejectDialog.id, 'rejected')
                     else handleVerifyPayment(rejectDialog.id, 'reject')
                   }}
                   disabled={!rejectReason || actionLoading !== null}
@@ -1034,6 +1223,10 @@ export default function AdminDashboard() {
 
         {/* Content */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+          {selectedLoan ? (
+            renderLoanDetails(selectedLoan)
+          ) : (
+            <>
 
           {/* ===== OVERVIEW ===== */}
           {activeTab === 'overview' && (
@@ -1653,7 +1846,7 @@ export default function AdminDashboard() {
                                 <td className="py-3 px-4"><StatusBadge status={loan.status} /></td>
                                 <td className="py-3 px-4 text-muted-foreground">{loan.createdAt ? formatDate(loan.createdAt) : 'N/A'}</td>
                                 <td className="py-3 px-4">
-                                  <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs">
+                                  <Button variant="ghost" size="sm" onClick={() => setSelectedLoan(loan)} className="h-7 text-muted-foreground hover:text-gold text-xs">
                                     <Eye className="size-3.5 mr-1" />View
                                   </Button>
                                 </td>
@@ -1681,6 +1874,9 @@ export default function AdminDashboard() {
                               <StatusBadge status={loan.status} />
                             </div>
                           </div>
+                          <Button variant="outline" size="sm" onClick={() => setSelectedLoan(loan)} className="mt-4 w-full border-border text-muted-foreground hover:text-gold">
+                            <Eye className="size-3.5 mr-1" /> View Application
+                          </Button>
                         </CardContent>
                       </Card>
                     ))}
@@ -1964,6 +2160,8 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+          )}
+            </>
           )}
         </main>
       </div>

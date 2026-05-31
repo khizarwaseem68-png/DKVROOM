@@ -27,6 +27,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   MapPin,
@@ -971,7 +972,7 @@ export default function CarDetail() {
   // Fetch car data
   useEffect(() => {
     if (!selectedCarId) {
-      setLoading(false)
+      queueMicrotask(() => setLoading(false))
       return
     }
 
@@ -1007,7 +1008,7 @@ export default function CarDetail() {
   // Show unlock banner once when contact becomes unlocked
   useEffect(() => {
     if (contactUnlocked && !showUnlockBanner) {
-      setShowUnlockBanner(true)
+      queueMicrotask(() => setShowUnlockBanner(true))
       const timer = setTimeout(() => setShowUnlockBanner(false), 5000)
       return () => clearTimeout(timer)
     }
@@ -1086,15 +1087,23 @@ export default function CarDetail() {
       const result = await bookingsApi.create(bookingData)
       const newBooking = result.data as Record<string, unknown> | undefined
       const payments = newBooking?.payments as Array<Record<string, unknown>> | undefined
+      const payment = payments?.[0]
+      const paymentAmount = typeof payment?.amount === 'number'
+        ? payment.amount
+        : typeof newBooking?.totalAmount === 'number'
+          ? newBooking.totalAmount
+          : amount
 
       startBooking(
         bookingType as 'rent' | 'sale' | 'continueLoan' | 'auction',
-        amount,
+        paymentAmount,
         newBooking?.id as string | undefined,
-        payments?.[0]?.id as string | undefined
+        payment?.id as string | undefined
       )
-    } catch {
-      // Silent error handling — user can retry
+      router.push('/payment')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create booking. Please try again.'
+      toast.error(message)
     } finally {
       setBookingLoading(false)
     }

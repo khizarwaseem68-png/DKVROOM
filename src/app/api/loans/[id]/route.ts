@@ -19,7 +19,7 @@ export async function GET(
   const loan = await db.loanApplication.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true, phone: true, icNumber: true } },
+      user: { select: { id: true, name: true, email: true, phone: true, whatsapp: true, address: true, icNumber: true } },
       car: { select: { id: true, brand: true, model: true, year: true, photos: true, price: true } },
       dealer: { select: { id: true, companyName: true, phone: true, whatsapp: true } },
     }
@@ -53,7 +53,7 @@ export async function PUT(
 
   const loan = await db.loanApplication.findUnique({
     where: { id },
-    include: { car: true }
+    include: { car: true, user: true }
   })
 
   if (!loan) return apiError('Loan application not found', 404)

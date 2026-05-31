@@ -145,18 +145,18 @@ export default function LoanApplication() {
   const [preferredBank, setPreferredBank] = useState('')
 
   // Step 3: Documents
-  const [uploadedDocs, setUploadedDocs] = useState<Record<string, boolean>>({
-    icFront: false,
-    icBack: false,
-    payslip1: false,
-    payslip2: false,
-    payslip3: false,
-    bankStatement1: false,
-    bankStatement2: false,
-    bankStatement3: false,
-    epfStatement: false,
-    utilityBill: false,
-    drivingLicense: false,
+  const [uploadedDocs, setUploadedDocs] = useState<Record<string, string | null>>({
+    icFront: null,
+    icBack: null,
+    payslip1: null,
+    payslip2: null,
+    payslip3: null,
+    bankStatement1: null,
+    bankStatement2: null,
+    bankStatement3: null,
+    epfStatement: null,
+    utilityBill: null,
+    drivingLicense: null,
   })
   const [termsAccepted, setTermsAccepted] = useState(false)
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
@@ -207,8 +207,8 @@ export default function LoanApplication() {
     }
 
     try {
-      await uploadApi.upload(file)
-      setUploadedDocs((prev) => ({ ...prev, [key]: true }))
+      const result = await uploadApi.upload(file, 'documents')
+      setUploadedDocs((prev) => ({ ...prev, [key]: result.url }))
       setError('')
     } catch {
       setError('Failed to upload document. Please try again.')
@@ -230,9 +230,19 @@ export default function LoanApplication() {
         employmentType: employmentStatus === 'selfEmployed' ? 'self-employed' : 'employed',
         employerName,
         bankName: preferredBank,
-        carBrand,
-        carModel,
-        carYear: Number(carYear),
+        payslipUrls: JSON.stringify(['payslip1', 'payslip2', 'payslip3'].map((key) => uploadedDocs[key]).filter(Boolean)),
+        bankStatementUrls: JSON.stringify(['bankStatement1', 'bankStatement2', 'bankStatement3'].map((key) => uploadedDocs[key]).filter(Boolean)),
+        epfStatementUrl: uploadedDocs.epfStatement || undefined,
+        documents: JSON.stringify({
+          vehicle: { brand: carBrand, model: carModel, year: Number(carYear), price: Number(carPrice), downPayment: Number(downPayment || 0) },
+          applicant: { fullName, icNumber, email, phone, address },
+          files: {
+            icFront: uploadedDocs.icFront,
+            icBack: uploadedDocs.icBack,
+            utilityBill: uploadedDocs.utilityBill,
+            drivingLicense: uploadedDocs.drivingLicense,
+          },
+        }),
       })
       if (result.success) {
         setShowSuccessDialog(true)
@@ -299,7 +309,7 @@ export default function LoanApplication() {
 
   useEffect(() => {
     if (mainTab === 'track' && user) {
-      fetchApplications()
+      queueMicrotask(() => fetchApplications())
     }
   }, [mainTab, user, fetchApplications])
 

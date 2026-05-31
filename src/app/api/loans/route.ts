@@ -62,7 +62,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { carId, type, amount, tenure, monthlyIncome, employmentType, employerName } = body
+  const {
+    carId,
+    type,
+    amount,
+    tenure,
+    monthlyIncome,
+    employmentType,
+    employerName,
+    bankName,
+    documents,
+    payslipUrls,
+    bankStatementUrls,
+    epfStatementUrl,
+  } = body
 
   if (!type) return apiError('Loan type is required', 400)
   if (!['loan', 'continueLoan'].includes(type)) {
@@ -88,6 +101,11 @@ export async function POST(request: NextRequest) {
       monthlyIncome: monthlyIncome ? parseFloat(String(monthlyIncome)) : null,
       employmentType: employmentType ? sanitizeInput(employmentType) : null,
       employerName: employerName ? sanitizeInput(employerName) : null,
+      bankName: bankName ? sanitizeInput(String(bankName)) : null,
+      documents: documents ? String(documents) : null,
+      payslipUrls: payslipUrls ? String(payslipUrls) : null,
+      bankStatementUrls: bankStatementUrls ? String(bankStatementUrls) : null,
+      epfStatementUrl: epfStatementUrl ? sanitizeInput(String(epfStatementUrl)) : null,
       status: 'pending',
     }
   })

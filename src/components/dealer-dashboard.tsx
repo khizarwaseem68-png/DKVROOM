@@ -41,6 +41,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs'
+import { toast } from 'sonner'
 import {
   LayoutDashboard,
   Car,
@@ -210,9 +211,9 @@ export default function DealerDashboard() {
     }
   }, [bookingFilter])
 
-  useEffect(() => { fetchStats() }, [fetchStats])
-  useEffect(() => { fetchListings() }, [fetchListings])
-  useEffect(() => { fetchBookings() }, [fetchBookings])
+  useEffect(() => { queueMicrotask(() => fetchStats()) }, [fetchStats])
+  useEffect(() => { queueMicrotask(() => fetchListings()) }, [fetchListings])
+  useEffect(() => { queueMicrotask(() => fetchBookings()) }, [fetchBookings])
 
   // ===== ADD CAR FORM STATE =====
   const [carType, setCarType] = useState<VehicleType>('rent')
@@ -282,17 +283,43 @@ export default function DealerDashboard() {
   const handleAddCar = async () => {
     setSubmitting(true)
     try {
+      const requirePositiveNumber = (value: string, label: string) => {
+        const parsed = parseFloat(value)
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw new Error(`${label} must be a positive number`)
+        }
+        return parsed
+      }
+
+      if (!carBrand.trim()) throw new Error('Brand is required')
+      if (!carModel.trim()) throw new Error('Model is required')
+
+      const year = parseInt(carYear, 10)
+      const currentYear = new Date().getFullYear()
+      if (!Number.isInteger(year) || year < 1900 || year > currentYear + 1) {
+        throw new Error('Enter a valid vehicle year')
+      }
+
+      const price =
+        carType === 'rent'
+          ? requirePositiveNumber(carDailyPrice, 'Daily price')
+          : carType === 'sale'
+            ? requirePositiveNumber(carSalePrice, 'Sale price')
+            : carType === 'auction'
+              ? requirePositiveNumber(carStartingBid, 'Starting bid')
+              : requirePositiveNumber(carMonthlyInstallment, 'Monthly installment')
+
       const carData: Record<string, unknown> = {
         type: carType,
-        brand: carBrand,
-        model: carModel,
-        year: parseInt(carYear),
-        price: carType === 'rent' ? parseFloat(carDailyPrice) : carType === 'sale' ? parseFloat(carSalePrice) : parseFloat(carTakeoverAmount || carDailyPrice),
-        description: carDescription,
-        location: carLocation,
-        city: carLocation,
+        brand: carBrand.trim(),
+        model: carModel.trim(),
+        year,
+        price,
+        description: carDescription.trim(),
+        location: carType === 'rent' && carSelfPickup && carPickupLocation ? carPickupLocation.trim() : carLocation.trim(),
+        city: carLocation.trim(),
         photos: JSON.stringify(carPhotos.map(p => p.url)),
-        features: carFeatures ? JSON.stringify(carFeatures.split(',').map(f => f.trim())) : undefined,
+        features: carFeatures ? JSON.stringify(carFeatures.split(',').map(f => f.trim()).filter(Boolean)) : undefined,
       }
 
       if (carType === 'rent') {
@@ -318,7 +345,7 @@ export default function DealerDashboard() {
       }
 
       if (carType === 'continueLoan') {
-        carData.monthlyInstallment = carMonthlyInstallment ? parseFloat(carMonthlyInstallment) : undefined
+        carData.monthlyInstallment = carMonthlyInstallment ? parseFloat(carMonthlyInstallment) : price
         carData.remainingMonths = carRemainingMonths ? parseInt(carRemainingMonths) : undefined
         carData.takeoverAmount = carTakeoverAmount ? parseFloat(carTakeoverAmount) : undefined
         carData.bankName = carBankName || undefined
@@ -330,12 +357,13 @@ export default function DealerDashboard() {
       }
 
       if (carType === 'auction') {
-        carData.auctionStartBid = carStartingBid ? parseFloat(carStartingBid) : undefined
+        carData.auctionStartBid = price
         carData.auctionEnd = carAuctionEndDate || undefined
         carData.auctionReserve = carReservePrice ? parseFloat(carReservePrice) : undefined
         carData.condition = carAuctionCondition || undefined
         carData.transmission = 'auto'
         carData.fuelType = 'petrol'
+        carData.auctionActive = true
       }
 
       if (editingCarId) {
@@ -348,8 +376,10 @@ export default function DealerDashboard() {
       fetchListings()
       fetchStats()
       handleTabChange('listings')
-    } catch {
-      // silent
+      toast.success(editingCarId ? 'Car listing updated for admin review' : 'Car listing submitted for admin review')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save car listing'
+      toast.error(message)
     } finally {
       setSubmitting(false)
     }

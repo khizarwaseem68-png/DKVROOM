@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import type { Prisma } from '@prisma/client'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, sanitizeObject, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest) {
     const type = searchParams.get('type') || undefined
 
     // Build where clause — customer sees own bookings, dealer sees bookings for their cars
-    let where: any = {}
+    const where: Prisma.BookingWhereInput = {}
 
     if (user.role === 'dealer' && user.dealer) {
       where.dealerId = user.dealer.id
@@ -140,16 +141,57 @@ export async function POST(request: NextRequest) {
       return apiError('Car is not available for booking', 400)
     }
 
-    // Check for existing active booking by this user for this car
-    const existingBooking = await db.booking.findFirst({
+    // Reuse unfinished bookings so repeated clicks continue payment instead of creating conflicts.
+    const existingPendingBooking = await db.booking.findFirst({
       where: {
         carId: sanitized.carId,
         userId: user.id,
-        status: { in: ['pending', 'payment_pending', 'payment_uploaded', 'confirmed', 'active'] },
+        status: { in: ['pending', 'payment_pending', 'payment_uploaded'] },
+      },
+      include: {
+        car: {
+          select: {
+            id: true,
+            brand: true,
+            model: true,
+            year: true,
+            type: true,
+            photos: true,
+            price: true,
+            city: true,
+          },
+        },
+        dealer: {
+          select: {
+            id: true,
+            companyName: true,
+            phone: true,
+            whatsapp: true,
+            logo: true,
+          },
+        },
+        payments: true,
       },
     })
 
-    if (existingBooking) {
+    if (existingPendingBooking) {
+      return apiResponse({
+        success: true,
+        message: 'Existing pending booking found. Continue payment to complete it.',
+        data: existingPendingBooking,
+        existing: true,
+      })
+    }
+
+    const existingActiveBooking = await db.booking.findFirst({
+      where: {
+        carId: sanitized.carId,
+        userId: user.id,
+        status: { in: ['confirmed', 'active'] },
+      },
+    })
+
+    if (existingActiveBooking) {
       return apiError('You already have an active booking for this car', 409)
     }
 
