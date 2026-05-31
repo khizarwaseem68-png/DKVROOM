@@ -383,7 +383,7 @@ export default function CustomerDashboard() {
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer ${
                   isActive
                     ? 'bg-gold/10 text-gold'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -422,7 +422,7 @@ export default function CustomerDashboard() {
       {/* ===== MOBILE SIDEBAR OVERLAY ===== */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 cursor-pointer" onClick={() => setMobileSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-sidebar border-r border-border flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
@@ -448,7 +448,7 @@ export default function CustomerDashboard() {
                   <button
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
-                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all cursor-pointer ${
                       isActive
                         ? 'bg-gold/10 text-gold'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -702,7 +702,7 @@ export default function CustomerDashboard() {
                         <button
                           key={action.label}
                           onClick={action.action}
-                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/50 hover:bg-gold/5 transition-all text-left group"
+                          className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-gold/50 hover:bg-gold/5 transition-all text-left group cursor-pointer"
                         >
                           <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center shrink-0 group-hover:bg-gold/20 transition-colors">
                             <Icon className="size-5 text-gold" />

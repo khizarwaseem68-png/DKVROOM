@@ -872,11 +872,11 @@ export default function AdminDashboard() {
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gold/10 text-gold'
-                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                } ${sidebarCollapsed ? 'justify-center' : ''}`}
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer ${
+                   isActive
+                     ? 'bg-gold/10 text-gold'
+                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                 } ${sidebarCollapsed ? 'justify-center' : ''}`}
               >
                 <Icon className="size-4 shrink-0" />
                 {!sidebarCollapsed && <span>{item.label}</span>}
@@ -901,7 +901,7 @@ export default function AdminDashboard() {
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 cursor-pointer" onClick={() => setMobileSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-sidebar border-r border-border flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
@@ -922,11 +922,11 @@ export default function AdminDashboard() {
                   <button
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
-                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
-                      isActive
-                        ? 'bg-gold/10 text-gold'
-                        : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-                    }`}
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all cursor-pointer ${
+                       isActive
+                         ? 'bg-gold/10 text-gold'
+                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
+                     }`}
                   >
                     <Icon className="size-4" />
                     <span>{item.label}</span>
@@ -1023,7 +1023,7 @@ export default function AdminDashboard() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { logout(); router.push('/') }}>
+                  <DropdownMenuItem onClick={() => { logout(); router.push('/') }} className="cursor-pointer">
                     <LogOut className="size-4 mr-2" />Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1233,13 +1233,13 @@ export default function AdminDashboard() {
                                     <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
                                       {dealer.id.slice(0, 8)}
                                     </code>
-                                    <button
-                                      onClick={() => { navigator.clipboard.writeText(dealer.id); toast.success('ID copied!') }}
-                                      className="text-muted-foreground hover:text-gold transition-colors"
-                                      title="Copy full ID"
-                                    >
-                                      <Copy className="size-3" />
-                                    </button>
+                                     <button
+                                       onClick={() => { navigator.clipboard.writeText(dealer.id); toast.success('ID copied!') }}
+                                       className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                       title="Copy full ID"
+                                     >
+                                       <Copy className="size-3" />
+                                     </button>
                                   </div>
                                 </td>
                                 <td className="py-3 px-4 font-medium">{dealer.companyName || dealer.company}</td>
@@ -1406,12 +1406,12 @@ export default function AdminDashboard() {
                                         {car.id.slice(0, 8)}
                                       </code>
                                       <button
-                                        onClick={() => { navigator.clipboard.writeText(car.id); toast.success('ID copied!') }}
-                                        className="text-muted-foreground hover:text-gold transition-colors"
-                                        title="Copy full ID"
-                                      >
-                                        <Copy className="size-3" />
-                                      </button>
+                                         onClick={() => { navigator.clipboard.writeText(car.id); toast.success('ID copied!') }}
+                                         className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                         title="Copy full ID"
+                                       >
+                                         <Copy className="size-3" />
+                                       </button>
                                     </div>
                                   </td>
                                   <td className="py-3 px-4">
@@ -1637,13 +1637,13 @@ export default function AdminDashboard() {
                                     <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
                                       {loan.id.slice(0, 8)}
                                     </code>
-                                    <button
-                                      onClick={() => { navigator.clipboard.writeText(loan.id); toast.success('ID copied!') }}
-                                      className="text-muted-foreground hover:text-gold transition-colors"
-                                      title="Copy full ID"
-                                    >
-                                      <Copy className="size-3" />
-                                    </button>
+                                     <button
+                                       onClick={() => { navigator.clipboard.writeText(loan.id); toast.success('ID copied!') }}
+                                       className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                       title="Copy full ID"
+                                     >
+                                       <Copy className="size-3" />
+                                     </button>
                                   </div>
                                 </td>
                                 <td className="py-3 px-4 font-medium">{loan.user?.name || loan.applicantName || 'N/A'}</td>
@@ -1763,13 +1763,13 @@ export default function AdminDashboard() {
                                     <code className="text-caption text-muted-foreground bg-secondary px-1.5 py-0.5 rounded font-mono">
                                       {txn.id.slice(0, 8)}
                                     </code>
-                                    <button
-                                      onClick={() => { navigator.clipboard.writeText(txn.id); toast.success('ID copied!') }}
-                                      className="text-muted-foreground hover:text-gold transition-colors"
-                                      title="Copy full ID"
-                                    >
-                                      <Copy className="size-3" />
-                                    </button>
+                                     <button
+                                       onClick={() => { navigator.clipboard.writeText(txn.id); toast.success('ID copied!') }}
+                                       className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                       title="Copy full ID"
+                                     >
+                                       <Copy className="size-3" />
+                                     </button>
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">{txn.user?.name || txn.userName || 'N/A'}</td>

@@ -273,7 +273,7 @@ export default function PaymentPage() {
               <span className="text-caption text-muted-foreground">Booking ID</span>
               <div className="flex items-center gap-2">
                 <span className="text-body-sm font-mono font-medium text-foreground">{booking.bookingId || 'BK-DEMO'}</span>
-                <button onClick={handleCopyRef} className="text-muted-foreground hover:text-gold">
+                <button onClick={handleCopyRef} className="text-muted-foreground hover:text-gold cursor-pointer">
                   {copied ? <CheckCircle2 className="size-3.5 text-gold" /> : <Copy className="size-3.5" />}
                 </button>
               </div>
@@ -455,7 +455,7 @@ export default function PaymentPage() {
                   /* Upload Area */
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full p-8 rounded-xl border-2 border-dashed border-border hover:border-gold/50 bg-background transition-all group"
+                    className="w-full p-8 rounded-xl border-2 border-dashed border-border hover:border-gold/50 bg-background transition-all group cursor-pointer"
                   >
                     <div className="flex flex-col items-center gap-3">
                       <div className="w-14 h-14 rounded-xl bg-gold/10 flex items-center justify-center group-hover:bg-gold/20 transition-colors">
