@@ -242,7 +242,7 @@ export function Header() {
                       {getUserInitials()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="hidden flex-col items-start xl:flex">
+                  <div className="hidden flex-col items-start xl:flex gap-0.5">
                     <span className="text-xs font-medium text-foreground leading-tight whitespace-nowrap">
                       {userName}
                     </span>
@@ -381,7 +381,7 @@ export function Header() {
                             {getUserInitials()}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5">
                           <span className="text-sm font-medium text-foreground whitespace-nowrap">
                             {userName}
                           </span>
