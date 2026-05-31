@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { bookingsApi, paymentsApi, loansApi } from '@/lib/api'
+import { bookingsApi, paymentsApi, loansApi, wishlistApi } from '@/lib/api'
 import { formatPrice, formatDate } from '@/lib/constants'
 import { NotificationDropdown, StatusBadge, EmptyState, VehicleTypeBadge } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -18,7 +18,7 @@ import {
   LayoutDashboard, CalendarCheck, Wallet, Banknote, User,
   ChevronLeft, ChevronRight, Car, DollarSign, Clock,
   LogOut, Menu, X, ArrowUpRight, ArrowDownRight,
-  Loader2, CreditCard, FileText, Home, PlusCircle,
+  Loader2, CreditCard, FileText, Home, PlusCircle, Heart, MapPin,
   Upload, CheckCircle, AlertCircle, Phone, Mail, MessageCircle,
 } from 'lucide-react'
 
@@ -76,6 +76,7 @@ const sidebarItems = [
   { id: 'bookings', label: 'My Bookings', icon: CalendarCheck },
   { id: 'payments', label: 'My Payments', icon: Wallet },
   { id: 'loans', label: 'My Loans', icon: Banknote },
+  { id: 'wishlist', label: 'My Wishlist', icon: Heart },
   { id: 'profile', label: 'Profile', icon: User },
 ] as const
 
@@ -139,6 +140,10 @@ export default function CustomerDashboard() {
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
   const [loanFilter, setLoanFilter] = useState('all')
+
+  // Wishlist state
+  const [wishlistItems, setWishlistItems] = useState<Record<string, unknown>[]>([])
+  const [wishlistLoading, setWishlistLoading] = useState(true)
 
   // Profile state
   const [profileName, setProfileName] = useState(user?.name || '')
@@ -208,6 +213,20 @@ export default function CustomerDashboard() {
     }
   }, [loanFilter])
 
+  // ===== FETCH WISHLIST =====
+  const fetchWishlist = useCallback(async () => {
+    setWishlistLoading(true)
+    try {
+      const result = await wishlistApi.list()
+      const data = result.data as Record<string, unknown>[]
+      setWishlistItems(Array.isArray(data) ? data : [])
+    } catch {
+      // silent
+    } finally {
+      setWishlistLoading(false)
+    }
+  }, [])
+
   // Fetch on tab change / filter change
   useEffect(() => {
     if (activeTab === 'bookings') fetchBookings()
@@ -221,11 +240,16 @@ export default function CustomerDashboard() {
     if (activeTab === 'loans') fetchLoans()
   }, [activeTab, fetchLoans])
 
+  useEffect(() => {
+    if (activeTab === 'wishlist') fetchWishlist()
+  }, [activeTab, fetchWishlist])
+
   // Fetch all data on mount for overview
   useEffect(() => {
     fetchBookings()
     fetchPayments()
     fetchLoans()
+    fetchWishlist()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -234,6 +258,7 @@ export default function CustomerDashboard() {
   const activeBookings = bookings.filter(b => b.status === 'active' || b.status === 'confirmed').length
   const pendingPayments = payments.filter(p => p.status === 'pending' || p.status === 'payment_pending').length
   const activeLoans = loans.filter(l => l.status === 'approved' || l.status === 'disbursed' || l.status === 'active').length
+  const wishlistCount = wishlistItems.length
   const totalSpent = payments
     .filter(p => p.status === 'verified' || p.status === 'completed')
     .reduce((sum, p) => sum + (p.amount || 0), 0)
@@ -527,7 +552,7 @@ export default function CustomerDashboard() {
               </div>
 
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
                   {
                     label: 'Active Bookings',
@@ -555,6 +580,13 @@ export default function CustomerDashboard() {
                     value: paymentsLoading ? '...' : formatPrice(totalSpent),
                     icon: DollarSign,
                     change: 'Verified payments',
+                    up: true,
+                  },
+                  {
+                    label: 'Wishlist',
+                    value: wishlistLoading ? '...' : String(wishlistCount),
+                    icon: Heart,
+                    change: 'Saved vehicles',
                     up: true,
                   },
                 ].map((stat) => {
@@ -1065,6 +1097,105 @@ export default function CustomerDashboard() {
                       </CardContent>
                     </Card>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ============================================ */}
+          {/* ===== MY WISHLIST TAB ===== */}
+          {/* ============================================ */}
+          {activeTab === 'wishlist' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="dash-heading-md">My Wishlist</h2>
+                <span className="text-caption text-muted-foreground">
+                  {wishlistCount} vehicle{wishlistCount !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {wishlistLoading ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <CardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : wishlistItems.length === 0 ? (
+                <EmptyState
+                  icon={<Heart className="size-12" />}
+                  title="Your wishlist is empty"
+                  description="Save vehicles you love to your wishlist and find them here."
+                  action={
+                    <Button onClick={() => router.push('/buy')} className="bg-gold hover:bg-gold-dark text-primary-foreground">
+                      <Car className="size-4 mr-1" />
+                      Browse Cars
+                    </Button>
+                  }
+                />
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {wishlistItems.map((item) => {
+                    const car = item.car as Record<string, unknown> | undefined
+                    const carPhotos = car?.photos
+                    const photoUrl = typeof carPhotos === 'string'
+                      ? (() => { try { return JSON.parse(carPhotos)[0] } catch { return '' } })()
+                      : Array.isArray(carPhotos) ? carPhotos[0] : ''
+                    return (
+                      <Card key={item.id as string} className="bg-card border-border overflow-hidden hover:border-gold/30 transition-all cursor-pointer"
+                        onClick={() => router.push(`/car/${car?.id}`)}
+                      >
+                        {photoUrl && (
+                          <div className="relative aspect-[16/9] overflow-hidden bg-secondary">
+                            <img src={photoUrl} alt={`${car?.brand} ${car?.model}`} className="w-full h-full object-cover" />
+                          </div>
+                        )}
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between">
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-semibold text-foreground truncate">
+                                {car?.brand as string} {car?.model as string}
+                              </h3>
+                              <p className="text-caption text-muted-foreground">{car?.year as string}</p>
+                            </div>
+                            {car?.price != null && (
+                              <span className="text-lg font-bold text-gold shrink-0 ml-2">
+                                {formatPrice(Number(car.price))}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-caption text-muted-foreground">
+                            <MapPin className="size-3" />
+                            <span>{(car?.city as string) || 'Malaysia'}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <VehicleTypeBadge type={(car?.type as string) || ''} />
+                            {car?.mileage != null && (
+                              <span className="text-caption text-muted-foreground">
+                                {(car?.mileage as number).toLocaleString()} km
+                              </span>
+                            )}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-400"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const carId = car?.id as string
+                              if (carId) {
+                                const { toggleWishlist } = useAppStore.getState()
+                                toggleWishlist(carId)
+                                setWishlistItems(wishlistItems.filter((i) => i.id !== item.id))
+                              }
+                            }}
+                          >
+                            <Heart className="size-4 mr-1 fill-red-500 text-red-500" />
+                            Remove
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    )
+                  })}
                 </div>
               )}
             </div>

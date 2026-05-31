@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { toast } from 'sonner'
 import { authApi, wishlistApi, setToken, clearToken } from '@/lib/api'
 
 // ===== VIEW TYPES (kept for reference, navigation now uses URLs) =====
@@ -229,8 +230,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         await wishlistApi.add(carId)
         set({ wishlistIds: [...wishlistIds, carId] })
       }
-    } catch {
-      // Silent fail
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update wishlist'
+      toast.error(msg)
     }
   },
 
