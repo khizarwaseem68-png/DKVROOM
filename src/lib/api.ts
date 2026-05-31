@@ -179,9 +179,9 @@ async function apiFetch<T = unknown>(endpoint: string, options: RequestInit = {}
 
   if (!response.ok) {
     if (response.status === 401) {
-      // Token expired or invalid
+      const hadToken = getToken() !== null
       clearToken()
-      if (typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && hadToken) {
         window.dispatchEvent(new CustomEvent('auth:expired'))
       }
     }
