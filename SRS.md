@@ -64,7 +64,7 @@ The platform follows a **black and gold luxury branding** theme for the public-f
 ├─────────────────────────────────────────────────────┤
 │                    BACKEND                           │
 │  Next.js API Routes (serverless functions)           │
-│  Prisma ORM + SQLite                                 │
+│  Prisma ORM + PostgreSQL                             │
 │  bcryptjs (password) + jose/JWT (auth tokens)        │
 │  File System Storage (uploads)                       │
 ├─────────────────────────────────────────────────────┤
@@ -75,7 +75,7 @@ The platform follows a **black and gold luxury branding** theme for the public-f
 │  CORS Configuration                                  │
 ├─────────────────────────────────────────────────────┤
 │                   DATABASE                           │
-│  SQLite (file-based) — Prisma-managed                │
+│  PostgreSQL (server-based) — Prisma-managed          │
 │  17 Models with full relational integrity            │
 └─────────────────────────────────────────────────────┘
 ```
@@ -98,7 +98,7 @@ Customer/Browser
       ▼
   Next.js API Routes (/api/*)
       │
-      ├──► Prisma ORM ──► SQLite Database
+      ├──► Prisma ORM ──► PostgreSQL Database
       ├──► File Upload Handler (/api/upload)
       ├──► Auth Handlers (/api/auth/login, /register, /me)
       └──► Module-Specific APIs (cars, bookings, payments, loans, auctions, etc.)
@@ -1262,7 +1262,7 @@ Without admin verification at each step, the platform would lack the trust layer
 
 ### 14.5 Scalability Considerations
 
-- SQLite suitable for current scale; can migrate to PostgreSQL
+- PostgreSQL handles current scale; can scale vertically or migrate to managed Postgres
 - Stateless JWT authentication (horizontal scaling friendly)
 - File system uploads can migrate to S3/CloudFlare R2
 - API route structure supports microservice extraction

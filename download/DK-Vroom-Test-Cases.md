@@ -7,7 +7,7 @@
 | **Project** | DK Vroom — Malaysia Premium Automotive Marketplace |
 | **Version** | 1.0.0 |
 | **Date** | 2026-05-30 |
-| **Environment** | Next.js 16 / React 19 / Prisma / SQLite |
+| **Environment** | Next.js 16 / React 19 / Prisma / PostgreSQL |
 | **Panels** | Customer, Dealer, Admin |
 
 ---
