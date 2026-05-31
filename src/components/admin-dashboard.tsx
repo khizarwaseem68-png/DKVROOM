@@ -173,8 +173,11 @@ interface CarItem {
   currentBid?: number | null
   auctionEnd?: string | null
   conditionCategory?: string | null
+  runningStatus?: string | null
+  salvageStatus?: string | null
   damageDescription?: string | null
   repairEstimate?: number | null
+  auctionActive?: boolean
   location?: string | null
   city?: string | null
   state?: string | null
@@ -902,7 +905,14 @@ export default function AdminDashboard() {
               <DetailItem label="Monthly Price" value={car.monthlyPrice ? formatPrice(car.monthlyPrice) : 'N/A'} />
               <DetailItem label="Deposit" value={car.deposit ? formatPrice(car.deposit) : 'N/A'} />
               <DetailItem label="Booking Fee" value={car.bookingFee ? formatPrice(car.bookingFee) : 'N/A'} />
+              <DetailItem label="Auction Start Bid" value={car.auctionStartBid ? formatPrice(car.auctionStartBid) : 'N/A'} />
+              <DetailItem label="Auction Reserve" value={car.auctionReserve ? formatPrice(car.auctionReserve) : 'N/A'} />
               <DetailItem label="Current Bid" value={car.currentBid ? formatPrice(car.currentBid) : 'N/A'} />
+              <DetailItem label="Auction End" value={car.auctionEnd ? formatDate(car.auctionEnd) : 'N/A'} />
+              <DetailItem label="Auction Active" value={car.auctionActive ? 'Yes' : 'No'} />
+              <DetailItem label="Condition Category" value={car.conditionCategory || 'N/A'} />
+              <DetailItem label="Running Status" value={car.runningStatus || 'N/A'} />
+              <DetailItem label="Salvage Status" value={car.salvageStatus || 'N/A'} />
               <DetailItem label="Repair Estimate" value={car.repairEstimate ? formatPrice(car.repairEstimate) : 'N/A'} />
             </CardContent>
           </Card>
