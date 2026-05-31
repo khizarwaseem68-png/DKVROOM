@@ -949,7 +949,7 @@ export default function HomePage() {
                   <li key={link.label}>
                     <button
                       onClick={() => router.push(link.path)}
-                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
+                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left cursor-pointer"
                     >
                       {link.label}
                     </button>
@@ -966,7 +966,7 @@ export default function HomePage() {
                   <li key={link.label}>
                     <button
                       onClick={() => router.push(link.path)}
-                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
+                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left cursor-pointer"
                     >
                       {link.label}
                     </button>
@@ -983,7 +983,7 @@ export default function HomePage() {
                   <li key={link.label}>
                     <button
                       onClick={() => router.push(link.path)}
-                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left"
+                      className="text-muted-foreground hover:text-gold text-body-sm transition-colors text-left cursor-pointer"
                     >
                       {link.label}
                     </button>
@@ -1047,9 +1047,9 @@ export default function HomePage() {
                 &copy; {new Date().getFullYear()} DK Vroom. All Rights Reserved.
               </p>
               <div className="flex gap-6 text-body-sm text-muted-foreground">
-                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Privacy</button>
-                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Terms</button>
-                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors">Cookies</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors cursor-pointer">Privacy</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors cursor-pointer">Terms</button>
+                <button onClick={() => router.push('/')} className="hover:text-gold transition-colors cursor-pointer">Cookies</button>
               </div>
             </div>
           </div>

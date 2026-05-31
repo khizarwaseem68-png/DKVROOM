@@ -258,14 +258,14 @@ function FileUploadBox({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="px-2 py-1 text-caption text-gold hover:text-gold-light hover:bg-gold/10 rounded transition-colors"
+              className="px-2 py-1 text-caption text-gold hover:text-gold-light hover:bg-gold/10 rounded transition-colors cursor-pointer"
             >
               Change
             </button>
             <button
               type="button"
               onClick={onRemove}
-              className="p-1 text-muted-foreground hover:text-error hover:bg-error/10 rounded transition-colors"
+              className="p-1 text-muted-foreground hover:text-error hover:bg-error/10 rounded transition-colors cursor-pointer"
               aria-label="Remove file"
             >
               <X className="size-4" />
@@ -691,7 +691,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
       <div className="relative z-10 w-full max-w-2xl">
         {/* Logo */}
         <div className="text-center mb-8">
-          <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 mb-4" type="button">
+          <button onClick={() => router.push('/')} className="inline-flex items-center gap-2 mb-4 cursor-pointer" type="button">
             <div className="flex size-10 items-center justify-center rounded-lg border border-gold/30 bg-gradient-to-br from-gold/20 to-transparent">
               <Car className="size-5 text-gold" />
             </div>
@@ -710,7 +710,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 role="tab"
                 aria-selected={mode === 'login'}
                 onClick={() => switchMode('login')}
-                className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all ${
+                className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all cursor-pointer ${
                   mode === 'login' ? 'bg-gold text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -720,7 +720,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 role="tab"
                 aria-selected={mode === 'register'}
                 onClick={() => switchMode('register')}
-                className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all ${
+                className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all cursor-pointer ${
                   mode === 'register' ? 'bg-gold text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -780,13 +780,13 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                       {...loginForm.register('password')}
                       className="h-11 pl-10 pr-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus-visible:border-gold"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
-                      aria-label={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold cursor-pointer"
+                                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                              >
+                                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
                 </FormField>
@@ -845,7 +845,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                     <button
                       type="button"
                       onClick={() => switchRole('customer')}
-                      className={`p-3 rounded-lg border text-body-sm font-medium transition-all ${
+                      className={`p-3 rounded-lg border text-body-sm font-medium transition-all cursor-pointer ${
                         regRole === 'customer'
                           ? 'border-gold bg-gold/10 text-gold'
                           : 'border-border bg-background text-muted-foreground hover:border-gold/50'
@@ -857,7 +857,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                     <button
                       type="button"
                       onClick={() => switchRole('dealer')}
-                      className={`p-3 rounded-lg border text-body-sm font-medium transition-all ${
+                      className={`p-3 rounded-lg border text-body-sm font-medium transition-all cursor-pointer ${
                         regRole === 'dealer'
                           ? 'border-gold bg-gold/10 text-gold'
                           : 'border-border bg-background text-muted-foreground hover:border-gold/50'
