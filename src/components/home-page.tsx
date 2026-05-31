@@ -593,7 +593,7 @@ export default function HomePage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full"
+                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation()
                           if (!isLoggedIn) {
@@ -608,7 +608,7 @@ export default function HomePage() {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full"
+                        className="size-8 bg-background/70 hover:bg-background/90 text-foreground rounded-full cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation()
                           selectCar(car.id, car.type)
@@ -672,7 +672,7 @@ export default function HomePage() {
 
                     {/* View Details Button (visible on hover) */}
                     <Button
-                      className="w-full mt-4 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold opacity-0 group-hover:opacity-100 transition-opacity h-9 rounded-lg"
+                      className="w-full mt-4 bg-gold hover:bg-gold-dark text-primary-foreground font-semibold opacity-0 group-hover:opacity-100 transition-opacity h-9 rounded-lg cursor-pointer"
                       onClick={(e) => {
                         e.stopPropagation()
                         selectCar(car.id, car.type)
