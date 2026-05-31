@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, sanitizeObject, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { saveFile, validateFile } from '@/lib/file-upload'
+
+const PHOTO_CONFIG = { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp'] }
 
 // ============================================================
 // GET /api/cars — List / search cars with filters + pagination
@@ -131,7 +134,33 @@ export async function POST(request: NextRequest) {
     if (!user.dealer) return apiError('Dealer profile not found', 404)
     if (!user.dealer.verified) return apiError('Dealer account not yet verified', 403)
 
-    const body = await request.json()
+    const contentType = request.headers.get('content-type') || ''
+    const isMultipart = contentType.includes('multipart/form-data')
+
+    let body: Record<string, any>
+    let photoFiles: File[] = []
+
+    if (isMultipart) {
+      const formData = await request.formData()
+      photoFiles = []
+      body = {}
+      for (const [key, value] of formData.entries()) {
+        if (value instanceof File) {
+          if (key.startsWith('photo_')) {
+            photoFiles.push(value)
+          }
+        } else {
+          body[key] = value
+        }
+      }
+      // Validate photos
+      for (const file of photoFiles) {
+        const err = validateFile(file, PHOTO_CONFIG.maxSizeMB, PHOTO_CONFIG.allowedMimes)
+        if (err) return apiError(`Photo ${file.name}: ${err}`, 400)
+      }
+    } else {
+      body = await request.json()
+    }
     const sanitized = sanitizeObject(body)
 
     // Required fields validation
@@ -222,6 +251,22 @@ export async function POST(request: NextRequest) {
 
     // Remove undefined values
     Object.keys(carData).forEach(key => carData[key] === undefined && delete carData[key])
+
+    // Save photos to disk only after DB create succeeds
+    if (photoFiles.length > 0) {
+      const photoUrls: string[] = []
+      for (const file of photoFiles) {
+        try {
+          const url = await saveFile(file, 'vehicle_photos', user.id)
+          photoUrls.push(url)
+        } catch {
+          // Skip failed photo saves
+        }
+      }
+      if (photoUrls.length > 0) {
+        carData.photos = JSON.stringify(photoUrls)
+      }
+    }
 
     const car = await db.car.create({
       data: carData,

@@ -2,6 +2,9 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { saveFile, validateFile } from '@/lib/file-upload'
+
+const RECEIPT_CONFIG = { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] }
 
 // GET /api/payments/[id] - Single payment detail
 export async function GET(
@@ -79,17 +82,49 @@ export async function PUT(
     if (payment.userId !== user.id) return apiError('Forbidden', 403)
     if (payment.status !== 'pending') return apiError('Payment is not in pending status', 400)
 
-    const { receiptUrl } = body
-    if (!receiptUrl) return apiError('Receipt URL is required', 400)
+    let receiptUrl: string | null = body?.receiptUrl || null
+    let receiptFile: File | null = null
+
+    const contentType = request.headers.get('content-type') || ''
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      receiptFile = formData.get('receipt') as File | null
+      receiptUrl = formData.get('receiptUrl') as string | null
+    }
+
+    if (receiptFile) {
+      const err = validateFile(receiptFile, RECEIPT_CONFIG.maxSizeMB, RECEIPT_CONFIG.allowedMimes)
+      if (err) return apiError('Receipt: ' + err, 400)
+    }
+
+    if (!receiptUrl && !receiptFile) return apiError('Receipt file or URL is required', 400)
+
+    // Update payment status in DB first (without URL if file not yet saved)
+    const updateData: any = {
+      receiptUploadedAt: new Date(),
+      status: 'uploaded',
+    }
+    if (receiptUrl && !receiptFile) {
+      updateData.receiptUrl = sanitizeInput(receiptUrl)
+    }
 
     const updatedPayment = await db.payment.update({
       where: { id },
-      data: {
-        receiptUrl: sanitizeInput(receiptUrl),
-        receiptUploadedAt: new Date(),
-        status: 'uploaded',
-      }
+      data: updateData,
     })
+
+    // Save file to disk only after DB update succeeds
+    if (receiptFile) {
+      try {
+        const savedUrl = await saveFile(receiptFile, 'receipts', payment.userId)
+        await db.payment.update({
+          where: { id },
+          data: { receiptUrl: savedUrl },
+        })
+      } catch {
+        // File save failed but DB is already updated — non-critical
+      }
+    }
 
     // Create notification for admin
     await db.notification.create({

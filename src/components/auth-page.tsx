@@ -184,7 +184,7 @@ function FileUploadBox({
   uploading,
 }: {
   label: string
-  fileInfo: { file: File; url: string } | null
+  fileInfo: File | null
   onUpload: (file: File) => void
   onRemove: () => void
   fileInputRef: React.RefObject<HTMLInputElement | null>
@@ -239,11 +239,11 @@ function FileUploadBox({
         <div className="flex-1 min-w-0">
           {fileInfo ? (
             <>
-              <p className="text-body-sm font-medium text-success truncate" title={fileInfo.file.name}>
-                {fileInfo.file.name}
+              <p className="text-body-sm font-medium text-success truncate" title={fileInfo.name}>
+                {fileInfo.name}
               </p>
               <p className="text-caption text-muted-foreground">
-                {(fileInfo.file.size / 1024).toFixed(1)} KB
+                {(fileInfo.size / 1024).toFixed(1)} KB
               </p>
             </>
           ) : (
@@ -344,11 +344,9 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
   const [dealerStep, setDealerStep] = useState(0)
 
   // File upload states — capture file + URL
-  const [custICFile, setCustICFile] = useState<{ file: File; url: string } | null>(null)
-  const [custLicenseFile, setCustLicenseFile] = useState<{ file: File; url: string } | null>(null)
-  const [dealerDocFile, setDealerDocFile] = useState<{ file: File; url: string } | null>(null)
-
-  // File upload loading states
+  const [custICFile, setCustICFile] = useState<File | null>(null)
+  const [custLicenseFile, setCustLicenseFile] = useState<File | null>(null)
+  const [dealerDocFile, setDealerDocFile] = useState<File | null>(null)
   const [custICUploading, setCustICUploading] = useState(false)
   const [custLicenseUploading, setCustLicenseUploading] = useState(false)
   const [dealerDocUploading, setDealerDocUploading] = useState(false)
@@ -409,22 +407,15 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     setDealerDocFile(null)
   }, [customerForm, dealerForm])
 
-  // ===== FILE UPLOAD HANDLER =====
-  const handleFileUploadWithUrl = async (
+  // ===== FILE HANDLER =====
+  const handleFileSelect = (
     file: File,
-    category: string,
-    onUploaded: (file: File, url: string) => void,
+    onSelected: (file: File) => void,
     setUploading: (v: boolean) => void,
   ) => {
     setUploading(true)
-    try {
-      const result = await uploadApi.upload(file, category)
-      onUploaded(file, result.url)
-    } catch {
-      setError('File upload failed. Please try again.')
-    } finally {
-      setUploading(false)
-    }
+    onSelected(file)
+    setUploading(false)
   }
 
   // ===== MAP USER STATE =====
@@ -458,10 +449,13 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     return user.dealer?.verified && !user.dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status'
   }
 
+  const [pendingFileMap, setPendingFileMap] = useState<Record<string, File | null> | null>(null)
+
   const startOtpFlow = async (
     email: string,
     purpose: 'registration' | 'forgot_password',
-    pendingData?: RegistrationPayload
+    pendingData?: RegistrationPayload,
+    fileMap?: Record<string, File | null>
   ) => {
     setOtpLoading(true)
     setOtpError(null)
@@ -472,6 +466,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
       setOtpPurpose(purpose)
       setOtpCode('')
       setPendingRegistration(pendingData || null)
+      setPendingFileMap(fileMap || null)
       setResetVerificationToken(null)
       setOtpOpen(true)
       setSuccess('OTP sent to your email.')
@@ -485,9 +480,10 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
   }
 
   const completeRegistration = async (payload: RegistrationPayload, emailVerificationToken: string) => {
-    const result = await authApi.register({ ...payload, emailVerificationToken })
+    const result = await authApi.register({ ...payload, emailVerificationToken }, pendingFileMap || undefined)
     const userState = mapUserState(result.user)
     login(userState, result.token)
+    setPendingFileMap(null)
     if (result.user.role === 'dealer') router.push(getDealerDestination(result.user))
     else router.push('/')
   }
@@ -585,10 +581,12 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         address: data.address || undefined,
         icNumber: data.icNumber || undefined,
         drivingLicense: data.licenseNumber || undefined,
-        icDocumentUrl: custICFile?.url || undefined,
-        licenseDocumentUrl: custLicenseFile?.url || undefined,
       }
-      await startOtpFlow(data.email, 'registration', userData)
+      const fileMap = {
+        icDocument: custICFile,
+        licenseDocument: custLicenseFile,
+      }
+      await startOtpFlow(data.email, 'registration', userData, fileMap)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -617,9 +615,11 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         bankName: data.bankName || undefined,
         bankAccountNumber: data.bankAccount || undefined,
         bankAccountHolder: data.bankHolder || undefined,
-        registrationDocUrl: dealerDocFile?.url || undefined,
       }
-      await startOtpFlow(data.email, 'registration', userData)
+      const fileMap = {
+        registrationDoc: dealerDocFile,
+      }
+      await startOtpFlow(data.email, 'registration', userData, fileMap)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -1016,7 +1016,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           <FileUploadBox
                             label="Upload IC / Passport"
                             fileInfo={custICFile}
-                            onUpload={(file) => handleFileUploadWithUrl(file, 'ic', (f, url) => setCustICFile({ file: f, url }), setCustICUploading)}
+                            onUpload={(file) => handleFileSelect(file, setCustICFile, setCustICUploading)}
                             onRemove={() => setCustICFile(null)}
                             fileInputRef={custICRef}
                             uploading={custICUploading}
@@ -1024,7 +1024,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           <FileUploadBox
                             label="Upload Driving License"
                             fileInfo={custLicenseFile}
-                            onUpload={(file) => handleFileUploadWithUrl(file, 'license', (f, url) => setCustLicenseFile({ file: f, url }), setCustLicenseUploading)}
+                            onUpload={(file) => handleFileSelect(file, setCustLicenseFile, setCustLicenseUploading)}
                             onRemove={() => setCustLicenseFile(null)}
                             fileInputRef={custLicenseRef}
                             uploading={custLicenseUploading}
@@ -1060,8 +1060,8 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           <ReviewRow label="Address" value={customerForm.getValues('address')} />
                           <ReviewRow label="IC Number" value={customerForm.getValues('icNumber')} />
                           <ReviewRow label="License Number" value={customerForm.getValues('licenseNumber')} />
-                          <ReviewRow label="IC Document" value={custICFile?.file.name || 'Not uploaded'} />
-                          <ReviewRow label="License Document" value={custLicenseFile?.file.name || 'Not uploaded'} />
+                          <ReviewRow label="IC Document" value={custICFile?.name || 'Not uploaded'} />
+                          <ReviewRow label="License Document" value={custLicenseFile?.name || 'Not uploaded'} />
                         </div>
 
                         {/* Agree to terms */}
@@ -1338,7 +1338,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                         <FileUploadBox
                           label="Upload SSM / Registration Document"
                           fileInfo={dealerDocFile}
-                          onUpload={(file) => handleFileUploadWithUrl(file, 'documents', (f, url) => setDealerDocFile({ file: f, url }), setDealerDocUploading)}
+                          onUpload={(file) => handleFileSelect(file, setDealerDocFile, setDealerDocUploading)}
                           onRemove={() => setDealerDocFile(null)}
                           fileInputRef={dealerDocRef}
                           uploading={dealerDocUploading}
@@ -1386,7 +1386,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           <ReviewRow label="Bank Name" value={dealerForm.getValues('bankName')} />
                           <ReviewRow label="Account Number" value={dealerForm.getValues('bankAccount')} />
                           <ReviewRow label="Account Holder" value={dealerForm.getValues('bankHolder')} />
-                          <ReviewRow label="SSM / Reg. Doc" value={dealerDocFile?.file.name || 'Not uploaded'} />
+                          <ReviewRow label="SSM / Reg. Doc" value={dealerDocFile?.name || 'Not uploaded'} />
                         </div>
 
                         {/* Agree to terms */}

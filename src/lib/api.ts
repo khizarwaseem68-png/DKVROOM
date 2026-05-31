@@ -206,6 +206,27 @@ async function apiFetch<T = unknown>(endpoint: string, options: RequestInit = {}
   return data as T
 }
 
+function buildFormData(data: Record<string, unknown>, fileMap?: Record<string, File | File[] | null | undefined>): FormData {
+  const formData = new FormData()
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined && value !== null) {
+      formData.append(key, String(value))
+    }
+  }
+  if (fileMap) {
+    for (const [key, file] of Object.entries(fileMap)) {
+      if (file instanceof File) {
+        formData.append(key, file)
+      } else if (Array.isArray(file)) {
+        for (const f of file) {
+          formData.append(key, f)
+        }
+      }
+    }
+  }
+  return formData
+}
+
 async function apiUpload<T = unknown>(endpoint: string, file: File, category?: string): Promise<T> {
   const token = getToken()
   const formData = new FormData()
@@ -246,10 +267,14 @@ export const authApi = {
     return data
   },
 
-  register: async (userData: Record<string, unknown>): Promise<LoginResponse> => {
+  register: async (userData: Record<string, unknown>, fileMap?: Record<string, File | null | undefined>): Promise<LoginResponse> => {
+    const hasFiles = fileMap && Object.values(fileMap).some(Boolean)
+    const body = hasFiles
+      ? buildFormData(userData, fileMap as Record<string, File | File[] | null | undefined>)
+      : JSON.stringify(userData)
     const data = await apiFetch<LoginResponse>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify(userData),
+      body,
     })
     if (data.token) setToken(data.token)
     return data
@@ -306,7 +331,23 @@ export const carsApi = {
     return apiFetch(`/cars/${id}`)
   },
 
-  create: async (carData: Record<string, unknown>): Promise<ApiResponse<CarData>> => {
+  create: async (carData: Record<string, unknown>, photoFiles?: File[]): Promise<ApiResponse<CarData>> => {
+    const hasFiles = photoFiles && photoFiles.length > 0
+    if (hasFiles) {
+      const formData = new FormData()
+      for (const [key, value] of Object.entries(carData)) {
+        if (value !== undefined && value !== null) {
+          formData.append(key, String(value))
+        }
+      }
+      for (let i = 0; i < photoFiles!.length; i++) {
+        formData.append(`photo_${i}`, photoFiles![i])
+      }
+      return apiFetch('/cars', {
+        method: 'POST',
+        body: formData,
+      })
+    }
     return apiFetch('/cars', {
       method: 'POST',
       body: JSON.stringify(carData),
@@ -365,13 +406,11 @@ export const paymentsApi = {
   },
 
   uploadReceipt: async (id: string, file: File): Promise<ApiResponse> => {
-    const uploadResult = await apiUpload<{ url: string }>('/upload', file)
+    const formData = new FormData()
+    formData.append('receipt', file)
     return apiFetch(`/payments/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({
-        receiptUrl: uploadResult.url,
-        status: 'uploaded',
-      }),
+      body: formData,
     })
   },
 
@@ -409,10 +448,14 @@ export const continueLoanApi = {
     })
   },
 
-  update: async (id: string, data: Record<string, unknown>): Promise<ApiResponse> => {
+  update: async (id: string, data: Record<string, unknown>, fileMap?: Record<string, File | null | undefined>): Promise<ApiResponse> => {
+    const hasFiles = fileMap && Object.values(fileMap).some(Boolean)
+    const body = hasFiles
+      ? buildFormData(data, fileMap as Record<string, File | File[] | null | undefined>)
+      : JSON.stringify(data)
     return apiFetch(`/continue-loan/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(data),
+      body,
     })
   },
 }
