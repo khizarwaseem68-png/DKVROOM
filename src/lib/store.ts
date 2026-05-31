@@ -101,7 +101,7 @@ const initialBooking: BookingState = {
 
 let authCheckPromise: Promise<void> | null = null
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   selectedCarId: null,
   selectedCarType: null,
   searchQuery: '',
