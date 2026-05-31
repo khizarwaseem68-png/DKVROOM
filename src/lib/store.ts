@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { authApi, setToken, clearToken } from '@/lib/api'
+import { authApi, setToken, getToken, clearToken } from '@/lib/api'
 
 // ===== VIEW TYPES (kept for reference, navigation now uses URLs) =====
 
@@ -88,24 +88,11 @@ const initialBooking: BookingState = {
   paymentId: null,
 }
 
-const initialUser: UserState = {
-  id: null,
-  email: null,
-  name: null,
-  phone: null,
-  whatsapp: null,
-  role: null,
-  verified: false,
-  avatar: null,
-  dealerId: null,
-  dealer: null,
-}
-
 // ===== STORE =====
 
 let authCheckPromise: Promise<void> | null = null
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set) => ({
   selectedCarId: null,
   selectedCarType: null,
   searchQuery: '',
@@ -139,12 +126,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       booking: { ...initialBooking },
     })
     // Redirect to home page
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       window.location.href = '/'
     }
   },
 
   checkAuth: async () => {
+    if (!getToken()) {
+      clearToken()
+      set({ isLoggedIn: false, user: null })
+      return
+    }
+
     // Prevent duplicate auth checks
     if (authCheckPromise) return authCheckPromise
 

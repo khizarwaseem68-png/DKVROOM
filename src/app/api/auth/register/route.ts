@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, generateToken } from '@/lib/auth/auth-utils'
+import { verifyOtpVerificationToken } from '@/lib/auth/otp-service'
 import { authRateLimit, sanitizeInput, isValidEmail, hasSqlInjection, apiResponse, apiError } from '@/lib/security/middleware'
 
 export async function POST(request: NextRequest) {
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
       bankName, bankAccountNumber, bankAccount, bankAccountHolder, bankHolder,
       // Document URLs
       icDocumentUrl, licenseDocumentUrl, registrationDocUrl,
+      emailVerificationToken,
     } = body
 
     // Validate required fields
@@ -39,6 +41,11 @@ export async function POST(request: NextRequest) {
     // Check for SQL injection
     if (hasSqlInjection(sanitizedEmail) || hasSqlInjection(sanitizedName)) {
       return apiError('Invalid input detected', 400)
+    }
+
+    const emailVerified = await verifyOtpVerificationToken(emailVerificationToken, 'registration', sanitizedEmail)
+    if (!emailVerified) {
+      return apiError('Please verify your email before registration', 400)
     }
 
     // Validate password strength

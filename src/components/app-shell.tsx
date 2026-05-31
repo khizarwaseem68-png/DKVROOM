@@ -1,34 +1,78 @@
 'use client'
 
-import { useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
+import { getToken } from '@/lib/api'
 import { Header } from '@/components/header'
-import { Toaster } from '@/components/ui/sonner'
 
 // Routes where the main Header should be hidden
 const HIDE_HEADER_ROUTES = ['/login', '/register', '/dealer-dashboard', '/admin-dashboard', '/customer-dashboard']
+const PROTECTED_ROUTES = ['/dealer-dashboard', '/admin-dashboard', '/customer-dashboard']
+
+type ProtectedRole = 'dealer' | 'admin' | 'customer'
+
+function isProtectedRoute(pathname: string | null): boolean {
+  return Boolean(pathname && PROTECTED_ROUTES.some((route) => pathname.startsWith(route)))
+}
+
+function getRequiredRole(pathname: string | null): ProtectedRole | null {
+  if (!pathname) return null
+  if (pathname.startsWith('/admin-dashboard')) return 'admin'
+  if (pathname.startsWith('/dealer-dashboard')) return 'dealer'
+  if (pathname.startsWith('/customer-dashboard')) return 'customer'
+  return null
+}
 
 function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const checkAuth = useAppStore((state) => state.checkAuth)
+  const isLoggedIn = useAppStore((state) => state.isLoggedIn)
+  const user = useAppStore((state) => state.user)
+  const [authReady, setAuthReady] = useState(() => !getToken())
 
   // Check auth state once on app load
   useEffect(() => {
-    checkAuth()
+    let mounted = true
+
+    if (!getToken()) {
+      return () => {
+        mounted = false
+      }
+    }
+
+    checkAuth().finally(() => {
+      if (mounted) setAuthReady(true)
+    })
+
+    return () => {
+      mounted = false
+    }
   }, [checkAuth])
 
   // Listen for auth expiration events
   useEffect(() => {
     const handleAuthExpired = () => {
-      const state = useAppStore.getState()
-      if (state.isLoggedIn) {
-        state.logout()
-      }
+      useAppStore.getState().logout()
     }
     window.addEventListener('auth:expired', handleAuthExpired)
     return () => window.removeEventListener('auth:expired', handleAuthExpired)
   }, [])
+
+  useEffect(() => {
+    if (!authReady || !isProtectedRoute(pathname)) return
+
+    if (!getToken() || !isLoggedIn || !user) {
+      router.replace('/')
+      return
+    }
+
+    const requiredRole = getRequiredRole(pathname)
+    if (requiredRole && user.role !== requiredRole) {
+      router.replace('/')
+    }
+  }, [authReady, isLoggedIn, pathname, router, user])
 
   // Determine if header should be shown
   const hideHeader = HIDE_HEADER_ROUTES.some((route) => pathname?.startsWith(route))

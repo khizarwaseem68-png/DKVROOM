@@ -4,8 +4,23 @@ const API_BASE = '/api'
 // ===== TOKEN MANAGEMENT =====
 
 const TOKEN_KEY = 'dkvroom_token'
+const PROTECTED_CLIENT_ROUTES = ['/admin-dashboard', '/dealer-dashboard', '/customer-dashboard']
 
 let authToken: string | null = null
+
+function isProtectedClientRoute(pathname: string): boolean {
+  return PROTECTED_CLIENT_ROUTES.some((route) => pathname.startsWith(route))
+}
+
+function shouldRedirectOnUnauthorized(): boolean {
+  if (typeof window === 'undefined') return false
+  return Boolean(getToken()) || isProtectedClientRoute(window.location.pathname)
+}
+
+function notifyUnauthorized(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('auth:expired'))
+}
 
 export function setToken(token: string | null): void {
   authToken = token
@@ -179,11 +194,9 @@ async function apiFetch<T = unknown>(endpoint: string, options: RequestInit = {}
 
   if (!response.ok) {
     if (response.status === 401) {
-      const hadToken = getToken() !== null
+      const shouldRedirect = shouldRedirectOnUnauthorized()
       clearToken()
-      if (typeof window !== 'undefined' && hadToken) {
-        window.dispatchEvent(new CustomEvent('auth:expired'))
-      }
+      if (shouldRedirect) notifyUnauthorized()
     }
     throw new ApiError(data.error || 'Something went wrong', response.status)
   }
@@ -208,7 +221,14 @@ async function apiUpload<T = unknown>(endpoint: string, file: File, category?: s
   })
 
   const data = await response.json()
-  if (!response.ok) throw new ApiError(data.error || 'Upload failed', response.status)
+  if (!response.ok) {
+    if (response.status === 401) {
+      const shouldRedirect = shouldRedirectOnUnauthorized()
+      clearToken()
+      if (shouldRedirect) notifyUnauthorized()
+    }
+    throw new ApiError(data.error || 'Upload failed', response.status)
+  }
   return data as T
 }
 
@@ -231,6 +251,31 @@ export const authApi = {
     })
     if (data.token) setToken(data.token)
     return data
+  },
+
+  sendOtp: async (email: string, purpose: 'registration' | 'forgot_password'): Promise<ApiResponse> => {
+    return apiFetch('/auth/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, purpose }),
+    })
+  },
+
+  verifyOtp: async (
+    email: string,
+    otp: string,
+    purpose: 'registration' | 'forgot_password'
+  ): Promise<ApiResponse<{ verificationToken: string }> & { verificationToken?: string }> => {
+    return apiFetch('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, purpose }),
+    })
+  },
+
+  resetPassword: async (email: string, password: string, verificationToken: string): Promise<ApiResponse> => {
+    return apiFetch('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, verificationToken }),
+    })
   },
 
   me: async (): Promise<LoginResponse> => {
@@ -467,7 +512,7 @@ export const dealerApi = {
 
 export const adminApi = {
   getStats: async (): Promise<ApiResponse> => {
-    return apiFetch('/admin/stats')
+    return apiFetch('/admin/stats?summary=true')
   },
 
   getDealers: async (params: Record<string, string> = {}): Promise<ApiResponse> => {

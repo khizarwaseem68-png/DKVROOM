@@ -17,6 +17,13 @@ import { Separator } from '@/components/ui/separator'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -43,6 +50,7 @@ import {
   MessageCircle,
   AlertCircle,
   X,
+  KeyRound,
 } from 'lucide-react'
 
 // ============================================================
@@ -103,6 +111,11 @@ const dealerSchema = z.object({
 })
 
 type DealerFormData = z.infer<typeof dealerSchema>
+
+type RegistrationPayload = Record<string, unknown> & {
+  email: string
+  role: 'customer' | 'dealer'
+}
 
 // ============================================================
 // Step definitions
@@ -314,6 +327,17 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
   const [success, setSuccess] = useState<string | null>(null)
   const [regRole, setRegRole] = useState<'customer' | 'dealer'>('customer')
   const [loginRole, setLoginRole] = useState<'customer' | 'dealer' | 'admin'>('customer')
+  const [otpOpen, setOtpOpen] = useState(false)
+  const [otpCode, setOtpCode] = useState('')
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpPurpose, setOtpPurpose] = useState<'registration' | 'forgot_password'>('registration')
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpError, setOtpError] = useState<string | null>(null)
+  const [pendingRegistration, setPendingRegistration] = useState<RegistrationPayload | null>(null)
+  const [resetEmail, setResetEmail] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('')
+  const [resetVerificationToken, setResetVerificationToken] = useState<string | null>(null)
 
   // Stepper state
   const [custStep, setCustStep] = useState(0)
@@ -429,6 +453,99 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     }
   }
 
+  const startOtpFlow = async (
+    email: string,
+    purpose: 'registration' | 'forgot_password',
+    pendingData?: RegistrationPayload
+  ) => {
+    setOtpLoading(true)
+    setOtpError(null)
+    setError(null)
+    try {
+      await authApi.sendOtp(email, purpose)
+      setOtpEmail(email)
+      setOtpPurpose(purpose)
+      setOtpCode('')
+      setPendingRegistration(pendingData || null)
+      setResetVerificationToken(null)
+      setOtpOpen(true)
+      setSuccess('OTP sent to your email.')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send OTP. Please try again.'
+      if (purpose === 'registration') setError(message)
+      else setOtpError(message)
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const completeRegistration = async (payload: RegistrationPayload, emailVerificationToken: string) => {
+    const result = await authApi.register({ ...payload, emailVerificationToken })
+    const userState = mapUserState(result.user)
+    login(userState, result.token)
+    if (result.user.role === 'dealer') router.push('/dealer-dashboard')
+    else router.push('/')
+  }
+
+  const handleVerifyOtp = async () => {
+    setOtpLoading(true)
+    setOtpError(null)
+    try {
+      const result = await authApi.verifyOtp(otpEmail, otpCode, otpPurpose)
+      const verificationToken = result.verificationToken || result.data?.verificationToken
+      if (!verificationToken) throw new Error('OTP verified, but verification token was missing.')
+
+      if (otpPurpose === 'registration') {
+        if (!pendingRegistration) throw new Error('Registration data expired. Please submit the form again.')
+        await completeRegistration(pendingRegistration, verificationToken)
+        setOtpOpen(false)
+      } else {
+        setResetVerificationToken(verificationToken)
+        setSuccess('Email verified. Enter your new password.')
+      }
+
+      setOtpCode('')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'OTP verification failed. Please try again.'
+      setOtpError(message)
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
+  const handleForgotPasswordClick = async () => {
+    const email = loginForm.getValues('email') || resetEmail
+    if (!email) {
+      setOtpError('Enter your email first, then click forgot password.')
+      setOtpEmail('')
+      setOtpPurpose('forgot_password')
+      setOtpOpen(true)
+      return
+    }
+    setResetEmail(email)
+    await startOtpFlow(email, 'forgot_password')
+  }
+
+  const handleResetPassword = async () => {
+    setOtpLoading(true)
+    setOtpError(null)
+    try {
+      if (!resetVerificationToken) throw new Error('Please verify your email OTP first.')
+      if (resetPassword !== resetConfirmPassword) throw new Error('Passwords do not match.')
+      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(resetPassword)) throw new Error(passwordMessage)
+      await authApi.resetPassword(resetEmail || otpEmail, resetPassword, resetVerificationToken)
+      setResetPassword('')
+      setResetConfirmPassword('')
+      setResetVerificationToken(null)
+      setSuccess('Password reset successfully. You can sign in now.')
+      setOtpOpen(false)
+    } catch (err: unknown) {
+      setOtpError(err instanceof Error ? err.message : 'Failed to reset password.')
+    } finally {
+      setOtpLoading(false)
+    }
+  }
+
   // ===== LOGIN HANDLER =====
   const handleLogin = async (data: LoginFormData) => {
     setLoading(true)
@@ -466,10 +583,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         icDocumentUrl: custICFile?.url || undefined,
         licenseDocumentUrl: custLicenseFile?.url || undefined,
       }
-      const result = await authApi.register(userData)
-      const userState = mapUserState(result.user)
-      login(userState, result.token)
-      router.push('/')
+      await startOtpFlow(data.email, 'registration', userData)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -500,10 +614,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         bankAccountHolder: data.bankHolder || undefined,
         registrationDocUrl: dealerDocFile?.url || undefined,
       }
-      const result = await authApi.register(userData)
-      const userState = mapUserState(result.user)
-      login(userState, result.token)
-      router.push('/dealer-dashboard')
+      await startOtpFlow(data.email, 'registration', userData)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Registration failed. Please try again.'
       setError(message)
@@ -654,7 +765,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 <FormField label="Password" required error={loginForm.formState.errors.password?.message}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="sr-only">Password</span>
-                    <button type="button" className="text-caption text-gold hover:underline ml-auto">Forgot password?</button>
+                    <button type="button" onClick={handleForgotPasswordClick} className="text-caption text-gold hover:underline ml-auto">Forgot password?</button>
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -1348,6 +1459,125 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
           By continuing, you agree to DK Vroom&apos;s Terms &amp; Conditions
         </p>
       </div>
+
+      <Dialog open={otpOpen} onOpenChange={(open) => {
+        setOtpOpen(open)
+        if (!open) {
+          setOtpError(null)
+          setOtpCode('')
+        }
+      }}>
+        <DialogContent className="bg-card border-border text-foreground">
+          <DialogHeader>
+            <div className="mx-auto mb-2 flex size-12 items-center justify-center rounded-full bg-gold/10">
+              <KeyRound className="size-6 text-gold" />
+            </div>
+            <DialogTitle className="text-center">
+              {otpPurpose === 'registration' ? 'Verify your email' : resetVerificationToken ? 'Set a new password' : 'Reset your password'}
+            </DialogTitle>
+            <DialogDescription className="text-center">
+              {resetVerificationToken
+                ? 'Your email is verified. Choose a secure new password.'
+                : `Enter the 6-digit OTP sent to ${otpEmail || 'your email'}.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {otpPurpose === 'forgot_password' && !otpEmail && (
+              <FormField label="Email" required>
+                <Input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="bg-background border-border text-foreground"
+                />
+              </FormField>
+            )}
+
+            {!resetVerificationToken ? (
+              <>
+                <Input
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={otpCode}
+                  onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="000000"
+                  className="h-14 bg-background border-border text-center text-2xl tracking-[0.5em] text-foreground placeholder:tracking-normal"
+                />
+                <div className="flex gap-2">
+                  {otpPurpose === 'forgot_password' && !otpEmail ? (
+                    <Button
+                      type="button"
+                      disabled={otpLoading || !resetEmail}
+                      onClick={() => startOtpFlow(resetEmail, 'forgot_password')}
+                      className="flex-1 bg-gold hover:bg-gold-light text-primary-foreground"
+                    >
+                      {otpLoading ? 'Sending...' : 'Send OTP'}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={otpLoading}
+                        onClick={() => startOtpFlow(otpEmail, otpPurpose, pendingRegistration || undefined)}
+                        className="flex-1 border-border text-foreground hover:bg-muted"
+                      >
+                        Resend
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={otpLoading || otpCode.length !== 6}
+                        onClick={handleVerifyOtp}
+                        className="flex-1 bg-gold hover:bg-gold-light text-primary-foreground"
+                      >
+                        {otpLoading ? 'Verifying...' : 'Verify OTP'}
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <FormField label="New Password" required>
+                  <Input
+                    type="password"
+                    value={resetPassword}
+                    onChange={(e) => setResetPassword(e.target.value)}
+                    placeholder="New password"
+                    className="bg-background border-border text-foreground"
+                  />
+                </FormField>
+                <FormField label="Confirm Password" required>
+                  <Input
+                    type="password"
+                    value={resetConfirmPassword}
+                    onChange={(e) => setResetConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                    className="bg-background border-border text-foreground"
+                  />
+                </FormField>
+                <p className="text-caption text-muted-foreground">{passwordMessage}.</p>
+                <Button
+                  type="button"
+                  disabled={otpLoading}
+                  onClick={handleResetPassword}
+                  className="w-full bg-gold hover:bg-gold-light text-primary-foreground"
+                >
+                  {otpLoading ? 'Resetting...' : 'Reset Password'}
+                </Button>
+              </>
+            )}
+
+            {otpError && (
+              <div className="rounded-lg border border-error/30 bg-error/10 p-3 text-body-sm text-error">
+                {otpError}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

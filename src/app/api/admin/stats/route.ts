@@ -3,6 +3,21 @@ import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, apiError, apiResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
 
+function countGrouped<T extends { _count: unknown }>(rows: T[], key: string): Record<string, number> {
+  return rows.reduce<Record<string, number>>((acc, row) => {
+    const value = (row as Record<string, unknown>)[key]
+    const count = row._count as Record<string, unknown>
+    if (typeof value === 'string') {
+      acc[value] = typeof count[key] === 'number' ? count[key] : 0
+    }
+    return acc
+  }, {})
+}
+
+function sumCounts(values: Record<string, number>): number {
+  return Object.values(values).reduce((sum, count) => sum + count, 0)
+}
+
 // GET /api/admin/stats - Admin dashboard stats (admin only)
 export async function GET(request: NextRequest) {
   const rateCheck = rateLimit(request)
@@ -15,122 +30,168 @@ export async function GET(request: NextRequest) {
     return apiError('Admin access required', 403)
   }
 
-  // Total counts
+  const summaryOnly = request.nextUrl.searchParams.get('summary') === 'true'
+
+  if (summaryOnly) {
+    const [
+      userRoleBreakdown,
+      dealerVerifiedBreakdown,
+      rejectedDealers,
+      carStatusBreakdown,
+      paymentStatusBreakdown,
+      totalLoanApplications,
+      verifiedPaymentRevenue,
+    ] = await Promise.all([
+      db.user.groupBy({ by: ['role'], _count: { role: true } }),
+      db.dealer.groupBy({ by: ['verified'], _count: { verified: true } }),
+      db.dealer.count({ where: { rejectedAt: { not: null } } }),
+      db.car.groupBy({ by: ['status'], _count: { status: true } }),
+      db.payment.groupBy({ by: ['status'], _count: { status: true } }),
+      db.loanApplication.count(),
+      db.payment.aggregate({
+        where: { status: 'verified' },
+        _sum: { amount: true, platformFee: true, dealerPayout: true },
+      }),
+    ])
+
+    const userCounts = countGrouped(userRoleBreakdown, 'role')
+    const carStatusCounts = countGrouped(carStatusBreakdown, 'status')
+    const paymentStatusCounts = countGrouped(paymentStatusBreakdown, 'status')
+    const verifiedDealerCount = dealerVerifiedBreakdown.find((row) => row.verified)?._count.verified ?? 0
+    const unverifiedDealerCount = dealerVerifiedBreakdown.find((row) => !row.verified)?._count.verified ?? 0
+    const pendingDealers = Math.max(unverifiedDealerCount - rejectedDealers, 0)
+
+    return apiResponse({
+      success: true,
+      data: {
+        totals: {
+          users: sumCounts(userCounts),
+          dealers: verifiedDealerCount + unverifiedDealerCount,
+          cars: sumCounts(carStatusCounts),
+          payments: sumCounts(paymentStatusCounts),
+          loanApplications: totalLoanApplications,
+        },
+        dealerVerification: {
+          verified: verifiedDealerCount,
+          pending: pendingDealers,
+          rejected: rejectedDealers,
+        },
+        carBreakdown: {
+          byStatus: {
+            pending: carStatusCounts.pending ?? 0,
+            approved: carStatusCounts.approved ?? 0,
+            rejected: carStatusCounts.rejected ?? 0,
+          },
+        },
+        paymentBreakdown: {
+          byStatus: {
+            pending: paymentStatusCounts.pending ?? 0,
+            uploaded: paymentStatusCounts.uploaded ?? 0,
+            verified: paymentStatusCounts.verified ?? 0,
+            rejected: paymentStatusCounts.rejected ?? 0,
+          },
+        },
+        revenue: {
+          total: verifiedPaymentRevenue._sum.amount || 0,
+          platformFees: verifiedPaymentRevenue._sum.platformFee || 0,
+          dealerPayouts: verifiedPaymentRevenue._sum.dealerPayout || 0,
+        },
+      },
+    })
+  }
+
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
   const [
-    totalUsers,
-    totalDealers,
-    totalCars,
-    totalBookings,
-    totalPayments,
-    totalLoanApplications,
+    userRoleBreakdown,
+    dealerVerifiedBreakdown,
+    rejectedDealers,
+    carTypeBreakdown,
+    carStatusBreakdown,
+    bookingStatusBreakdown,
+    paymentStatusBreakdown,
+    loanStatusBreakdown,
+    verifiedPaymentRevenue,
+    revenueByType,
     totalContinueLoanEnquiries,
     totalAuctionBids,
     totalWorkshopAppointments,
     totalInsuranceEnquiries,
     totalReviews,
+    recentUsers,
+    recentBookings,
+    recentPayments,
+    recentCars,
+    recentRevenue,
+    recentActivity,
   ] = await Promise.all([
-    db.user.count(),
-    db.dealer.count(),
-    db.car.count(),
-    db.booking.count(),
-    db.payment.count(),
-    db.loanApplication.count(),
+    db.user.groupBy({ by: ['role'], _count: { role: true } }),
+    db.dealer.groupBy({ by: ['verified'], _count: { verified: true } }),
+    db.dealer.count({ where: { rejectedAt: { not: null } } }),
+    db.car.groupBy({ by: ['type'], _count: { type: true } }),
+    db.car.groupBy({ by: ['status'], _count: { status: true } }),
+    db.booking.groupBy({ by: ['status'], _count: { status: true } }),
+    db.payment.groupBy({ by: ['status'], _count: { status: true } }),
+    db.loanApplication.groupBy({ by: ['status'], _count: { status: true } }),
+    db.payment.aggregate({
+      where: { status: 'verified' },
+      _sum: { amount: true, platformFee: true, dealerPayout: true },
+    }),
+    db.payment.groupBy({
+      by: ['paymentType'],
+      where: { status: 'verified' },
+      _sum: { amount: true, platformFee: true },
+    }),
     db.continueLoanEnquiry.count(),
     db.auctionBid.count(),
     db.workshopAppointment.count(),
     db.insuranceEnquiry.count(),
     db.review.count(),
-  ])
-
-  // User breakdown by role
-  const [customerCount, dealerUserCount, adminCount] = await Promise.all([
-    db.user.count({ where: { role: 'customer' } }),
-    db.user.count({ where: { role: 'dealer' } }),
-    db.user.count({ where: { role: 'admin' } }),
-  ])
-
-  // Dealer verification status
-  const [verifiedDealers, pendingDealers, rejectedDealers] = await Promise.all([
-    db.dealer.count({ where: { verified: true } }),
-    db.dealer.count({ where: { verified: false, rejectedAt: null } }),
-    db.dealer.count({ where: { rejectedAt: { not: null } } }),
-  ])
-
-  // Car breakdown by type
-  const [rentCars, saleCars, auctionCars, continueLoanCars] = await Promise.all([
-    db.car.count({ where: { type: 'rent' } }),
-    db.car.count({ where: { type: 'sale' } }),
-    db.car.count({ where: { type: 'auction' } }),
-    db.car.count({ where: { type: 'continueLoan' } }),
-  ])
-
-  // Car status breakdown
-  const [pendingCars, approvedCars, rejectedCars] = await Promise.all([
-    db.car.count({ where: { status: 'pending' } }),
-    db.car.count({ where: { status: 'approved' } }),
-    db.car.count({ where: { status: 'rejected' } }),
-  ])
-
-  // Payment breakdown by status
-  const [pendingPayments, uploadedPayments, verifiedPayments, rejectedPayments] = await Promise.all([
-    db.payment.count({ where: { status: 'pending' } }),
-    db.payment.count({ where: { status: 'uploaded' } }),
-    db.payment.count({ where: { status: 'verified' } }),
-    db.payment.count({ where: { status: 'rejected' } }),
-  ])
-
-  // Revenue calculations
-  const verifiedPaymentsData = await db.payment.findMany({
-    where: { status: 'verified' },
-    select: { amount: true, platformFee: true, dealerPayout: true }
-  })
-
-  const totalRevenue = verifiedPaymentsData.reduce((sum, p) => sum + (p.amount || 0), 0)
-  const totalPlatformFees = verifiedPaymentsData.reduce((sum, p) => sum + (p.platformFee || 0), 0)
-  const totalDealerPayouts = verifiedPaymentsData.reduce((sum, p) => sum + (p.dealerPayout || 0), 0)
-
-  // Revenue by payment type
-  const revenueByType = await db.payment.groupBy({
-    by: ['paymentType'],
-    where: { status: 'verified' },
-    _sum: { amount: true, platformFee: true },
-  })
-
-  // Recent activity (last 30 days)
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-
-  const [recentUsers, recentBookings, recentPayments, recentCars] = await Promise.all([
     db.user.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
     db.booking.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
     db.payment.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
     db.car.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+    db.payment.aggregate({
+      where: { status: 'verified', verifiedAt: { gte: thirtyDaysAgo } },
+      _sum: { amount: true, platformFee: true },
+    }),
+    db.auditLog.findMany({
+      take: 20,
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        resource: true,
+        resourceId: true,
+        details: true,
+        ipAddress: true,
+        userAgent: true,
+        severity: true,
+        createdAt: true,
+        user: { select: { id: true, name: true, email: true, role: true } },
+      },
+    }),
   ])
 
-  const recentRevenue = await db.payment.aggregate({
-    where: { status: 'verified', verifiedAt: { gte: thirtyDaysAgo } },
-    _sum: { amount: true, platformFee: true },
-  })
-
-  // Recent audit logs
-  const recentActivity = await db.auditLog.findMany({
-    take: 20,
-    orderBy: { createdAt: 'desc' },
-    include: {
-      user: { select: { id: true, name: true, email: true, role: true } }
-    }
-  })
-
-  // Booking status breakdown
-  const bookingStatusBreakdown = await db.booking.groupBy({
-    by: ['status'],
-    _count: { status: true },
-  })
-
-  // Loan status breakdown
-  const loanStatusBreakdown = await db.loanApplication.groupBy({
-    by: ['status'],
-    _count: { status: true },
-  })
+  const userCounts = countGrouped(userRoleBreakdown, 'role')
+  const carTypeCounts = countGrouped(carTypeBreakdown, 'type')
+  const carStatusCounts = countGrouped(carStatusBreakdown, 'status')
+  const paymentStatusCounts = countGrouped(paymentStatusBreakdown, 'status')
+  const bookingStatusCounts = countGrouped(bookingStatusBreakdown, 'status')
+  const loanStatusCounts = countGrouped(loanStatusBreakdown, 'status')
+  const verifiedDealerCount = dealerVerifiedBreakdown.find((row) => row.verified)?._count.verified ?? 0
+  const unverifiedDealerCount = dealerVerifiedBreakdown.find((row) => !row.verified)?._count.verified ?? 0
+  const pendingDealers = Math.max(unverifiedDealerCount - rejectedDealers, 0)
+  const totalUsers = sumCounts(userCounts)
+  const totalDealers = verifiedDealerCount + unverifiedDealerCount
+  const totalCars = sumCounts(carTypeCounts)
+  const totalBookings = sumCounts(bookingStatusCounts)
+  const totalPayments = sumCounts(paymentStatusCounts)
+  const totalLoanApplications = sumCounts(loanStatusCounts)
+  const totalRevenue = verifiedPaymentRevenue._sum.amount || 0
+  const totalPlatformFees = verifiedPaymentRevenue._sum.platformFee || 0
+  const totalDealerPayouts = verifiedPaymentRevenue._sum.dealerPayout || 0
 
   return apiResponse({
     success: true,
@@ -149,25 +210,34 @@ export async function GET(request: NextRequest) {
         reviews: totalReviews,
       },
       userBreakdown: {
-        customers: customerCount,
-        dealers: dealerUserCount,
-        admins: adminCount,
+        customers: userCounts.customer ?? 0,
+        dealers: userCounts.dealer ?? 0,
+        admins: userCounts.admin ?? 0,
       },
       dealerVerification: {
-        verified: verifiedDealers,
+        verified: verifiedDealerCount,
         pending: pendingDealers,
         rejected: rejectedDealers,
       },
       carBreakdown: {
-        byType: { rent: rentCars, sale: saleCars, auction: auctionCars, continueLoan: continueLoanCars },
-        byStatus: { pending: pendingCars, approved: approvedCars, rejected: rejectedCars },
+        byType: {
+          rent: carTypeCounts.rent ?? 0,
+          sale: carTypeCounts.sale ?? 0,
+          auction: carTypeCounts.auction ?? 0,
+          continueLoan: carTypeCounts.continueLoan ?? 0,
+        },
+        byStatus: {
+          pending: carStatusCounts.pending ?? 0,
+          approved: carStatusCounts.approved ?? 0,
+          rejected: carStatusCounts.rejected ?? 0,
+        },
       },
       paymentBreakdown: {
         byStatus: {
-          pending: pendingPayments,
-          uploaded: uploadedPayments,
-          verified: verifiedPayments,
-          rejected: rejectedPayments,
+          pending: paymentStatusCounts.pending ?? 0,
+          uploaded: paymentStatusCounts.uploaded ?? 0,
+          verified: paymentStatusCounts.verified ?? 0,
+          rejected: paymentStatusCounts.rejected ?? 0,
         }
       },
       revenue: {
@@ -188,13 +258,13 @@ export async function GET(request: NextRequest) {
         revenue: recentRevenue._sum.amount || 0,
         platformFees: recentRevenue._sum.platformFee || 0,
       },
-      bookingStatusBreakdown: bookingStatusBreakdown.map(b => ({
-        status: b.status,
-        count: b._count.status,
+      bookingStatusBreakdown: bookingStatusBreakdown.map((booking) => ({
+        status: booking.status,
+        count: booking._count.status,
       })),
-      loanStatusBreakdown: loanStatusBreakdown.map(l => ({
-        status: l.status,
-        count: l._count.status,
+      loanStatusBreakdown: loanStatusBreakdown.map((loan) => ({
+        status: loan.status,
+        count: loan._count.status,
       })),
       recentAuditLogs: recentActivity,
     }
