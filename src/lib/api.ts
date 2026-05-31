@@ -567,6 +567,27 @@ export const notificationsApi = {
   },
 }
 
+// ===== WISHLIST API =====
+
+export const wishlistApi = {
+  list: async (): Promise<ApiResponse> => {
+    return apiFetch('/wishlist')
+  },
+
+  add: async (carId: string): Promise<ApiResponse> => {
+    return apiFetch('/wishlist', {
+      method: 'POST',
+      body: JSON.stringify({ carId }),
+    })
+  },
+
+  remove: async (carId: string): Promise<ApiResponse> => {
+    return apiFetch(`/wishlist?carId=${encodeURIComponent(carId)}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
 // ===== UPLOAD API =====
 
 export const uploadApi = {
