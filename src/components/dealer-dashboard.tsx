@@ -471,7 +471,7 @@ export default function DealerDashboard() {
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 cursor-pointer ${
                   isActive
                     ? 'bg-gold/10 text-gold'
                     : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -501,7 +501,7 @@ export default function DealerDashboard() {
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 cursor-pointer" onClick={() => setMobileSidebarOpen(false)} />
           <aside className="absolute left-0 top-0 bottom-0 w-64 bg-sidebar border-r border-border flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-border">
               <div className="flex items-center gap-2">
@@ -522,7 +522,7 @@ export default function DealerDashboard() {
                   <button
                     key={item.id}
                     onClick={() => handleTabChange(item.id)}
-                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ${
+                    className={`w-full flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all cursor-pointer ${
                       isActive
                         ? 'bg-gold/10 text-gold'
                         : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
@@ -888,11 +888,11 @@ export default function DealerDashboard() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent className="bg-card border-border">
                                   {idx !== 0 && (
-                                    <DropdownMenuItem onClick={() => setAsCover(idx)} className="text-foreground focus:bg-gold/10 focus:text-gold">
+                                    <DropdownMenuItem onClick={() => setAsCover(idx)} className="text-foreground focus:bg-gold/10 focus:text-gold cursor-pointer">
                                       <Star className="size-3 mr-2" /> Set as Cover
                                     </DropdownMenuItem>
                                   )}
-                                  <DropdownMenuItem onClick={() => removePhoto(idx)} className="text-red-400 focus:bg-red-500/10">
+                                  <DropdownMenuItem onClick={() => removePhoto(idx)} className="text-red-400 focus:bg-red-500/10 cursor-pointer">
                                     <Trash2 className="size-3 mr-2" /> Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>

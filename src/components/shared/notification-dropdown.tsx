@@ -109,7 +109,7 @@ export function NotificationDropdown() {
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
-              className="text-xs text-gold hover:underline flex items-center gap-1"
+              className="text-xs text-gold hover:underline flex items-center gap-1 cursor-pointer"
             >
               <CheckCheck className="size-3" />
               Mark all as read
@@ -165,7 +165,7 @@ export function NotificationDropdown() {
                         e.stopPropagation()
                         handleMarkRead(notification.id)
                       }}
-                      className="shrink-0 p-1 rounded hover:bg-secondary text-muted-foreground hover:text-gold transition-colors"
+                      className="shrink-0 p-1 rounded hover:bg-secondary text-muted-foreground hover:text-gold transition-colors cursor-pointer"
                       title="Mark as read"
                     >
                       <Check className="size-3.5" />
@@ -182,7 +182,7 @@ export function NotificationDropdown() {
           <div className="border-t border-border px-4 py-2">
             <button
               onClick={handleMarkAllRead}
-              className="text-xs text-gold hover:underline w-full text-center flex items-center justify-center gap-1"
+              className="text-xs text-gold hover:underline w-full text-center flex items-center justify-center gap-1 cursor-pointer"
             >
               <CheckCheck className="size-3" />
               Mark all as read

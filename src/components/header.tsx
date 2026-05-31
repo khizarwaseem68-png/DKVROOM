@@ -116,7 +116,7 @@ export function Header() {
           {/* Logo */}
           <button
             onClick={() => handleNavClick('/')}
-            className="group flex shrink-0 items-center gap-2 transition-all duration-300 hover:scale-105"
+            className="group flex shrink-0 items-center gap-2 transition-all duration-300 hover:scale-105 cursor-pointer"
           >
             <div className="relative flex size-9 items-center justify-center rounded-lg border border-gold/30 bg-gradient-to-br from-gold/20 to-transparent shadow-[0_0_15px_rgba(201,168,76,0.15)] transition-all duration-300 group-hover:border-gold/60 group-hover:shadow-[0_0_25px_rgba(201,168,76,0.25)]">
               <Car className="size-5 text-gold transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -138,7 +138,7 @@ export function Header() {
               <button
                 key={item.path}
                 onClick={() => handleNavClick(item.path)}
-                className={`group relative rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-300 ${
+                className={`group relative rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-300 cursor-pointer ${
                   isActive(item.path)
                     ? 'text-gold'
                     : 'text-muted-foreground hover:text-foreground'
@@ -199,7 +199,7 @@ export function Header() {
               {searchQuery && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-gold"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-gold cursor-pointer"
                 >
                   <X className="size-3.5" />
                 </button>
@@ -235,7 +235,7 @@ export function Header() {
                 {/* User Avatar */}
                 <button
                   onClick={() => handleNavClick(getDashboardPath())}
-                  className="group flex items-center gap-2 rounded-full p-1 pr-3 transition-all duration-300 hover:bg-white/5"
+                  className="group flex items-center gap-2 rounded-full p-1 pr-3 transition-all duration-300 hover:bg-white/5 cursor-pointer"
                 >
                   <Avatar className="size-8 border border-gold/30 transition-all duration-300 group-hover:border-gold/60 group-hover:shadow-[0_0_12px_rgba(201,168,76,0.2)]">
                     <AvatarFallback className="bg-gradient-to-br from-gold/20 to-gold/5 text-xs font-bold text-gold">
@@ -331,7 +331,7 @@ export function Header() {
                     {searchQuery && (
                       <button
                         onClick={() => setSearch('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
+className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold cursor-pointer"
                       >
                         <X className="size-3.5" />
                       </button>
@@ -347,7 +347,7 @@ export function Header() {
                     <button
                       key={item.path}
                       onClick={() => handleNavClick(item.path)}
-                      className={`group flex items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-300 ${
+                      className={`group flex items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-300 cursor-pointer ${
                         isActive(item.path)
                           ? 'bg-gold/10 text-gold shadow-[inset_0_0_20px_rgba(201,168,76,0.05)]'
                           : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
@@ -463,7 +463,7 @@ export function Header() {
             />
             <button
               onClick={() => setSearch('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold"
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-gold cursor-pointer"
             >
               <X className="size-4" />
             </button>
