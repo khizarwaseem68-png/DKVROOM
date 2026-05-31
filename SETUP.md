@@ -29,7 +29,7 @@ Complete installation and setup instructions for **Windows** and **Ubuntu (Linux
 | TypeScript | 5.x | Type-safe JavaScript |
 | Tailwind CSS | 4.x | Utility-first CSS framework |
 | Prisma | 6.x | ORM for database management |
-| SQLite | — | Embedded database (file-based) |
+| PostgreSQL | 16+ | Relational database (server-based) |
 | Bun | 1.x+ | JavaScript runtime & package manager |
 | Zustand | 5.x | Client-side state management |
 | bcryptjs | 3.x | Password hashing |
@@ -136,8 +136,8 @@ nano .env
 Paste the following content (adjust paths for your system):
 
 ```env
-# Database — SQLite file path (ABSOLUTE path required)
-DATABASE_URL=file:./db/custom.db
+# Database — PostgreSQL connection string
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dkvroom
 
 # Security — MUST change in production
 JWT_SECRET=dk-vroom-prod-jwt-secret-2024-change-me-b4f2a8c9e1
@@ -155,7 +155,7 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX_REQUESTS=60
 ```
 
-> **Important**: The `DATABASE_URL` uses a relative path `file:./db/custom.db` which Prisma resolves relative to the `prisma/schema.prisma` file location. If you prefer an absolute path, use `file:///home/youruser/projects/dk-vroom/db/custom.db`.
+> **Important**: The `DATABASE_URL` uses a PostgreSQL connection string. Make sure PostgreSQL 16+ is installed and the database `dkvroom` exists. Create it with: `createdb dkvroom`.
 
 ### Step 7: Initialize Database
 
@@ -293,8 +293,8 @@ notepad .env
 Paste the following content (**note the Windows path format**):
 
 ```env
-# Database — SQLite file path (use forward slashes even on Windows for Prisma)
-DATABASE_URL=file:./db/custom.db
+# Database — PostgreSQL connection string
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dkvroom
 
 # Security — MUST change in production
 JWT_SECRET=dk-vroom-prod-jwt-secret-2024-change-me-b4f2a8c9e1
@@ -312,7 +312,7 @@ RATE_LIMIT_WINDOW_MS=60000
 RATE_LIMIT_MAX_REQUESTS=60
 ```
 
-> **Windows Path Note**: Prisma's SQLite `DATABASE_URL` should use forward slashes (`/`) not backslashes (`\`). Relative paths like `file:./db/custom.db` work on both Windows and Linux. If you need an absolute path, use: `file:C:/Projects/dk-vroom/db/custom.db`
+> **Note**: Ensure PostgreSQL 16+ is running and the `dkvroom` database exists. Create it with: `createdb dkvroom` or via `psql -U postgres -c "CREATE DATABASE dkvroom"`.
 
 ### Step 8: Initialize Database
 
@@ -362,9 +362,9 @@ The application will be available at **http://localhost:3000**
 # =============================================
 # DATABASE
 # =============================================
-# SQLite database file path (relative to prisma/schema.prisma)
-# Use forward slashes on ALL platforms (Windows included)
-DATABASE_URL=file:./db/custom.db
+# PostgreSQL connection string
+# Format: postgresql://USER:PASSWORD@HOST:PORT/DATABASE
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/dkvroom
 
 # =============================================
 # SECURITY — CRITICAL FOR PRODUCTION
@@ -428,7 +428,7 @@ Before deploying to production, you MUST:
 
 ### Understanding the Schema
 
-The project uses **Prisma ORM** with **SQLite**. The database schema includes these main models:
+The project uses **Prisma ORM** with **PostgreSQL**. The database schema includes these main models:
 
 | Model | Purpose |
 |---|---|
@@ -719,7 +719,7 @@ dk-vroom/
 │       ├── use-mobile.ts      # Mobile detection
 │       └── use-toast.ts       # Toast notifications
 ├── db/
-│   └── custom.db              # SQLite database file
+│   └── custom.db              # Legacy SQLite database (not used with PostgreSQL)
 ├── uploads/                   # File upload storage
 ├── public/
 │   └── logo.svg               # App logo
@@ -775,14 +775,11 @@ npx prisma generate
 **Solution**:
 ```bash
 # Ensure the db directory exists
-mkdir -p db
+# Ensure PostgreSQL is running and database exists
+createdb dkvroom 2>/dev/null || psql -U postgres -c "CREATE DATABASE dkvroom"
 
-# Push the schema to create the database file
+# Push the schema
 npx prisma db push
-
-# If using absolute path in .env, verify it's correct
-# Ubuntu: file:///home/youruser/projects/dk-vroom/db/custom.db
-# Windows: file:C:/Projects/dk-vroom/db/custom.db
 ```
 
 #### 4. Port 3000 already in use
@@ -859,21 +856,24 @@ $env:JWT_SECRET="your-strong-secret-here"
 # Or set it in .env (never commit .env to version control!)
 ```
 
-#### 9. SQLite locked errors
+#### 9. PostgreSQL connection issues
 
-**Problem**: `Error: SQLITE_BUSY: database is locked`.
+**Problem**: `Can't reach database server` or `Connection refused`.
 
 **Solution**:
 ```bash
-# This happens with concurrent writes. Stop the dev server, then:
+# Ensure PostgreSQL is running
 # Ubuntu:
-rm -f db/custom.db-journal db/custom.db-wal
+sudo systemctl start postgresql
 
-# Windows:
-del db\custom.db-journal db\custom.db-wal
+# Windows: Start the PostgreSQL service from Services app or:
+pg_ctl start
 
-# Restart the dev server
-bun run dev
+# macOS:
+brew services start postgresql@16
+
+# Then verify the dkvroom database exists:
+psql -U postgres -c "CREATE DATABASE dkvroom;" 2>/dev/null || true
 ```
 
 #### 10. Build fails with out-of-memory error
