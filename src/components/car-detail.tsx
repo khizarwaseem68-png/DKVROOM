@@ -18,6 +18,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -968,6 +970,8 @@ export default function CarDetail() {
   const [loading, setLoading] = useState(true)
   const [bookingLoading, setBookingLoading] = useState(false)
   const [showUnlockBanner, setShowUnlockBanner] = useState(false)
+  const [rentStartDate, setRentStartDate] = useState<string>('')
+  const [rentEndDate, setRentEndDate] = useState<string>('')
 
   // Fetch car data
   useEffect(() => {
@@ -1077,11 +1081,13 @@ export default function CarDetail() {
       }
 
       if (isRent) {
-        const today = new Date()
-        const tomorrow = new Date(today)
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        bookingData.startDate = today.toISOString()
-        bookingData.endDate = tomorrow.toISOString()
+        if (!rentStartDate || !rentEndDate) {
+          toast.error('Please select rental start and end dates')
+          setBookingLoading(false)
+          return
+        }
+        bookingData.startDate = new Date(rentStartDate).toISOString()
+        bookingData.endDate = new Date(rentEndDate).toISOString()
       }
 
       const result = await bookingsApi.create(bookingData)
@@ -1184,6 +1190,78 @@ export default function CarDetail() {
 
             {/* Auction Condition Section */}
             {isAuction && <AuctionConditionSection car={car} />}
+
+            {/* Rental Date Selection */}
+            {isRent && (
+              <Card className="border-border bg-card overflow-hidden">
+                <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
+                  <CardTitle className="text-foreground flex items-center gap-2 heading-sm">
+                    <Calendar className="size-5 text-gold" />
+                    Select Rental Dates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 p-4 sm:p-6 pt-3">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="rent-start" className="text-overline text-muted-foreground">
+                        Pick-up Date
+                      </Label>
+                      <Input
+                        id="rent-start"
+                        type="date"
+                        value={rentStartDate}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={(e) => {
+                          setRentStartDate(e.target.value)
+                          if (rentEndDate && e.target.value > rentEndDate) {
+                            setRentEndDate('')
+                          }
+                        }}
+                        className="bg-background border-border"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="rent-end" className="text-overline text-muted-foreground">
+                        Return Date
+                      </Label>
+                      <Input
+                        id="rent-end"
+                        type="date"
+                        value={rentEndDate}
+                        min={rentStartDate || new Date().toISOString().split('T')[0]}
+                        onChange={(e) => setRentEndDate(e.target.value)}
+                        className="bg-background border-border"
+                      />
+                    </div>
+                  </div>
+                  {rentStartDate && rentEndDate && (
+                    <div className="rounded-lg bg-gold/5 border border-gold/20 p-3">
+                      <div className="flex items-center justify-between text-body-sm">
+                        <span className="text-muted-foreground">Total Days</span>
+                        <span className="font-semibold text-foreground">
+                          {Math.max(1, Math.ceil(
+                            (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
+                              (1000 * 60 * 60 * 24)
+                          ))} day(s)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-body-sm mt-1">
+                        <span className="text-muted-foreground">Estimated Total</span>
+                        <span className="font-semibold gold-text">
+                          {formatPrice(
+                            car.price *
+                              Math.max(1, Math.ceil(
+                                (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
+                                  (1000 * 60 * 60 * 24)
+                              ))
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Location with unlock logic */}
             <div className="flex items-center gap-2">

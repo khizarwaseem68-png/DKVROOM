@@ -204,7 +204,22 @@ export async function POST(request: NextRequest) {
       const start = new Date(sanitized.startDate)
       const end = new Date(sanitized.endDate)
       if (end <= start) return apiError('End date must be after start date', 400)
+
+      // Check for date conflicts with existing approved/active bookings for the same car
+      const conflictingBooking = await db.booking.findFirst({
+        where: {
+          carId: sanitized.carId,
+          status: { in: ['confirmed', 'active', 'payment_pending'] },
+          startDate: { lte: end },
+          endDate: { gte: start },
+        },
+      })
+      if (conflictingBooking) {
+        return apiError('This car is already booked for the selected dates', 409)
+      }
+
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      if (days < 1) return apiError('Minimum rental period is 1 day', 400)
       totalAmount = car.price * days
     } else if (sanitized.type === 'purchase') {
       totalAmount = car.bookingFee || car.deposit || car.price

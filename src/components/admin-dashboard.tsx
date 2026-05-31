@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { adminApi, loansApi } from '@/lib/api'
+import { adminApi, bookingsApi, loansApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
@@ -426,8 +426,8 @@ export default function AdminDashboard() {
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
   const [selectedLoan, setSelectedLoan] = useState<LoanItem | null>(null)
-  const [bookings] = useState<BookingItem[]>([])
-  const [bookingsLoading] = useState(false)
+  const [bookings, setBookings] = useState<BookingItem[]>([])
+  const [bookingsLoading, setBookingsLoading] = useState(false)
 
   // Action states
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -525,13 +525,28 @@ export default function AdminDashboard() {
       const params: Record<string, string> = {}
       if (loanFilter !== 'all') params.status = loanFilter
       const result = await loansApi.list(params)
-      setLoans((result.data ?? []) as LoanItem[])
+      const data = result.data as { loans?: LoanItem[] } | LoanItem[]
+      setLoans(Array.isArray(data) ? data : (data?.loans ?? []))
     } catch {
-      setLoans([])
+      // silent
     } finally {
       setLoansLoading(false)
     }
   }, [loanFilter])
+
+  // Fetch bookings
+  const fetchBookings = useCallback(async () => {
+    setBookingsLoading(true)
+    try {
+      const result = await bookingsApi.list()
+      const data = result.data as { bookings?: BookingItem[] } | BookingItem[]
+      setBookings(Array.isArray(data) ? data : (data?.bookings ?? []))
+    } catch {
+      // silent
+    } finally {
+      setBookingsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     queueMicrotask(() => { void fetchStats() })
@@ -551,7 +566,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (activeTab === 'loans') queueMicrotask(() => { void fetchLoans() })
-  }, [activeTab, fetchLoans])
+    if (activeTab === 'bookings') queueMicrotask(() => { void fetchBookings() })
+  }, [activeTab, fetchLoans, fetchBookings])
 
   // Action handlers
   const handleVerifyDealer = async (dealerId: string, action: 'verify' | 'reject') => {

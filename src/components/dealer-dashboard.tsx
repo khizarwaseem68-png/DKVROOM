@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { dealerApi, carsApi, uploadApi } from '@/lib/api'
+import { dealerApi, carsApi, bookingsApi, uploadApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
@@ -165,6 +165,7 @@ export default function DealerDashboard() {
   const [listingsLoading, setListingsLoading] = useState(true)
   const [bookingsLoading, setBookingsLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -440,20 +441,46 @@ export default function DealerDashboard() {
   }
 
   // Handle edit car - populate form with car data and switch to addCar tab
-  const handleEditCar = (car: CarItem) => {
+  const handleEditCar = (car: CarItem & { weeklyPrice?: number | null; monthlyPrice?: number | null; deposit?: number | null; rentalTerms?: string | null; pickupAvailable?: boolean; deliveryAvailable?: boolean; deliveryFee?: number | null }) => {
     setEditingCarId(car.id)
     setCarType(car.type as VehicleType)
     setCarBrand(car.brand)
     setCarModel(car.model)
     setCarYear(car.year?.toString() || '')
     setCarLocation(car.city || car.location || '')
-    setCarDescription('') // description not in CarItem type
+    setCarDescription('')
     const photos = parseJsonField(car.photos)
     setCarPhotos(photos.map(url => ({ url, name: url.split('/').pop() || 'photo' })))
     setCarSalePrice(car.type === 'sale' ? car.price.toString() : '')
     setCarDailyPrice(car.type === 'rent' ? car.price.toString() : '')
+    setCarWeeklyPrice(car.type === 'rent' && car.weeklyPrice ? car.weeklyPrice.toString() : '')
+    setCarMonthlyPrice(car.type === 'rent' && car.monthlyPrice ? car.monthlyPrice.toString() : '')
+    setCarRentDeposit(car.type === 'rent' && car.deposit ? car.deposit.toString() : '')
+    setCarRentalTerms(car.type === 'rent' && car.rentalTerms ? car.rentalTerms : '')
+    setCarSelfPickup(car.type === 'rent' ? (car.pickupAvailable ?? true) : true)
+    setCarDeliveryAvailable(car.type === 'rent' ? (car.deliveryAvailable ?? false) : false)
+    setCarDeliveryFee(car.type === 'rent' && car.deliveryFee ? car.deliveryFee.toString() : '')
     setCarMileage(car.mileage?.toString() || '')
     handleTabChange('addCar')
+  }
+
+  // Handle booking action (approve/reject) for dealer
+  const handleBookingAction = async (bookingId: string, action: 'confirmed' | 'cancelled') => {
+    setActionLoading(bookingId)
+    try {
+      await bookingsApi.update(bookingId, {
+        status: action,
+        cancellationReason: action === 'cancelled' ? 'Cancelled by dealer' : undefined,
+      })
+      fetchBookings()
+      fetchStats()
+      toast.success(action === 'confirmed' ? 'Booking confirmed' : 'Booking cancelled')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update booking'
+      toast.error(message)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   // Handle toggle featured
@@ -1278,10 +1305,20 @@ export default function DealerDashboard() {
                                   <td className="py-3 px-4">
                                     {booking.status === 'pending' || booking.status === 'payment_pending' ? (
                                       <div className="flex items-center gap-1">
-                                        <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
+                                        <Button
+                                          variant="ghost" size="sm"
+                                          className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
+                                          onClick={() => handleBookingAction(booking.id, 'confirmed')}
+                                          disabled={actionLoading === booking.id}
+                                        >
                                           <CheckCircle className="size-3.5 mr-1" />Approve
                                         </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
+                                        <Button
+                                          variant="ghost" size="sm"
+                                          className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                          onClick={() => handleBookingAction(booking.id, 'cancelled')}
+                                          disabled={actionLoading === booking.id}
+                                        >
                                           <X className="size-3.5 mr-1" />Reject
                                         </Button>
                                       </div>
