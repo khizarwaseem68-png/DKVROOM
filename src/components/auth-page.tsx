@@ -586,7 +586,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 aria-selected={mode === 'login'}
                 onClick={() => switchMode('login')}
                 className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all ${
-                  mode === 'login' ? 'bg-gold text-gold-dark' : 'text-muted-foreground hover:text-foreground'
+                  mode === 'login' ? 'bg-gold text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Sign In
@@ -596,7 +596,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 aria-selected={mode === 'register'}
                 onClick={() => switchMode('register')}
                 className={`flex-1 py-2.5 text-body-sm font-medium rounded-md transition-all ${
-                  mode === 'register' ? 'bg-gold text-gold-dark' : 'text-muted-foreground hover:text-foreground'
+                  mode === 'register' ? 'bg-gold text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Create Account
@@ -685,7 +685,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 <Button
                   type="submit"
                   disabled={loading}
-                  className="w-full h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
+                  className="w-full h-11 bg-gold hover:bg-gold-light text-primary-foreground font-semibold rounded-lg disabled:opacity-50"
                 >
                   {loading ? 'Signing In...' : <>Sign In <ArrowRight className="size-4 ml-1" /></>}
                 </Button>
@@ -981,7 +981,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                         <Button
                           type="button"
                           onClick={goCustNext}
-                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg"
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-primary-foreground font-semibold rounded-lg"
                         >
                           Next <ArrowRight className="size-4 ml-1" />
                         </Button>
@@ -990,7 +990,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           type="button"
                           disabled={loading}
                           onClick={customerForm.handleSubmit(handleCustomerRegister)}
-                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-primary-foreground font-semibold rounded-lg disabled:opacity-50"
                         >
                           {loading ? 'Creating Account...' : <>Create Account <ArrowRight className="size-4 ml-1" /></>}
                         </Button>
@@ -1306,7 +1306,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                         <Button
                           type="button"
                           onClick={goDealerNext}
-                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg"
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-primary-foreground font-semibold rounded-lg"
                         >
                           Next <ArrowRight className="size-4 ml-1" />
                         </Button>
@@ -1315,7 +1315,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           type="button"
                           disabled={loading}
                           onClick={dealerForm.handleSubmit(handleDealerRegister)}
-                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-gold-dark font-semibold rounded-lg disabled:opacity-50"
+                          className="flex-1 h-11 bg-gold hover:bg-gold-light text-primary-foreground font-semibold rounded-lg disabled:opacity-50"
                         >
                           {loading ? 'Registering...' : <>Register as Dealer <ArrowRight className="size-4 ml-1" /></>}
                         </Button>

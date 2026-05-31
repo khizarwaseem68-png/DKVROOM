@@ -478,7 +478,7 @@ export const adminApi = {
   verifyDealer: async (id: string, action: 'verify' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/dealers', {
       method: 'PUT',
-      body: JSON.stringify({ dealerId: id, action, reason }),
+      body: JSON.stringify({ dealerId: id, action, rejectionReason: reason }),
     })
   },
 
@@ -490,7 +490,7 @@ export const adminApi = {
   approveCar: async (id: string, action: 'approve' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/cars', {
       method: 'PUT',
-      body: JSON.stringify({ carId: id, action, reason }),
+      body: JSON.stringify({ carId: id, action, rejectionReason: reason }),
     })
   },
 
@@ -502,7 +502,7 @@ export const adminApi = {
   verifyPayment: async (id: string, action: 'verify' | 'reject', reason?: string): Promise<ApiResponse> => {
     return apiFetch('/admin/payments', {
       method: 'PUT',
-      body: JSON.stringify({ paymentId: id, action, reason }),
+      body: JSON.stringify({ paymentId: id, action, rejectionReason: reason }),
     })
   },
 }

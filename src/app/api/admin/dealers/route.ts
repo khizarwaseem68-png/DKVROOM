@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get('page') || '1')
   const limit = Math.min(parseInt(searchParams.get('limit') || '20'), 100)
   const verified = searchParams.get('verified')
+  const status = searchParams.get('status')
   const dealerType = searchParams.get('dealerType')
   const city = searchParams.get('city')
   const state = searchParams.get('state')
@@ -27,20 +28,27 @@ export async function GET(request: NextRequest) {
 
   const where: any = {}
 
-  if (verified !== null && verified !== undefined) {
+  if (status === 'verified') {
+    where.verified = true
+  } else if (status === 'pending') {
+    where.verified = false
+    where.rejectedAt = null
+  } else if (status === 'rejected') {
+    where.rejectedAt = { not: null }
+  } else if (verified !== null && verified !== undefined) {
     where.verified = verified === 'true'
   }
   if (dealerType) where.dealerType = dealerType
-  if (city) where.city = { contains: city, mode: 'insensitive' }
-  if (state) where.state = { contains: state, mode: 'insensitive' }
+  if (city) where.city = { contains: city }
+  if (state) where.state = { contains: state }
   if (subscriptionTier) where.subscriptionTier = subscriptionTier
   if (search) {
     where.OR = [
-      { companyName: { contains: search, mode: 'insensitive' } },
-      { contactPerson: { contains: search, mode: 'insensitive' } },
-      { registrationNo: { contains: search, mode: 'insensitive' } },
-      { user: { name: { contains: search, mode: 'insensitive' } } },
-      { user: { email: { contains: search, mode: 'insensitive' } } },
+      { companyName: { contains: search } },
+      { contactPerson: { contains: search } },
+      { registrationNo: { contains: search } },
+      { user: { name: { contains: search } } },
+      { user: { email: { contains: search } } },
     ]
   }
 
