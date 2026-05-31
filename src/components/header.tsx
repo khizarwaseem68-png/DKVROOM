@@ -133,18 +133,18 @@ export function Header() {
           </button>
 
           {/* Desktop Navigation */}
-          <nav className="hidden items-center gap-1 lg:flex">
+          <nav className="hidden items-center gap-0.5 lg:flex">
             {navItems.map((item) => (
               <button
                 key={item.path}
                 onClick={() => handleNavClick(item.path)}
-                className={`group relative rounded-lg px-3 py-2 text-sm font-medium transition-all duration-300 ${
+                className={`group relative rounded-lg px-2.5 py-2 text-sm font-medium transition-all duration-300 ${
                   isActive(item.path)
                     ? 'text-gold'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <span className="relative z-10 flex items-center gap-1.5">
+                <span className="relative z-10 flex items-center gap-1.5 whitespace-nowrap">
                   {item.label}
                   {item.badge && (
                     <Badge
@@ -353,7 +353,7 @@ export function Header() {
                           : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
                       }`}
                     >
-                      <span>{item.label}</span>
+                      <span className="whitespace-nowrap">{item.label}</span>
                       {item.badge && (
                         <Badge
                           variant="outline"
