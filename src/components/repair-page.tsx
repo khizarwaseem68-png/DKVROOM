@@ -42,6 +42,11 @@ import {
 
 // ===== LOCAL TYPES =====
 
+interface HoursGroup {
+  label: string
+  time: string
+}
+
 interface WorkshopData {
   id: string
   name: string
@@ -50,6 +55,7 @@ interface WorkshopData {
   rating: number
   specialization: string[]
   hours: string
+  structuredHours: HoursGroup[]
   services: string[]
   verified: boolean
 }
@@ -81,12 +87,12 @@ const HOW_IT_WORKS_STEPS = [
 ]
 
 const DEFAULT_WORKSHOPS: WorkshopData[] = [
-  { id: 'w1', name: 'AutoPrestige Service Center', logo: '🔧', city: 'Kuala Lumpur', rating: 4.9, specialization: ['European Cars', 'Engine Repair'], hours: 'Mon-Sat 8AM-6PM', services: ['Engine Overhaul', 'Oil Change', 'Brake Service', 'Diagnostics'], verified: true },
-  { id: 'w2', name: 'TurboFix Motors', logo: '⚡', city: 'Selangor', rating: 4.7, specialization: ['Japanese Cars', 'Performance'], hours: 'Mon-Fri 9AM-7PM', services: ['Turbo Installation', 'ECU Tuning', 'Exhaust System', 'Suspension'], verified: true },
-  { id: 'w3', name: 'CrystalClear Detailing', logo: '✨', city: 'Penang', rating: 4.8, specialization: ['Detailing', 'Body & Paint'], hours: 'Mon-Sun 10AM-8PM', services: ['Ceramic Coating', 'Paint Protection', 'Interior Detailing', 'Window Tinting'], verified: true },
-  { id: 'w4', name: 'QuickStop Auto', logo: '🏎️', city: 'Johor', rating: 4.5, specialization: ['General Repair', 'Tyres'], hours: 'Mon-Sat 8:30AM-5:30PM', services: ['Tyre Replacement', 'Alignment', 'Battery', 'General Service'], verified: true },
-  { id: 'w5', name: 'Volt Auto Electrical', logo: '💡', city: 'Kuala Lumpur', rating: 4.6, specialization: ['Electrical', 'Diagnostics'], hours: 'Mon-Fri 9AM-6PM', services: ['Electrical Diagnosis', 'AC Repair', 'Audio System', 'Lighting'], verified: true },
-  { id: 'w6', name: 'ProTech Inspection', logo: '🔍', city: 'Selangor', rating: 4.8, specialization: ['Inspection', 'Pre-Purchase'], hours: 'Mon-Sat 9AM-5PM', services: ['Full Inspection', 'Pre-Purchase Check', 'Accident Assessment', 'Valuation'], verified: true },
+  { id: 'w1', name: 'AutoPrestige Service Center', logo: '🔧', city: 'Kuala Lumpur', rating: 4.9, specialization: ['European Cars', 'Engine Repair'], hours: 'Mon-Sat 8AM-6PM', structuredHours: [], services: ['Engine Overhaul', 'Oil Change', 'Brake Service', 'Diagnostics'], verified: true },
+  { id: 'w2', name: 'TurboFix Motors', logo: '⚡', city: 'Selangor', rating: 4.7, specialization: ['Japanese Cars', 'Performance'], hours: 'Mon-Fri 9AM-7PM', structuredHours: [], services: ['Turbo Installation', 'ECU Tuning', 'Exhaust System', 'Suspension'], verified: true },
+  { id: 'w3', name: 'CrystalClear Detailing', logo: '✨', city: 'Penang', rating: 4.8, specialization: ['Detailing', 'Body & Paint'], hours: 'Mon-Sun 10AM-8PM', structuredHours: [], services: ['Ceramic Coating', 'Paint Protection', 'Interior Detailing', 'Window Tinting'], verified: true },
+  { id: 'w4', name: 'QuickStop Auto', logo: '🏎️', city: 'Johor', rating: 4.5, specialization: ['General Repair', 'Tyres'], hours: 'Mon-Sat 8:30AM-5:30PM', structuredHours: [], services: ['Tyre Replacement', 'Alignment', 'Battery', 'General Service'], verified: true },
+  { id: 'w5', name: 'Volt Auto Electrical', logo: '💡', city: 'Kuala Lumpur', rating: 4.6, specialization: ['Electrical', 'Diagnostics'], hours: 'Mon-Fri 9AM-6PM', structuredHours: [], services: ['Electrical Diagnosis', 'AC Repair', 'Audio System', 'Lighting'], verified: true },
+  { id: 'w6', name: 'ProTech Inspection', logo: '🔍', city: 'Selangor', rating: 4.8, specialization: ['Inspection', 'Pre-Purchase'], hours: 'Mon-Sat 9AM-5PM', structuredHours: [], services: ['Full Inspection', 'Pre-Purchase Check', 'Accident Assessment', 'Valuation'], verified: true },
 ]
 
 // ===== HELPERS =====
@@ -139,6 +145,48 @@ function parseAndFormatHours(hours: unknown): string {
   }).join(' · ')
 }
 
+function parseStructuredHours(hours: unknown): HoursGroup[] {
+  if (!hours) return []
+
+  let obj: Record<string, string> | null = null
+
+  if (typeof hours === 'string') {
+    try {
+      const parsed = JSON.parse(hours)
+      if (typeof parsed === 'object' && parsed !== null) {
+        obj = parsed as Record<string, string>
+      }
+    } catch {
+      return []
+    }
+  } else if (typeof hours === 'object' && hours !== null) {
+    obj = hours as Record<string, string>
+  }
+
+  if (!obj) return []
+
+  const entries = Object.entries(obj)
+    .map(([k, v]) => ({ day: DAY_NAMES[k.toLowerCase()] || k, time: String(v) }))
+    .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day))
+
+  const groups: { days: string[]; time: string }[] = []
+  for (const e of entries) {
+    const last = groups[groups.length - 1]
+    if (last && last.time === e.time) {
+      last.days.push(e.day)
+    } else {
+      groups.push({ days: [e.day], time: e.time })
+    }
+  }
+
+  return groups.map((g) => ({
+    label: g.days.length > 2
+      ? `${g.days[0]}–${g.days[g.days.length - 1]}`
+      : g.days.join(', '),
+    time: g.time,
+  }))
+}
+
 function normalizeWorkshop(apiWorkshop: Record<string, unknown>): WorkshopData {
   const parseField = (field: unknown): string[] => {
     if (typeof field === 'string') {
@@ -149,6 +197,7 @@ function normalizeWorkshop(apiWorkshop: Record<string, unknown>): WorkshopData {
 
   const specialization = parseField(apiWorkshop.specialization)
   const services = parseField(apiWorkshop.services)
+  const rawHours = apiWorkshop.operatingHours ?? apiWorkshop.hours
 
   return {
     id: String(apiWorkshop.id ?? ''),
@@ -157,10 +206,27 @@ function normalizeWorkshop(apiWorkshop: Record<string, unknown>): WorkshopData {
     city: String(apiWorkshop.city || 'Kuala Lumpur'),
     rating: Number(apiWorkshop.rating) || 4.5,
     specialization: specialization.length > 0 ? specialization : ['General Repair'],
-    hours: parseAndFormatHours(apiWorkshop.operatingHours ?? apiWorkshop.hours) || 'Mon-Sat 9AM-6PM',
+    hours: parseAndFormatHours(rawHours) || 'Mon-Sat 9AM-6PM',
+    structuredHours: parseStructuredHours(rawHours),
     services: services.length > 0 ? services : ['General Service'],
     verified: Boolean(apiWorkshop.verified ?? true),
   }
+}
+
+function WorkshopSchedule({ groups }: { groups?: HoursGroup[] }) {
+  if (!groups || groups.length === 0) return null
+  return (
+    <div className="space-y-1">
+      {groups.map((g) => (
+        <div key={g.label} className="flex items-center justify-between text-body-sm">
+          <span className="text-muted-foreground font-medium">{g.label}</span>
+          <span className={g.time === 'Closed' ? 'text-error/70' : 'text-foreground/80'}>
+            {g.time}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -405,9 +471,20 @@ export default function RepairPage() {
                     <Separator className="bg-border my-4" />
 
                     {/* Hours */}
-                    <div className="flex items-center gap-2 text-body-sm text-muted-foreground mb-3">
-                      <Clock className="size-3.5 text-gold" />
-                      {workshop.hours}
+                    <div className="mb-3">
+                      <div className="flex items-center gap-2 text-body-sm text-muted-foreground mb-1.5">
+                        <Clock className="size-3.5 text-gold" />
+                        <span>Hours</span>
+                      </div>
+                      {workshop.structuredHours?.length > 0 ? (
+                        <div className="ml-5">
+                          <WorkshopSchedule groups={workshop.structuredHours} />
+                        </div>
+                      ) : (
+                        <div className="ml-5 text-body-sm text-muted-foreground">
+                          {workshop.hours}
+                        </div>
+                      )}
                     </div>
 
                     {/* Services */}

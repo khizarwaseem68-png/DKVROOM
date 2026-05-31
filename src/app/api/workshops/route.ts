@@ -34,13 +34,18 @@ export async function GET(request: NextRequest) {
   const [workshops, total] = await Promise.all([
     db.dealer.findMany({
       where,
-      include: {
-        user: { select: { id: true, name: true, phone: true, whatsapp: true } },
-        workshopAppointments: {
-          select: { id: true },
-          take: 0,
-        },
-        _count: { select: { workshopAppointments: true } },
+      select: {
+        id: true,
+        companyName: true,
+        logo: true,
+        city: true,
+        state: true,
+        phone: true,
+        whatsapp: true,
+        rating: true,
+        verified: true,
+        operatingHours: true,
+        description: true,
       },
       orderBy: { rating: 'desc' },
       skip: (page - 1) * limit,
