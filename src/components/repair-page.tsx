@@ -91,6 +91,54 @@ const DEFAULT_WORKSHOPS: WorkshopData[] = [
 
 // ===== HELPERS =====
 
+const DAY_NAMES: Record<string, string> = {
+  mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun',
+}
+
+const DAY_ORDER = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function parseAndFormatHours(hours: unknown): string {
+  if (!hours) return 'Mon-Sat 9AM-6PM'
+
+  let obj: Record<string, string> | null = null
+
+  if (typeof hours === 'string') {
+    try {
+      const parsed = JSON.parse(hours)
+      if (typeof parsed === 'object' && parsed !== null) {
+        obj = parsed as Record<string, string>
+      }
+    } catch {
+      return hours
+    }
+  } else if (typeof hours === 'object' && hours !== null) {
+    obj = hours as Record<string, string>
+  }
+
+  if (!obj) return String(hours)
+
+  const entries = Object.entries(obj)
+    .map(([k, v]) => ({ day: DAY_NAMES[k.toLowerCase()] || k, time: String(v) }))
+    .sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day))
+
+  const groups: { days: string[]; time: string }[] = []
+  for (const e of entries) {
+    const last = groups[groups.length - 1]
+    if (last && last.time === e.time) {
+      last.days.push(e.day)
+    } else {
+      groups.push({ days: [e.day], time: e.time })
+    }
+  }
+
+  return groups.map((g) => {
+    const dayLabel = g.days.length > 2
+      ? `${g.days[0]}–${g.days[g.days.length - 1]}`
+      : g.days.join(', ')
+    return `${dayLabel} ${g.time}`
+  }).join(' · ')
+}
+
 function normalizeWorkshop(apiWorkshop: Record<string, unknown>): WorkshopData {
   const parseField = (field: unknown): string[] => {
     if (typeof field === 'string') {
@@ -109,7 +157,7 @@ function normalizeWorkshop(apiWorkshop: Record<string, unknown>): WorkshopData {
     city: String(apiWorkshop.city || 'Kuala Lumpur'),
     rating: Number(apiWorkshop.rating) || 4.5,
     specialization: specialization.length > 0 ? specialization : ['General Repair'],
-    hours: String(apiWorkshop.operatingHours || apiWorkshop.hours || 'Mon-Sat 9AM-6PM'),
+    hours: parseAndFormatHours(apiWorkshop.operatingHours ?? apiWorkshop.hours) || 'Mon-Sat 9AM-6PM',
     services: services.length > 0 ? services : ['General Service'],
     verified: Boolean(apiWorkshop.verified ?? true),
   }
