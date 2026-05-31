@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { db } from '@/lib/db'
 import { hashPassword, generateToken } from '@/lib/auth/auth-utils'
-import { rateLimit, authRateLimit, sanitizeInput, isValidEmail, hasSqlInjection, apiResponse, apiError } from '@/lib/security/middleware'
+import { authRateLimit, sanitizeInput, isValidEmail, hasSqlInjection, apiResponse, apiError } from '@/lib/security/middleware'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,11 +13,11 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const {
-      email, password, name, phone, whatsapp, address,
-      icNumber, drivingLicense, role,
+      email, password, name, phone, whatsapp, address, city, state,
+      icNumber, drivingLicense, licenseNumber, role,
       // Dealer-specific fields
-      companyName, dealerType, contactPerson, registrationNo,
-      bankName, bankAccountNumber, bankAccountHolder,
+      companyName, businessName, dealerType, contactPerson, contactName, registrationNo, regNo,
+      bankName, bankAccountNumber, bankAccount, bankAccountHolder, bankHolder,
       // Document URLs
       icDocumentUrl, licenseDocumentUrl, registrationDocUrl,
     } = body
@@ -49,6 +49,14 @@ export async function POST(request: NextRequest) {
       return apiError('Password must contain at least one uppercase letter, one lowercase letter, and one number', 400)
     }
 
+    const phonePattern = /^[+()\-\s0-9]{7,20}$/
+    if (phone && !phonePattern.test(phone)) {
+      return apiError('Please enter a valid phone number', 400)
+    }
+    if (whatsapp && !phonePattern.test(whatsapp)) {
+      return apiError('Please enter a valid WhatsApp number', 400)
+    }
+
     // Check if user already exists
     const existingUser = await db.user.findUnique({ where: { email: sanitizedEmail } })
     if (existingUser) {
@@ -70,7 +78,7 @@ export async function POST(request: NextRequest) {
         whatsapp: whatsapp ? sanitizeInput(whatsapp) : null,
         address: address ? sanitizeInput(address) : null,
         icNumber: icNumber ? sanitizeInput(icNumber) : null,
-        drivingLicense: drivingLicense ? sanitizeInput(drivingLicense) : null,
+        drivingLicense: (drivingLicense || licenseNumber) ? sanitizeInput(drivingLicense || licenseNumber) : null,
         icDocumentUrl: icDocumentUrl || null,
         licenseDocumentUrl: licenseDocumentUrl || null,
         role: userRole,
@@ -80,7 +88,9 @@ export async function POST(request: NextRequest) {
 
     // If dealer, create dealer record
     if (userRole === 'dealer') {
-      if (!companyName) {
+      const dealerCompanyName = companyName || businessName
+
+      if (!dealerCompanyName) {
         await db.user.delete({ where: { id: user.id } })
         return apiError('Company name is required for dealer registration', 400)
       }
@@ -88,16 +98,18 @@ export async function POST(request: NextRequest) {
       await db.dealer.create({
         data: {
           userId: user.id,
-          companyName: sanitizeInput(companyName),
+          companyName: sanitizeInput(dealerCompanyName),
           dealerType: dealerType || 'used_car',
-          contactPerson: contactPerson ? sanitizeInput(contactPerson) : null,
-          registrationNo: registrationNo ? sanitizeInput(registrationNo) : null,
+          contactPerson: (contactPerson || contactName) ? sanitizeInput(contactPerson || contactName) : null,
+          registrationNo: (registrationNo || regNo) ? sanitizeInput(registrationNo || regNo) : null,
           phone: phone ? sanitizeInput(phone) : null,
           whatsapp: whatsapp ? sanitizeInput(whatsapp) : null,
           address: address ? sanitizeInput(address) : null,
+          city: city ? sanitizeInput(city) : null,
+          state: state ? sanitizeInput(state) : null,
           bankName: bankName ? sanitizeInput(bankName) : null,
-          bankAccountNumber: bankAccountNumber ? sanitizeInput(bankAccountNumber) : null,
-          bankAccountHolder: bankAccountHolder ? sanitizeInput(bankAccountHolder) : null,
+          bankAccountNumber: (bankAccountNumber || bankAccount) ? sanitizeInput(bankAccountNumber || bankAccount) : null,
+          bankAccountHolder: (bankAccountHolder || bankHolder) ? sanitizeInput(bankAccountHolder || bankHolder) : null,
           registrationDocUrl: registrationDocUrl || null,
           verified: false,
         }
@@ -149,7 +161,7 @@ export async function POST(request: NextRequest) {
       token,
     }, 201)
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Registration error:', error)
     return apiError('Registration failed. Please try again.', 500)
   }

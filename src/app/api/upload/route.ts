@@ -15,14 +15,19 @@ export async function POST(request: NextRequest) {
       return apiError('Too many upload requests. Please try again later.', 429)
     }
 
-    // Auth check - must be logged in
-    const user = await getUserFromRequest(request)
-    if (!user) return apiError('Unauthorized', 401)
-
     // Get the form data
     const formData = await request.formData()
     const file = formData.get('file') as File | null
     const category = formData.get('category') as string | null // receipts, documents, photos, ic, license, agreements, vehicle_photos
+    const cat = category || 'default'
+
+    // Registration documents are uploaded before an account exists. Other upload
+    // categories still require authentication.
+    const user = await getUserFromRequest(request)
+    const publicRegistrationCategories = new Set(['documents', 'ic', 'license'])
+    if (!user && !publicRegistrationCategories.has(cat)) {
+      return apiError('Unauthorized', 401)
+    }
 
     if (!file) {
       return apiError('No file provided', 400)
@@ -51,7 +56,6 @@ export async function POST(request: NextRequest) {
       default: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
     }
 
-    const cat = category || 'default'
     const maxSizeMB = maxSizes[cat] || maxSizes.default
     const allowedMimes = allowedTypes[cat] || allowedTypes.default
 
@@ -68,8 +72,9 @@ export async function POST(request: NextRequest) {
       return apiError('Invalid file extension', 400)
     }
 
-    const filename = `${cat}/${user.id}/${randomUUID()}.${ext}`
-    const uploadDir = join(process.cwd(), 'uploads', cat, user.id)
+    const ownerFolder = user?.id || 'registration'
+    const filename = `${cat}/${ownerFolder}/${randomUUID()}.${ext}`
+    const uploadDir = join(process.cwd(), 'uploads', cat, ownerFolder)
 
     // Ensure directory exists
     if (!existsSync(uploadDir)) {
@@ -89,7 +94,7 @@ export async function POST(request: NextRequest) {
     const { db } = await import('@/lib/db')
     await db.auditLog.create({
       data: {
-        userId: user.id,
+        userId: user?.id,
         action: 'file_uploaded',
         resource: 'upload',
         details: JSON.stringify({

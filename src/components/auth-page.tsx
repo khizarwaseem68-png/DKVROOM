@@ -56,18 +56,17 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>
 
-const malaysianPhoneRegex = /^(\+?6?0?1)[0-9]-?\s?[0-9]{3,4}\s?[0-9]{4}$/
+const phoneRegex = /^[+()\-\s0-9]{7,20}$/
+const passwordMessage = 'Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 number'
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Full name is required'),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
-  phone: z.string().min(1, 'Phone number is required').regex(malaysianPhoneRegex, 'Please enter a valid Malaysian phone number'),
+  phone: z.string().min(1, 'Phone number is required').regex(phoneRegex, 'Please enter a valid phone number'),
   whatsapp: z.string().optional(),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least 1 uppercase letter')
-    .regex(/[0-9]/, 'Password must contain at least 1 number'),
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, passwordMessage),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   address: z.string().optional(),
   icNumber: z.string().optional(),
@@ -83,13 +82,11 @@ type CustomerFormData = z.infer<typeof customerSchema>
 const dealerSchema = z.object({
   contactName: z.string().min(1, 'Contact person name is required'),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
-  phone: z.string().min(1, 'Phone number is required').regex(malaysianPhoneRegex, 'Please enter a valid Malaysian phone number'),
+  phone: z.string().min(1, 'Phone number is required').regex(phoneRegex, 'Please enter a valid phone number'),
   whatsapp: z.string().optional(),
   password: z
     .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least 1 uppercase letter')
-    .regex(/[0-9]/, 'Password must contain at least 1 number'),
+    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, passwordMessage),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   companyName: z.string().min(1, 'Business name is required'),
   dealerType: z.string().min(1, 'Dealer type is required'),
@@ -193,8 +190,20 @@ function FileUploadBox({
     <div className={`w-full p-4 rounded-lg border-2 transition-all text-left ${
       fileInfo
         ? 'border-success/40 bg-success/5'
-        : 'border-dashed border-border bg-background hover:border-gold/50'
-    }`}>
+        : 'border-dashed border-border bg-background hover:border-gold/50 cursor-pointer'
+    }`}
+      role={!fileInfo ? 'button' : undefined}
+      tabIndex={!fileInfo ? 0 : undefined}
+      onClick={() => {
+        if (!fileInfo && !uploading) fileInputRef.current?.click()
+      }}
+      onKeyDown={(e) => {
+        if (!fileInfo && !uploading && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault()
+          fileInputRef.current?.click()
+        }
+      }}
+    >
       <input
         ref={fileInputRef}
         type="file"
@@ -453,7 +462,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         role: 'customer' as const,
         address: data.address || undefined,
         icNumber: data.icNumber || undefined,
-        licenseNumber: data.licenseNumber || undefined,
+        drivingLicense: data.licenseNumber || undefined,
         icDocumentUrl: custICFile?.url || undefined,
         licenseDocumentUrl: custLicenseFile?.url || undefined,
       }
@@ -481,14 +490,14 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
         phone: data.phone,
         whatsapp: data.whatsapp || undefined,
         role: 'dealer' as const,
-        businessName: data.companyName,
+        companyName: data.companyName,
         dealerType: data.dealerType,
         address: data.address || undefined,
-        regNo: data.regNo || undefined,
+        registrationNo: data.regNo || undefined,
         city: data.city || undefined,
         bankName: data.bankName || undefined,
-        bankAccount: data.bankAccount || undefined,
-        bankHolder: data.bankHolder || undefined,
+        bankAccountNumber: data.bankAccount || undefined,
+        bankAccountHolder: data.bankHolder || undefined,
         registrationDocUrl: dealerDocFile?.url || undefined,
       }
       const result = await authApi.register(userData)
@@ -844,7 +853,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                           </FormField>
                         </div>
                         <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                          <p className="text-caption text-muted-foreground">Password must contain at least 8 characters, 1 uppercase letter, and 1 number.</p>
+                          <p className="text-caption text-muted-foreground">{passwordMessage}.</p>
                         </div>
                       </div>
                     )}
@@ -1171,7 +1180,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                         </div>
 
                         <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                          <p className="text-caption text-muted-foreground">Password must contain at least 8 characters, 1 uppercase letter, and 1 number.</p>
+                          <p className="text-caption text-muted-foreground">{passwordMessage}.</p>
                         </div>
                       </div>
                     )}
