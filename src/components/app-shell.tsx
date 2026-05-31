@@ -84,6 +84,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
     if (pathname?.startsWith('/dealer-dashboard') && user.role === 'dealer' && getDealerStatus(user) !== 'verified') {
       router.replace('/dealer-status')
     }
+
+    if (pathname?.startsWith('/customer-dashboard') && user.role === 'customer') {
+      router.replace('/')
+    }
   }, [authReady, isLoggedIn, pathname, router, user])
 
   // Determine if header should be shown

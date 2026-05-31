@@ -406,14 +406,14 @@ className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover
                         Dashboard
                       </Button>}
 
-                      <Button
+                      {user?.role !== "customer" && <Button
                         variant="ghost"
-                        onClick={() => handleNavClick('/customer-dashboard')}
+                        onClick={() => handleNavClick('/')}
                         className="justify-start text-muted-foreground hover:text-gold"
                       >
                         <User className="mr-2 size-4" />
                         My Profile
-                      </Button>
+                      </Button>}
 
                       <Button
                         variant="ghost"
