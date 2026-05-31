@@ -21,7 +21,10 @@ function AppShell({ children }: { children: React.ReactNode }) {
   // Listen for auth expiration events
   useEffect(() => {
     const handleAuthExpired = () => {
-      useAppStore.getState().logout()
+      const state = useAppStore.getState()
+      if (state.isLoggedIn) {
+        state.logout()
+      }
     }
     window.addEventListener('auth:expired', handleAuthExpired)
     return () => window.removeEventListener('auth:expired', handleAuthExpired)
