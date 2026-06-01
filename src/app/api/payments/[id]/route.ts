@@ -6,6 +6,32 @@ import { saveFile, validateFile } from '@/lib/file-upload'
 
 const RECEIPT_CONFIG = { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] }
 
+type AdminNotification = {
+  title: string
+  message: string
+  type?: string
+  link?: string
+}
+
+async function notifyAdmins(notification: AdminNotification) {
+  const admins = await db.user.findMany({
+    where: { role: 'admin', active: true },
+    select: { id: true },
+  })
+
+  if (admins.length === 0) return
+
+  await db.notification.createMany({
+    data: admins.map((admin) => ({
+      userId: admin.id,
+      title: notification.title,
+      message: notification.message,
+      type: notification.type || 'info',
+      link: notification.link,
+    })),
+  })
+}
+
 // GET /api/payments/[id] - Single payment detail
 export async function GET(
   request: NextRequest,
@@ -75,67 +101,66 @@ export async function PUT(
 
   if (!payment) return apiError('Payment not found', 404)
 
-  const body = await request.json()
+  const contentType = request.headers.get('content-type') || ''
+  const isMultipart = contentType.includes('multipart/form-data')
+  const formData = isMultipart ? await request.formData() : null
+  const body = isMultipart ? {} : await request.json().catch(() => ({}))
 
   // Customer: Upload receipt
   if (user.role === 'customer') {
     if (payment.userId !== user.id) return apiError('Forbidden', 403)
-    if (payment.status !== 'pending') return apiError('Payment is not in pending status', 400)
+    if (payment.status !== 'pending') {
+      if (payment.status === 'uploaded' && payment.receiptUrl) {
+        return apiResponse({ success: true, data: payment })
+      }
 
-    let receiptUrl: string | null = body?.receiptUrl || null
-    let receiptFile: File | null = null
-
-    const contentType = request.headers.get('content-type') || ''
-    if (contentType.includes('multipart/form-data')) {
-      const formData = await request.formData()
-      receiptFile = formData.get('receipt') as File | null
-      receiptUrl = formData.get('receiptUrl') as string | null
+      return apiError('Payment is not in pending status', 400)
     }
 
-    if (receiptFile) {
+    let receiptUrl: string | null = typeof body?.receiptUrl === 'string' ? body.receiptUrl : null
+    const receiptFile = formData?.get('receipt')
+    const receiptUrlValue = formData?.get('receiptUrl')
+
+    if (typeof receiptUrlValue === 'string') {
+      receiptUrl = receiptUrlValue
+    }
+
+    if (receiptFile instanceof File) {
       const err = validateFile(receiptFile, RECEIPT_CONFIG.maxSizeMB, RECEIPT_CONFIG.allowedMimes)
       if (err) return apiError('Receipt: ' + err, 400)
     }
 
-    if (!receiptUrl && !receiptFile) return apiError('Receipt file or URL is required', 400)
-
-    // Update payment status in DB first (without URL if file not yet saved)
-    const updateData: any = {
-      receiptUploadedAt: new Date(),
-      status: 'uploaded',
+    if (!receiptUrl && !(receiptFile instanceof File)) {
+      return apiError('Receipt file or URL is required', 400)
     }
-    if (receiptUrl && !receiptFile) {
-      updateData.receiptUrl = sanitizeInput(receiptUrl)
+
+    if (receiptFile instanceof File) {
+      receiptUrl = await saveFile(receiptFile, 'receipts', payment.userId)
+    }
+
+    if (!receiptUrl) {
+      return apiError('Unable to save receipt', 500)
     }
 
     const updatedPayment = await db.payment.update({
       where: { id },
-      data: updateData,
+      data: {
+        receiptUploadedAt: new Date(),
+        receiptUrl: sanitizeInput(receiptUrl),
+        status: 'uploaded',
+      },
     })
 
-    // Save file to disk only after DB update succeeds
-    if (receiptFile) {
-      try {
-        const savedUrl = await saveFile(receiptFile, 'receipts', payment.userId)
-        await db.payment.update({
-          where: { id },
-          data: { receiptUrl: savedUrl },
-        })
-      } catch {
-        // File save failed but DB is already updated — non-critical
-      }
-    }
-
-    // Create notification for admin
-    await db.notification.create({
-      data: {
-        userId: 'admin',
+    try {
+      await notifyAdmins({
         title: 'Payment Receipt Uploaded',
         message: `A payment receipt has been uploaded for payment ${id}. Amount: RM${payment.amount}`,
         type: 'payment',
         link: `/admin/payments/${id}`,
-      }
-    })
+      })
+    } catch (error) {
+      console.error('Admin payment notification failed:', error)
+    }
 
     return apiResponse({ success: true, data: updatedPayment })
   }
