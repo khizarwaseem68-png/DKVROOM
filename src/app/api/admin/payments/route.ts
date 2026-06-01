@@ -133,6 +133,14 @@ export async function PUT(request: NextRequest) {
         }
       })
 
+      // If this is a rent booking, mark the car as booked
+      if (payment.booking?.type === 'rent' && payment.booking?.car) {
+        await db.car.update({
+          where: { id: payment.booking.car.id },
+          data: { status: 'booked' },
+        })
+      }
+
       // Notification for customer
       await db.notification.create({
         data: {

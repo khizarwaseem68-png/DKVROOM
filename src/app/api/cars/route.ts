@@ -188,7 +188,22 @@ export async function POST(request: NextRequest) {
     if (user.dealer.rejectedAt) return apiError('Dealer account rejected', 403)
     if (!user.dealer.verified) return apiError('Dealer account not yet verified', 403)
 
-    const body = await request.json()
+    let body: Record<string, unknown>
+    let photoFiles: File[] = []
+
+    const contentType = request.headers.get('content-type') ?? ''
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      body = Object.fromEntries(formData.entries())
+      // Extract photo files
+      for (const [key, value] of formData.entries()) {
+        if (key.startsWith('photo_') && value instanceof File) {
+          photoFiles.push(value)
+        }
+      }
+    } else {
+      body = await request.json()
+    }
 
     // Required fields validation
     const requiredFields = ['type', 'brand', 'model', 'year', 'price']
@@ -314,12 +329,6 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-    })
-
-    // Update dealer's total listings count
-    await db.dealer.update({
-      where: { id: user.dealer.id },
-      data: { totalListings: { increment: 1 } },
     })
 
     // Audit log

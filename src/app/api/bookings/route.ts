@@ -204,12 +204,31 @@ export async function POST(request: NextRequest) {
       const start = new Date(sanitized.startDate)
       const end = new Date(sanitized.endDate)
       if (end <= start) return apiError('End date must be after start date', 400)
+
+      // Check for date conflicts with existing approved/active bookings for the same car
+      const conflictingBooking = await db.booking.findFirst({
+        where: {
+          carId: sanitized.carId,
+          status: { in: ['confirmed', 'active', 'payment_pending'] },
+          startDate: { lte: end },
+          endDate: { gte: start },
+        },
+      })
+      if (conflictingBooking) {
+        return apiError('This car is already booked for the selected dates', 409)
+      }
+
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+      if (days < 1) return apiError('Minimum rental period is 1 day', 400)
       totalAmount = car.price * days
     } else if (sanitized.type === 'purchase') {
       totalAmount = car.bookingFee || car.deposit || car.price
     } else if (sanitized.type === 'continueLoan') {
       totalAmount = car.deposit || car.bookingFee || 0
+    } else if (sanitized.type === 'auction') {
+      totalAmount = sanitized.totalAmount
+        ? parseFloat(sanitized.totalAmount)
+        : Math.round((car.currentBid || car.auctionStartBid || car.price || 0) * 0.1)
     } else {
       totalAmount = sanitized.totalAmount ? parseFloat(sanitized.totalAmount) : car.bookingFee || 0
     }
@@ -239,6 +258,9 @@ export async function POST(request: NextRequest) {
       // Generate QR reference
       const qrReference = 'QR' + Date.now().toString(36).toUpperCase()
 
+      // Determine payment type based on booking type
+      const paymentType = sanitized.type === 'auction' ? 'auction_deposit' : 'booking'
+
       // Create associated payment record
       const payment = await tx.payment.create({
         data: {
@@ -249,7 +271,7 @@ export async function POST(request: NextRequest) {
           platformFee,
           dealerPayout: totalAmount ? Math.round((totalAmount - platformFee) * 100) / 100 : 0,
           method: 'qr_manual',
-          paymentType: 'booking',
+          paymentType,
           qrReference,
           qrGeneratedAt: new Date(),
           status: 'pending',

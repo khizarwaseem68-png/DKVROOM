@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { paymentsApi, uploadApi } from '@/lib/api'
+import { bookingsApi, paymentsApi } from '@/lib/api'
 import { formatPrice, PAYMENT_METHODS } from '@/lib/constants'
 import { StatusBadge } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -71,7 +71,15 @@ function getStatusStep(paymentStatus: string, receiptUploaded: boolean): number 
 
 // ===== SUB-COMPONENTS =====
 
-function VerifiedView({ onHome }: { onHome: () => void }) {
+interface DealerContact {
+  dealerName?: string
+  phone?: string
+  whatsapp?: string
+  address?: string
+  city?: string
+}
+
+function VerifiedView({ onHome, dealerContact }: { onHome: () => void; dealerContact: DealerContact }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
@@ -107,25 +115,33 @@ function VerifiedView({ onHome }: { onHome: () => void }) {
               <Phone className="size-5 text-emerald-400" />
               <div>
                 <p className="text-caption text-muted-foreground">Dealer Phone</p>
-                <p className="font-medium text-foreground">+60 12-345 6789</p>
+                <p className="font-medium text-foreground">{dealerContact.phone || '+60 12-345 6789'}</p>
               </div>
             </div>
             <div className="flex items-center gap-3 p-3 rounded-lg bg-background">
               <MessageCircle className="size-5 text-emerald-400" />
               <div>
                 <p className="text-caption text-muted-foreground">WhatsApp</p>
-                <p className="font-medium text-foreground">+60 12-345 6789</p>
+                <p className="font-medium text-foreground">{dealerContact.whatsapp || dealerContact.phone || '+60 12-345 6789'}</p>
               </div>
             </div>
-            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-11">
-              <MessageCircle className="size-5" />
-              Chat on WhatsApp
-            </Button>
+            {dealerContact.whatsapp && (
+              <a
+                href={`https://wa.me/${dealerContact.whatsapp.replace(/[-\s]/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2 h-11">
+                  <MessageCircle className="size-5" />
+                  Chat on WhatsApp
+                </Button>
+              </a>
+            )}
             <div className="flex items-center gap-3 p-3 rounded-lg bg-background">
               <MapPin className="size-5 text-gold" />
               <div>
                 <p className="text-caption text-muted-foreground">Exact Location</p>
-                <p className="font-medium text-foreground">Lot 23, Jalan Ampang, KLCC, 50450 Kuala Lumpur</p>
+                <p className="font-medium text-foreground">{dealerContact.address || dealerContact.city || 'Lot 23, Jalan Ampang, KLCC, 50450 Kuala Lumpur'}</p>
               </div>
             </div>
           </CardContent>
@@ -185,9 +201,38 @@ export default function PaymentPage() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null)
   const [receiptFileName, setReceiptFileName] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [dealerContact, setDealerContact] = useState<DealerContact>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isAdmin = user?.role === 'admin'
+
+  // Fetch booking details when contact is unlocked to show real dealer info
+  const fetchBookingDetails = useCallback(async () => {
+    if (!booking.bookingId || !booking.contactUnlocked) return
+    try {
+      const result = await bookingsApi.get(booking.bookingId)
+      const data = result.data as Record<string, unknown> | undefined
+      if (data) {
+        const dealer = data.dealer as Record<string, unknown> | undefined
+        const dealerContactData = data.dealerContact as Record<string, unknown> | undefined
+        if (dealerContactData) {
+          setDealerContact({
+            dealerName: (dealer?.companyName as string) || undefined,
+            phone: dealerContactData.phone as string || undefined,
+            whatsapp: dealerContactData.whatsapp as string || undefined,
+            address: dealerContactData.address as string || undefined,
+            city: (dealer?.city as string) || undefined,
+          })
+        }
+      }
+    } catch {
+      // Silent — fall back to placeholder data
+    }
+  }, [booking.bookingId, booking.contactUnlocked])
+
+  useEffect(() => {
+    fetchBookingDetails()
+  }, [fetchBookingDetails])
 
   const qrValue = `https://dkvroom.com/pay?ref=${booking.bookingId || 'DEMO'}&amount=${booking.amount}`
   const currentStep = getStatusStep(booking.paymentStatus, uploaded)
@@ -238,7 +283,7 @@ export default function PaymentPage() {
 
   // ===== VERIFIED STATE =====
   if (booking.contactUnlocked) {
-    return <VerifiedView onHome={() => router.push('/')} />
+    return <VerifiedView onHome={() => router.push('/')} dealerContact={dealerContact} />
   }
 
   // ===== PAYMENT FLOW =====

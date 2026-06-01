@@ -124,11 +124,11 @@ const TYPE_META: Record<string, { title: string; subtitle: string }> = {
   },
 }
 
-const PRICE_RANGES: { key: PriceRange; label: string }[] = [
+const PRICE_RANGES: { key: PriceRange; label: string; rentLabel?: string; auctionLabel?: string }[] = [
   { key: 'all', label: 'All Prices' },
-  { key: 'low', label: 'Under RM 100K' },
-  { key: 'mid', label: 'RM 100K – 500K' },
-  { key: 'high', label: 'Above RM 500K' },
+  { key: 'low', label: 'Under RM 100K', rentLabel: 'Under RM 200/day', auctionLabel: 'Under RM 100K' },
+  { key: 'mid', label: 'RM 100K – 500K', rentLabel: 'RM 200 – 800/day', auctionLabel: 'RM 100K – 500K' },
+  { key: 'high', label: 'Above RM 500K', rentLabel: 'Above RM 800/day', auctionLabel: 'Above RM 500K' },
 ]
 
 const TRANSMISSION_OPTIONS = [
@@ -651,13 +651,24 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
       if (cityFilter !== 'All Cities') params.city = cityFilter
       if (searchQuery) params.search = searchQuery
 
-      if (priceRange === 'low') {
-        params.maxPrice = 99999
-      } else if (priceRange === 'mid') {
-        params.minPrice = 100000
-        params.maxPrice = 499999
-      } else if (priceRange === 'high') {
-        params.minPrice = 500000
+      if (type === 'rent') {
+        if (priceRange === 'low') {
+          params.maxPrice = 199
+        } else if (priceRange === 'mid') {
+          params.minPrice = 200
+          params.maxPrice = 799
+        } else if (priceRange === 'high') {
+          params.minPrice = 800
+        }
+      } else {
+        if (priceRange === 'low') {
+          params.maxPrice = 99999
+        } else if (priceRange === 'mid') {
+          params.minPrice = 100000
+          params.maxPrice = 499999
+        } else if (priceRange === 'high') {
+          params.minPrice = 500000
+        }
       }
 
       const result = await carsApi.list(params)
@@ -812,7 +823,7 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
             <SelectContent>
               {PRICE_RANGES.map((pr) => (
                 <SelectItem key={pr.key} value={pr.key}>
-                  {pr.label}
+                  {type === 'rent' && pr.rentLabel ? pr.rentLabel : type === 'auction' && pr.auctionLabel ? pr.auctionLabel : pr.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -878,11 +889,17 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
             {priceRange !== 'all' && (
               <ActiveFilterBadge
                 label={
-                  priceRange === 'low'
-                    ? '< RM 100K'
-                    : priceRange === 'mid'
-                      ? 'RM 100K–500K'
-                      : '> RM 500K'
+                  type === 'rent'
+                    ? priceRange === 'low'
+                      ? '< RM 200/day'
+                      : priceRange === 'mid'
+                        ? 'RM 200–800/day'
+                        : '> RM 800/day'
+                    : priceRange === 'low'
+                      ? '< RM 100K'
+                      : priceRange === 'mid'
+                        ? 'RM 100K–500K'
+                        : '> RM 500K'
                 }
                 onRemove={() => {
                   setPriceRange('all')

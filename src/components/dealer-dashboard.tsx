@@ -3,11 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { dealerApi, carsApi, uploadApi } from '@/lib/api'
+import { dealerApi, carsApi, bookingsApi, uploadApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
   VEHICLE_TYPE_CONFIG,
+  CONDITION_CATEGORIES,
+  RUNNING_STATUS,
+  SALVAGE_STATUS,
   type VehicleType,
 } from '@/lib/constants'
 import {
@@ -165,6 +168,7 @@ export default function DealerDashboard() {
   const [listingsLoading, setListingsLoading] = useState(true)
   const [bookingsLoading, setBookingsLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -259,6 +263,11 @@ export default function DealerDashboard() {
   const [carAuctionEndDate, setCarAuctionEndDate] = useState('')
   const [carReservePrice, setCarReservePrice] = useState('')
   const [carAuctionCondition, setCarAuctionCondition] = useState('')
+  const [carAuctionConditionCategory, setCarAuctionConditionCategory] = useState('')
+  const [carAuctionRunningStatus, setCarAuctionRunningStatus] = useState('')
+  const [carAuctionSalvageStatus, setCarAuctionSalvageStatus] = useState('')
+  const [carDamageDescription, setCarDamageDescription] = useState('')
+  const [carRepairEstimate, setCarRepairEstimate] = useState('')
 
   const handleTabChange = (tab: DealerTab) => {
     setActiveTab(tab)
@@ -277,6 +286,8 @@ export default function DealerDashboard() {
     setCarTakeoverAmount(''); setCarVehicleCondition(''); setCarBankName('')
     setCarStartingBid(''); setCarAuctionEndDate('')
     setCarReservePrice(''); setCarAuctionCondition('')
+    setCarAuctionConditionCategory(''); setCarAuctionRunningStatus('')
+    setCarAuctionSalvageStatus(''); setCarDamageDescription(''); setCarRepairEstimate('')
     setEditingCarId(null)
   }
 
@@ -361,6 +372,11 @@ export default function DealerDashboard() {
         carData.auctionEnd = carAuctionEndDate || undefined
         carData.auctionReserve = carReservePrice ? parseFloat(carReservePrice) : undefined
         carData.condition = carAuctionCondition || undefined
+        carData.conditionCategory = carAuctionConditionCategory || undefined
+        carData.runningStatus = carAuctionRunningStatus || undefined
+        carData.salvageStatus = carAuctionSalvageStatus || undefined
+        carData.damageDescription = carDamageDescription || undefined
+        carData.repairEstimate = carRepairEstimate ? parseFloat(carRepairEstimate) : undefined
         carData.transmission = 'auto'
         carData.fuelType = 'petrol'
         carData.auctionActive = true
@@ -440,20 +456,61 @@ export default function DealerDashboard() {
   }
 
   // Handle edit car - populate form with car data and switch to addCar tab
-  const handleEditCar = (car: CarItem) => {
+  const handleEditCar = (car: CarItem & {
+    weeklyPrice?: number | null; monthlyPrice?: number | null; deposit?: number | null;
+    rentalTerms?: string | null; pickupAvailable?: boolean; deliveryAvailable?: boolean; deliveryFee?: number | null;
+    conditionCategory?: string | null; runningStatus?: string | null; salvageStatus?: string | null;
+    damageDescription?: string | null; repairEstimate?: number | null;
+    auctionEnd?: string | null; auctionReserve?: number | null; condition?: string | null;
+  }) => {
     setEditingCarId(car.id)
     setCarType(car.type as VehicleType)
     setCarBrand(car.brand)
     setCarModel(car.model)
     setCarYear(car.year?.toString() || '')
     setCarLocation(car.city || car.location || '')
-    setCarDescription('') // description not in CarItem type
+    setCarDescription('')
     const photos = parseJsonField(car.photos)
     setCarPhotos(photos.map(url => ({ url, name: url.split('/').pop() || 'photo' })))
     setCarSalePrice(car.type === 'sale' ? car.price.toString() : '')
     setCarDailyPrice(car.type === 'rent' ? car.price.toString() : '')
+    setCarWeeklyPrice(car.type === 'rent' && car.weeklyPrice ? car.weeklyPrice.toString() : '')
+    setCarMonthlyPrice(car.type === 'rent' && car.monthlyPrice ? car.monthlyPrice.toString() : '')
+    setCarRentDeposit(car.type === 'rent' && car.deposit ? car.deposit.toString() : '')
+    setCarRentalTerms(car.type === 'rent' && car.rentalTerms ? car.rentalTerms : '')
+    setCarSelfPickup(car.type === 'rent' ? (car.pickupAvailable ?? true) : true)
+    setCarDeliveryAvailable(car.type === 'rent' ? (car.deliveryAvailable ?? false) : false)
+    setCarDeliveryFee(car.type === 'rent' && car.deliveryFee ? car.deliveryFee.toString() : '')
+    setCarStartingBid(car.type === 'auction' ? car.price.toString() : '')
+    setCarAuctionEndDate(car.type === 'auction' && car.auctionEnd ? car.auctionEnd : '')
+    setCarReservePrice(car.type === 'auction' && car.auctionReserve ? car.auctionReserve.toString() : '')
+    setCarAuctionCondition(car.type === 'auction' && car.condition ? car.condition : '')
+    setCarAuctionConditionCategory(car.type === 'auction' && car.conditionCategory ? car.conditionCategory : '')
+    setCarAuctionRunningStatus(car.type === 'auction' && car.runningStatus ? car.runningStatus : '')
+    setCarAuctionSalvageStatus(car.type === 'auction' && car.salvageStatus ? car.salvageStatus : '')
+    setCarDamageDescription(car.type === 'auction' && car.damageDescription ? car.damageDescription : '')
+    setCarRepairEstimate(car.type === 'auction' && car.repairEstimate ? car.repairEstimate.toString() : '')
     setCarMileage(car.mileage?.toString() || '')
     handleTabChange('addCar')
+  }
+
+  // Handle booking action (approve/reject) for dealer
+  const handleBookingAction = async (bookingId: string, action: 'confirmed' | 'cancelled') => {
+    setActionLoading(bookingId)
+    try {
+      await bookingsApi.update(bookingId, {
+        status: action,
+        cancellationReason: action === 'cancelled' ? 'Cancelled by dealer' : undefined,
+      })
+      fetchBookings()
+      fetchStats()
+      toast.success(action === 'confirmed' ? 'Booking confirmed' : 'Booking cancelled')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update booking'
+      toast.error(message)
+    } finally {
+      setActionLoading(null)
+    }
   }
 
   // Handle toggle featured
@@ -1176,7 +1233,7 @@ export default function DealerDashboard() {
                           <Input type="number" value={carReservePrice} onChange={(e) => setCarReservePrice(e.target.value)} placeholder="e.g. 950000" className={INPUT_CLS} />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-muted-foreground text-caption">Condition</Label>
+                          <Label className="text-muted-foreground text-caption">General Condition</Label>
                           <Select value={carAuctionCondition} onValueChange={setCarAuctionCondition}>
                             <SelectTrigger className="bg-secondary border-border text-foreground h-10">
                               <SelectValue placeholder="Select Condition" />
@@ -1188,6 +1245,59 @@ export default function DealerDashboard() {
                             </SelectContent>
                           </Select>
                         </div>
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-caption">Condition Category</Label>
+                          <Select value={carAuctionConditionCategory} onValueChange={setCarAuctionConditionCategory}>
+                            <SelectTrigger className="bg-secondary border-border text-foreground h-10">
+                              <SelectValue placeholder="Select Category" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border">
+                              {CONDITION_CATEGORIES.map((cat) => (
+                                <SelectItem key={cat.key} value={cat.key} className="text-foreground focus:bg-secondary focus:text-gold">
+                                  {cat.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-caption">Running Status</Label>
+                          <Select value={carAuctionRunningStatus} onValueChange={setCarAuctionRunningStatus}>
+                            <SelectTrigger className="bg-secondary border-border text-foreground h-10">
+                              <SelectValue placeholder="Select Status" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border">
+                              {Object.entries(RUNNING_STATUS).map(([key, val]) => (
+                                <SelectItem key={key} value={key} className="text-foreground focus:bg-secondary focus:text-gold">
+                                  {val.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-caption">Salvage Status</Label>
+                          <Select value={carAuctionSalvageStatus} onValueChange={setCarAuctionSalvageStatus}>
+                            <SelectTrigger className="bg-secondary border-border text-foreground h-10">
+                              <SelectValue placeholder="Select Status" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-card border-border">
+                              {Object.entries(SALVAGE_STATUS).map(([key, val]) => (
+                                <SelectItem key={key} value={key} className="text-foreground focus:bg-secondary focus:text-gold">
+                                  {val.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-muted-foreground text-caption">Repair Estimate (RM) <span className="text-muted-foreground/50">— optional</span></Label>
+                          <Input type="number" value={carRepairEstimate} onChange={(e) => setCarRepairEstimate(e.target.value)} placeholder="e.g. 50000" className={INPUT_CLS} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground text-caption">Damage Description <span className="text-muted-foreground/50">— optional</span></Label>
+                        <Textarea value={carDamageDescription} onChange={(e) => setCarDamageDescription(e.target.value)} placeholder="Describe any damage, accident history, or special conditions..." rows={3} className="bg-secondary border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold" />
                       </div>
                     </div>
                   )}
@@ -1278,10 +1388,20 @@ export default function DealerDashboard() {
                                   <td className="py-3 px-4">
                                     {booking.status === 'pending' || booking.status === 'payment_pending' ? (
                                       <div className="flex items-center gap-1">
-                                        <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs">
+                                        <Button
+                                          variant="ghost" size="sm"
+                                          className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
+                                          onClick={() => handleBookingAction(booking.id, 'confirmed')}
+                                          disabled={actionLoading === booking.id}
+                                        >
                                           <CheckCircle className="size-3.5 mr-1" />Approve
                                         </Button>
-                                        <Button variant="ghost" size="sm" className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs">
+                                        <Button
+                                          variant="ghost" size="sm"
+                                          className="h-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-xs"
+                                          onClick={() => handleBookingAction(booking.id, 'cancelled')}
+                                          disabled={actionLoading === booking.id}
+                                        >
                                           <X className="size-3.5 mr-1" />Reject
                                         </Button>
                                       </div>

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { adminApi, loansApi } from '@/lib/api'
+import { adminApi, bookingsApi, loansApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
@@ -173,8 +173,11 @@ interface CarItem {
   currentBid?: number | null
   auctionEnd?: string | null
   conditionCategory?: string | null
+  runningStatus?: string | null
+  salvageStatus?: string | null
   damageDescription?: string | null
   repairEstimate?: number | null
+  auctionActive?: boolean
   location?: string | null
   city?: string | null
   state?: string | null
@@ -426,8 +429,8 @@ export default function AdminDashboard() {
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
   const [selectedLoan, setSelectedLoan] = useState<LoanItem | null>(null)
-  const [bookings] = useState<BookingItem[]>([])
-  const [bookingsLoading] = useState(false)
+  const [bookings, setBookings] = useState<BookingItem[]>([])
+  const [bookingsLoading, setBookingsLoading] = useState(false)
 
   // Action states
   const [actionLoading, setActionLoading] = useState<string | null>(null)
@@ -525,13 +528,28 @@ export default function AdminDashboard() {
       const params: Record<string, string> = {}
       if (loanFilter !== 'all') params.status = loanFilter
       const result = await loansApi.list(params)
-      setLoans((result.data ?? []) as LoanItem[])
+      const data = result.data as { loans?: LoanItem[] } | LoanItem[]
+      setLoans(Array.isArray(data) ? data : (data?.loans ?? []))
     } catch {
-      setLoans([])
+      // silent
     } finally {
       setLoansLoading(false)
     }
   }, [loanFilter])
+
+  // Fetch bookings
+  const fetchBookings = useCallback(async () => {
+    setBookingsLoading(true)
+    try {
+      const result = await bookingsApi.list()
+      const data = result.data as { bookings?: BookingItem[] } | BookingItem[]
+      setBookings(Array.isArray(data) ? data : (data?.bookings ?? []))
+    } catch {
+      // silent
+    } finally {
+      setBookingsLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     queueMicrotask(() => { void fetchStats() })
@@ -551,7 +569,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     if (activeTab === 'loans') queueMicrotask(() => { void fetchLoans() })
-  }, [activeTab, fetchLoans])
+    if (activeTab === 'bookings') queueMicrotask(() => { void fetchBookings() })
+  }, [activeTab, fetchLoans, fetchBookings])
 
   // Action handlers
   const handleVerifyDealer = async (dealerId: string, action: 'verify' | 'reject') => {
@@ -886,7 +905,14 @@ export default function AdminDashboard() {
               <DetailItem label="Monthly Price" value={car.monthlyPrice ? formatPrice(car.monthlyPrice) : 'N/A'} />
               <DetailItem label="Deposit" value={car.deposit ? formatPrice(car.deposit) : 'N/A'} />
               <DetailItem label="Booking Fee" value={car.bookingFee ? formatPrice(car.bookingFee) : 'N/A'} />
+              <DetailItem label="Auction Start Bid" value={car.auctionStartBid ? formatPrice(car.auctionStartBid) : 'N/A'} />
+              <DetailItem label="Auction Reserve" value={car.auctionReserve ? formatPrice(car.auctionReserve) : 'N/A'} />
               <DetailItem label="Current Bid" value={car.currentBid ? formatPrice(car.currentBid) : 'N/A'} />
+              <DetailItem label="Auction End" value={car.auctionEnd ? formatDate(car.auctionEnd) : 'N/A'} />
+              <DetailItem label="Auction Active" value={car.auctionActive ? 'Yes' : 'No'} />
+              <DetailItem label="Condition Category" value={car.conditionCategory || 'N/A'} />
+              <DetailItem label="Running Status" value={car.runningStatus || 'N/A'} />
+              <DetailItem label="Salvage Status" value={car.salvageStatus || 'N/A'} />
               <DetailItem label="Repair Estimate" value={car.repairEstimate ? formatPrice(car.repairEstimate) : 'N/A'} />
             </CardContent>
           </Card>
