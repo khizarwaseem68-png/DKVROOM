@@ -225,6 +225,10 @@ export async function POST(request: NextRequest) {
       totalAmount = car.bookingFee || car.deposit || car.price
     } else if (sanitized.type === 'continueLoan') {
       totalAmount = car.deposit || car.bookingFee || 0
+    } else if (sanitized.type === 'auction') {
+      totalAmount = sanitized.totalAmount
+        ? parseFloat(sanitized.totalAmount)
+        : Math.round((car.currentBid || car.auctionStartBid || car.price || 0) * 0.1)
     } else {
       totalAmount = sanitized.totalAmount ? parseFloat(sanitized.totalAmount) : car.bookingFee || 0
     }
@@ -254,6 +258,9 @@ export async function POST(request: NextRequest) {
       // Generate QR reference
       const qrReference = 'QR' + Date.now().toString(36).toUpperCase()
 
+      // Determine payment type based on booking type
+      const paymentType = sanitized.type === 'auction' ? 'auction_deposit' : 'booking'
+
       // Create associated payment record
       const payment = await tx.payment.create({
         data: {
@@ -264,7 +271,7 @@ export async function POST(request: NextRequest) {
           platformFee,
           dealerPayout: totalAmount ? Math.round((totalAmount - platformFee) * 100) / 100 : 0,
           method: 'qr_manual',
-          paymentType: 'booking',
+          paymentType,
           qrReference,
           qrGeneratedAt: new Date(),
           status: 'pending',

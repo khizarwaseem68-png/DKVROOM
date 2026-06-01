@@ -124,11 +124,11 @@ const TYPE_META: Record<string, { title: string; subtitle: string }> = {
   },
 }
 
-const PRICE_RANGES: { key: PriceRange; label: string; rentLabel?: string }[] = [
+const PRICE_RANGES: { key: PriceRange; label: string; rentLabel?: string; auctionLabel?: string }[] = [
   { key: 'all', label: 'All Prices' },
-  { key: 'low', label: 'Under RM 100K', rentLabel: 'Under RM 200/day' },
-  { key: 'mid', label: 'RM 100K – 500K', rentLabel: 'RM 200 – 800/day' },
-  { key: 'high', label: 'Above RM 500K', rentLabel: 'Above RM 800/day' },
+  { key: 'low', label: 'Under RM 100K', rentLabel: 'Under RM 200/day', auctionLabel: 'Under RM 100K' },
+  { key: 'mid', label: 'RM 100K – 500K', rentLabel: 'RM 200 – 800/day', auctionLabel: 'RM 100K – 500K' },
+  { key: 'high', label: 'Above RM 500K', rentLabel: 'Above RM 800/day', auctionLabel: 'Above RM 500K' },
 ]
 
 const TRANSMISSION_OPTIONS = [
@@ -823,7 +823,7 @@ export default function CarListing({ type, conditionCategory }: CarListingProps)
             <SelectContent>
               {PRICE_RANGES.map((pr) => (
                 <SelectItem key={pr.key} value={pr.key}>
-                  {type === 'rent' && pr.rentLabel ? pr.rentLabel : pr.label}
+                  {type === 'rent' && pr.rentLabel ? pr.rentLabel : type === 'auction' && pr.auctionLabel ? pr.auctionLabel : pr.label}
                 </SelectItem>
               ))}
             </SelectContent>
