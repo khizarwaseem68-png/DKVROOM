@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { insuranceApi } from '@/lib/api'
 import { INSURANCE_COVERAGE_TYPES } from '@/lib/constants'
@@ -159,7 +160,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ===== MAIN COMPONENT =====
 
 export default function InsurancePage() {
-  const { user } = useAppStore()
+  const { user, startBooking } = useAppStore()
+  const router = useRouter()
   const [carBrand, setCarBrand] = useState('')
   const [carModel, setCarModel] = useState('')
   const [carYear, setCarYear] = useState('')
@@ -216,7 +218,7 @@ export default function InsurancePage() {
   const handleCreateEnquiry = async () => {
     try {
       setSubmitting(true)
-      await insuranceApi.createEnquiry({
+      const result = await insuranceApi.createEnquiry({
         carBrand,
         carModel,
         carYear: parseInt(carYear) || 0,
@@ -227,6 +229,21 @@ export default function InsurancePage() {
         estimatedPremium,
         userId: user?.id,
       })
+      const d = (result.data ?? result) as Record<string, unknown>
+      const pay = d.payment as Record<string, unknown> | undefined
+      const enq = d.enquiry as Record<string, unknown> | undefined
+      if (pay) {
+        const pid = pay.id as string
+        const eid = enq?.id as string | undefined
+        const amt = (pay.amount as number) || estimatedPremium
+        startBooking('insurance', amt, eid, pid)
+        const params = new URLSearchParams()
+        params.set('paymentId', pid)
+        if (eid) params.set('bookingId', eid)
+        params.set('amount', String(amt))
+        params.set('type', 'insurance')
+        router.push(`/payment?${params.toString()}`)
+      }
     } catch {
       // Silently fail — UI stays functional
     } finally {

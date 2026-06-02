@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     age,
     drivingExperience,
     claimsHistory,
+    estimatedPremium,
   } = body
 
   // dealerId is optional for insurance - customer can submit general enquiry
@@ -88,22 +89,45 @@ export async function POST(request: NextRequest) {
     return apiError(`Invalid coverage type. Must be one of: ${validCoverageTypes.join(', ')}`, 400)
   }
 
-  const enquiry = await db.insuranceEnquiry.create({
-    data: {
-      customerId: user.id,
-      dealerId: dealerId || null,
-      vehicleBrand: vehicleBrand ? sanitizeInput(vehicleBrand) : null,
-      vehicleModel: vehicleModel ? sanitizeInput(vehicleModel) : null,
-      vehicleYear: vehicleYear ? parseInt(String(vehicleYear)) : null,
-      registrationNo: registrationNo ? sanitizeInput(registrationNo) : null,
-      coverageType: coverageType || null,
-      currentInsurer: currentInsurer ? sanitizeInput(currentInsurer) : null,
-      ncdPercentage: ncdPercentage ? parseFloat(String(ncdPercentage)) : null,
-      age: age ? parseInt(String(age)) : null,
-      drivingExperience: drivingExperience ? parseInt(String(drivingExperience)) : null,
-      claimsHistory: claimsHistory ? JSON.stringify(claimsHistory) : null,
-      status: 'pending',
-    }
+  const amount = estimatedPremium ? parseFloat(String(estimatedPremium)) : 0
+
+  const result = await db.$transaction(async (tx) => {
+    const enquiry = await tx.insuranceEnquiry.create({
+      data: {
+        customerId: user.id,
+        dealerId: dealerId || null,
+        vehicleBrand: vehicleBrand ? sanitizeInput(vehicleBrand) : null,
+        vehicleModel: vehicleModel ? sanitizeInput(vehicleModel) : null,
+        vehicleYear: vehicleYear ? parseInt(String(vehicleYear)) : null,
+        registrationNo: registrationNo ? sanitizeInput(registrationNo) : null,
+        coverageType: coverageType || null,
+        currentInsurer: currentInsurer ? sanitizeInput(currentInsurer) : null,
+        ncdPercentage: ncdPercentage ? parseFloat(String(ncdPercentage)) : null,
+        age: age ? parseInt(String(age)) : null,
+        drivingExperience: drivingExperience ? parseInt(String(drivingExperience)) : null,
+        claimsHistory: claimsHistory ? JSON.stringify(claimsHistory) : null,
+        status: 'pending',
+      }
+    })
+
+    const platformFee = amount ? Math.round(amount * 0.05 * 100) / 100 : 0
+    const payment = await tx.payment.create({
+      data: {
+        userId: user.id,
+        dealerId: dealerId || null,
+        insuranceEnquiryId: enquiry.id,
+        amount,
+        platformFee,
+        dealerPayout: amount ? Math.round((amount - platformFee) * 100) / 100 : 0,
+        method: 'qr_manual',
+        paymentType: 'deposit',
+        qrReference: 'QR' + Date.now().toString(36).toUpperCase(),
+        qrGeneratedAt: new Date(),
+        status: 'pending',
+      }
+    })
+
+    return { enquiry, payment }
   })
 
   // Notify insurance dealer if specified
@@ -116,7 +140,7 @@ export async function POST(request: NextRequest) {
           title: 'New Insurance Enquiry',
           message: `A customer has submitted an insurance enquiry${vehicleBrand ? ` for ${vehicleBrand} ${vehicleModel || ''}` : ''}.`,
           type: 'booking',
-          link: `/insurance/enquiries/${enquiry.id}`,
+          link: `/insurance/enquiries/${result.enquiry.id}`,
         }
       })
     }
@@ -128,11 +152,11 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       action: 'insurance_enquiry_created',
       resource: 'insuranceEnquiry',
-      resourceId: enquiry.id,
+      resourceId: result.enquiry.id,
       details: JSON.stringify({ dealerId, coverageType, vehicleBrand, vehicleModel }),
       severity: 'info',
     }
   })
 
-  return apiResponse({ success: true, data: enquiry }, 201)
+  return apiResponse({ success: true, data: result }, 201)
 }
