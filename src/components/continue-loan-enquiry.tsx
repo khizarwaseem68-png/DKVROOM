@@ -93,7 +93,7 @@ const DEFAULT_REQUIRED_DOCS = [
 // ===== COMPONENT =====
 
 export default function ContinueLoanEnquiry() {
-  const { selectedCarId, user } = useAppStore()
+  const { selectedCarId, user, startBooking } = useAppStore()
   const router = useRouter()
   const [car, setCar] = useState<ParsedCarData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -215,7 +215,23 @@ export default function ContinueLoanEnquiry() {
         employer,
         message,
       })
-      const newEnquiryId = (result.data as { id?: string } | undefined)?.id || (result as { id?: string }).id
+      const d = (result.data ?? result) as Record<string, unknown>
+      const pay = d.payment as Record<string, unknown> | undefined
+      const enq = d.enquiry as Record<string, unknown> | undefined
+      if (pay && enq) {
+        const pid = pay.id as string
+        const eid = enq.id as string
+        const amt = (pay.amount as number) || 0
+        startBooking('continueLoan', amt, eid, pid)
+        const params = new URLSearchParams()
+        params.set('paymentId', pid)
+        params.set('bookingId', eid)
+        params.set('amount', String(amt))
+        params.set('type', 'continueLoan')
+        router.push(`/payment?${params.toString()}`)
+        return
+      }
+      const newEnquiryId = (enq?.id as string) || (d.id as string) || ''
       if (newEnquiryId) {
         setEnquiryId(newEnquiryId)
         setPhase('documents')

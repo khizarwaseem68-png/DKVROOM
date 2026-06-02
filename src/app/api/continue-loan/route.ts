@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     // Create payment record for the deposit
     const depositAmount = car.deposit || car.bookingFee || 0
-    const platformFee = Math.round(depositAmount * 0.1 * 100) / 100 // 10% platform fee
+    const platformFee = Math.round(depositAmount * 0.05 * 100) / 100 // 5% platform fee
     const dealerPayout = depositAmount - platformFee
 
     const payment = await tx.payment.create({
