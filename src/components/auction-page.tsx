@@ -147,11 +147,11 @@ export default function AuctionPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4 max-w-lg">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {auctionStats.map((stat) => {
               const Icon = stat.icon
               return (
-                <div key={stat.label} className="p-4 rounded-xl bg-card/80 border border-border/50">
+                <div key={stat.label} className="p-4 sm:p-6 rounded-xl bg-card/80 border border-border/50">
                   <Icon className={`size-5 ${stat.color} mb-2`} />
                   <div className="text-lg sm:text-xl font-bold gold-text">
                     {statsLoading ? <Loader2 className="size-5 animate-spin text-gold" /> : stat.value}
