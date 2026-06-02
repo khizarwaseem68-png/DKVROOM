@@ -10,7 +10,7 @@ export type PaymentStatus = 'none' | 'pending' | 'uploaded' | 'verified' | 'reje
 
 interface BookingState {
   bookingId: string | null
-  bookingType: 'rent' | 'sale' | 'continueLoan' | 'auction' | 'insurance' | 'workshop' | null
+  bookingType: 'rent' | 'sale' | 'continueLoan' | 'auction' | 'insurance' | 'workshop' | 'loan' | null
   amount: number
   paymentStatus: PaymentStatus
   receiptUploaded: boolean
@@ -107,7 +107,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchQuery: '',
   selectedCity: '',
   filterType: 'all',
-  isLoggedIn: false,
+  isLoggedIn: !!getToken(),
   user: null,
   showMobileMenu: false,
   loading: false,

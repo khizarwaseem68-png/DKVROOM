@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
   if (car.type !== 'continueLoan') return apiError('Car is not available for continue loan', 400)
   if (!car.dealerId) return apiError('Car has no associated dealer', 400)
 
+  const depositAmount = car.deposit || car.bookingFee || 0
+
   // Create the enquiry and deposit payment in a transaction
   const result = await db.$transaction(async (tx) => {
     const enquiry = await tx.continueLoanEnquiry.create({
@@ -83,15 +85,13 @@ export async function POST(request: NextRequest) {
         customerId: user.id,
         dealerId: car.dealerId,
         agreementStatus: 'pending',
-        depositAmount: car.deposit || car.bookingFee || 0,
+        depositAmount,
         notes: notes ? sanitizeInput(notes) : null,
       }
     })
 
-    // Create payment record for the deposit
-    const depositAmount = car.deposit || car.bookingFee || 0
-    const platformFee = Math.round(depositAmount * 0.05 * 100) / 100 // 5% platform fee
-    const dealerPayout = depositAmount - platformFee
+    const platformFee = Math.round(depositAmount * 0.05 * 100) / 100
+    const dealerPayout = Math.round((depositAmount - platformFee) * 100) / 100
 
     const payment = await tx.payment.create({
       data: {
@@ -103,6 +103,8 @@ export async function POST(request: NextRequest) {
         dealerPayout,
         method: 'qr_manual',
         paymentType: 'deposit',
+        qrReference: 'QR' + Date.now().toString(36).toUpperCase(),
+        qrGeneratedAt: new Date(),
         status: 'pending',
       }
     })
@@ -111,11 +113,10 @@ export async function POST(request: NextRequest) {
   })
 
   // Notify dealer
-  const dealer = await db.dealer.findUnique({ where: { id: car.dealerId } })
-  if (dealer) {
+  if (car.dealer) {
     await db.notification.create({
       data: {
-        userId: dealer.userId,
+        userId: car.dealer.userId,
         title: 'New Continue Loan Enquiry',
         message: `A customer has submitted a continue loan enquiry for ${car.brand} ${car.model} ${car.year}`,
         type: 'booking',
