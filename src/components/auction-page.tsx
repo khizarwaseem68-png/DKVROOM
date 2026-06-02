@@ -12,7 +12,6 @@ import {
   Users,
   Clock,
   Zap,
-  Loader2,
   Car,
   AlertTriangle,
   ShieldAlert,
@@ -154,7 +153,9 @@ export default function AuctionPage() {
                 <div key={stat.label} className="p-4 sm:p-6 rounded-xl bg-card/80 border border-border/50">
                   <Icon className={`size-5 ${stat.color} mb-2`} />
                   <div className="text-lg sm:text-xl font-bold gold-text">
-                    {statsLoading ? <Loader2 className="size-5 animate-spin text-gold" /> : stat.value}
+                    {statsLoading ? (
+                      <div className="h-7 w-24 rounded bg-gold/10 animate-pulse" />
+                    ) : stat.value}
                   </div>
                   <div className="text-caption text-muted-foreground">{stat.label}</div>
                 </div>
