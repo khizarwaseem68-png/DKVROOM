@@ -85,7 +85,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       router.replace('/dealer-status')
     }
 
-    if (pathname?.startsWith('/customer-dashboard') && user.role === 'customer') {
+    if (pathname?.startsWith('/customer-dashboard') && user.role !== 'customer') {
       router.replace('/')
     }
   }, [authReady, isLoggedIn, pathname, router, user])
