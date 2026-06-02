@@ -99,7 +99,7 @@ export function Header() {
       const dealer = user?.dealer
       return dealer?.verified && !dealer?.rejectedAt ? '/dealer-dashboard' : '/dealer-status'
     }
-    // if (userRole === 'customer') return '/customer-dashboard'
+    if (userRole === 'customer') return '/customer-dashboard'
     return '/'
   }
 

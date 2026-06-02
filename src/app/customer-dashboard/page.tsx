@@ -14,7 +14,7 @@ export default function CustomerDashboardRoute() {
 
   useEffect(() => {
     if (!isLoggedIn) return
-    if (user?.role === 'customer') {
+    if (user?.role !== 'customer') {
       router.replace('/')
     }
   }, [isLoggedIn, user, router])
