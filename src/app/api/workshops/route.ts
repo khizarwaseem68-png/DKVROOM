@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
     photos,
     preferredDate,
     preferredTime,
+    depositAmount,
   } = body
 
   if (!dealerId) return apiError('Workshop (dealer) ID is required', 400)
@@ -97,21 +98,44 @@ export async function POST(request: NextRequest) {
   if (dealer.dealerType !== 'workshop') return apiError('Dealer is not a workshop', 400)
   if (!dealer.active || !dealer.verified) return apiError('Workshop is not available', 400)
 
-  const appointment = await db.workshopAppointment.create({
-    data: {
-      customerId: user.id,
-      dealerId,
-      serviceType,
-      vehicleBrand: vehicleBrand ? sanitizeInput(vehicleBrand) : null,
-      vehicleModel: vehicleModel ? sanitizeInput(vehicleModel) : null,
-      vehicleYear: vehicleYear ? parseInt(String(vehicleYear)) : null,
-      registrationNo: registrationNo ? sanitizeInput(registrationNo) : null,
-      issueDescription: issueDescription ? sanitizeInput(issueDescription) : null,
-      photos: photos ? JSON.stringify(photos) : null,
-      preferredDate: preferredDate ? new Date(preferredDate) : null,
-      preferredTime: preferredTime ? sanitizeInput(preferredTime) : null,
-      status: 'pending',
-    }
+  const amount = depositAmount ? parseFloat(String(depositAmount)) : 50
+
+  const result = await db.$transaction(async (tx) => {
+    const appointment = await tx.workshopAppointment.create({
+      data: {
+        customerId: user.id,
+        dealerId,
+        serviceType,
+        vehicleBrand: vehicleBrand ? sanitizeInput(vehicleBrand) : null,
+        vehicleModel: vehicleModel ? sanitizeInput(vehicleModel) : null,
+        vehicleYear: vehicleYear ? parseInt(String(vehicleYear)) : null,
+        registrationNo: registrationNo ? sanitizeInput(registrationNo) : null,
+        issueDescription: issueDescription ? sanitizeInput(issueDescription) : null,
+        photos: photos ? JSON.stringify(photos) : null,
+        preferredDate: preferredDate ? new Date(preferredDate) : null,
+        preferredTime: preferredTime ? sanitizeInput(preferredTime) : null,
+        status: 'pending',
+      }
+    })
+
+    const platformFee = Math.round(amount * 0.05 * 100) / 100
+    const payment = await tx.payment.create({
+      data: {
+        userId: user.id,
+        dealerId,
+        workshopAppointmentId: appointment.id,
+        amount,
+        platformFee,
+        dealerPayout: amount - platformFee,
+        method: 'qr_manual',
+        paymentType: 'deposit',
+        qrReference: 'QR' + Date.now().toString(36).toUpperCase(),
+        qrGeneratedAt: new Date(),
+        status: 'pending',
+      }
+    })
+
+    return { appointment, payment }
   })
 
   // Notify workshop dealer
@@ -121,7 +145,7 @@ export async function POST(request: NextRequest) {
       title: 'New Workshop Appointment',
       message: `A customer has booked a ${serviceType.replace(/_/g, ' ')} appointment${preferredDate ? ` for ${new Date(preferredDate).toLocaleDateString()}` : ''}.`,
       type: 'booking',
-      link: `/workshops/appointments/${appointment.id}`,
+      link: `/workshops/appointments/${result.appointment.id}`,
     }
   })
 
@@ -131,11 +155,11 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       action: 'workshop_appointment_created',
       resource: 'workshopAppointment',
-      resourceId: appointment.id,
+      resourceId: result.appointment.id,
       details: JSON.stringify({ dealerId, serviceType, preferredDate }),
       severity: 'info',
     }
   })
 
-  return apiResponse({ success: true, data: appointment }, 201)
+  return apiResponse({ success: true, data: result }, 201)
 }

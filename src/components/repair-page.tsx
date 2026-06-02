@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { workshopsApi } from '@/lib/api'
+import { formatPrice } from '@/lib/constants'
 import { CITIES, SERVICE_TYPES } from '@/lib/constants'
 import { LoadingState, EmptyState, StarRating } from '@/components/shared'
 import { Card, CardContent } from '@/components/ui/card'
@@ -36,6 +37,7 @@ import {
   CheckCircle,
   ArrowRight,
   ShieldCheck,
+  Shield,
   ExternalLink,
   Loader2,
 } from 'lucide-react'
@@ -64,6 +66,9 @@ interface BookingFormState {
   serviceType: string
   city: string
   vehicleBrand: string
+  vehicleModel: string
+  vehicleYear: string
+  registrationNo: string
   notes: string
   date: string
 }
@@ -240,7 +245,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // ===== MAIN COMPONENT =====
 
 export default function RepairPage() {
-  const { user } = useAppStore()
+  const { user, startBooking } = useAppStore()
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
@@ -253,6 +258,9 @@ export default function RepairPage() {
     serviceType: SERVICE_TYPES[0].key,
     city: 'Kuala Lumpur',
     vehicleBrand: '',
+    vehicleModel: '',
+    vehicleYear: '',
+    registrationNo: '',
     notes: '',
     date: '',
   })
@@ -279,7 +287,7 @@ export default function RepairPage() {
     try {
       setBookingWorkshop(workshopId)
       setBookingSubmitting(true)
-      await workshopsApi.createAppointment({
+      const result = await workshopsApi.createAppointment({
         workshopId,
         userId: user?.id,
         customerName: user?.name,
@@ -288,11 +296,34 @@ export default function RepairPage() {
         serviceType: bookingForm.serviceType,
         city: bookingForm.city,
         vehicleBrand: bookingForm.vehicleBrand,
+        vehicleModel: bookingForm.vehicleModel,
+        vehicleYear: bookingForm.vehicleYear ? parseInt(bookingForm.vehicleYear) : undefined,
+        registrationNo: bookingForm.registrationNo,
+        issueDescription: bookingForm.notes,
         preferredDate: bookingForm.date,
-        notes: bookingForm.notes,
+        depositAmount: 50,
       })
+      const d = (result.data ?? result) as Record<string, unknown>
+      const pay = d.payment as Record<string, unknown> | undefined
+      const appt = d.appointment as Record<string, unknown> | undefined
+      if (pay) {
+        const pid = pay.id as string
+        const aid = appt?.id as string | undefined
+        const amt = (pay.amount as number) || 50
+        startBooking('workshop', amt, aid, pid)
+        const params = new URLSearchParams()
+        params.set('paymentId', pid)
+        if (aid) params.set('bookingId', aid)
+        params.set('amount', String(amt))
+        params.set('type', 'workshop')
+        router.push(`/payment?${params.toString()}`)
+      }
       setShowBookingForm(false)
-      setBookingForm({ serviceType: SERVICE_TYPES[0].key, city: 'Kuala Lumpur', vehicleBrand: '', notes: '', date: '' })
+      setBookingForm({
+        serviceType: SERVICE_TYPES[0].key, city: 'Kuala Lumpur',
+        vehicleBrand: '', vehicleModel: '', vehicleYear: '', registrationNo: '',
+        notes: '', date: '',
+      })
     } catch {
       // Silently fail — UI stays functional
     } finally {
@@ -586,6 +617,40 @@ export default function RepairPage() {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label className="text-body-sm text-muted-foreground">Vehicle Model</Label>
+                      <Input
+                        placeholder="e.g. Civic"
+                        value={bookingForm.vehicleModel}
+                        onChange={(e) => setBookingForm((f) => ({ ...f, vehicleModel: e.target.value }))}
+                        className="bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-body-sm text-muted-foreground">Vehicle Year</Label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 2022"
+                        value={bookingForm.vehicleYear}
+                        onChange={(e) => setBookingForm((f) => ({ ...f, vehicleYear: e.target.value }))}
+                        className="bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-body-sm text-muted-foreground">Registration No.</Label>
+                      <Input
+                        placeholder="e.g. ABC 1234"
+                        value={bookingForm.registrationNo}
+                        onChange={(e) => setBookingForm((f) => ({ ...f, registrationNo: e.target.value }))}
+                        className="bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label className="text-body-sm text-muted-foreground">Preferred Date</Label>
                       <Input
                         type="date"
@@ -594,15 +659,22 @@ export default function RepairPage() {
                         className="bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label className="text-body-sm text-muted-foreground">Deposit (RM 50)</Label>
+                      <div className="p-3 rounded-lg bg-gold/5 border border-gold/20 text-body-sm text-muted-foreground flex items-center gap-2 h-10">
+                        <Shield className="size-4 text-gold" />
+                        Service Deposit Required
+                      </div>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-body-sm text-muted-foreground">Notes</Label>
-                    <Input
-                      placeholder="Describe the issue…"
+                    <Label className="text-body-sm text-muted-foreground">Issue Description</Label>
+                    <textarea
+                      placeholder="Describe the issue, symptoms, or what needs to be done…"
                       value={bookingForm.notes}
                       onChange={(e) => setBookingForm((f) => ({ ...f, notes: e.target.value }))}
-                      className="bg-background border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30"
+                      className="flex w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold focus-visible:ring-gold/30 min-h-[80px] resize-y"
                     />
                   </div>
 
