@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { bookingsApi, paymentsApi } from '@/lib/api'
 import { formatPrice, PAYMENT_METHODS } from '@/lib/constants'
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { QRCodeSVG } from 'qrcode.react'
+import { toast } from 'sonner'
 import {
   ArrowLeft,
   QrCode,
@@ -127,7 +128,7 @@ function VerifiedView({ onHome, dealerContact }: { onHome: () => void; dealerCon
             </div>
             {dealerContact.whatsapp && (
               <a
-                href={`https://wa.me/${dealerContact.whatsapp.replace(/[-\s]/g, '')}`}
+                href={`https://wa.me/${dealerContact.whatsapp.replace(/[^\d]/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -192,8 +193,9 @@ function ProgressSteps({ steps, currentStep }: { steps: PaymentStep[]; currentSt
 // ===== MAIN COMPONENT =====
 
 export default function PaymentPage() {
-  const { booking, uploadReceipt, verifyPayment, user } = useAppStore()
+  const { booking, uploadReceipt, verifyPayment, user, startBooking } = useAppStore()
   const router = useRouter()
+  const searchParamsRef = useRef<{ bookingId?: string; paymentId?: string; amount?: string; type?: string }>({})
   const [uploaded, setUploaded] = useState(booking.receiptUploaded)
   const [copied, setCopied] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -204,7 +206,24 @@ export default function PaymentPage() {
   const [dealerContact, setDealerContact] = useState<DealerContact>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const searchParams = useSearchParams()
   const isAdmin = user?.role === 'admin'
+
+  // Recover from URL params if store was lost (e.g. page refresh)
+  useEffect(() => {
+    const paymentId = searchParams.get('paymentId')
+    const bookingId = searchParams.get('bookingId')
+    const amount = searchParams.get('amount')
+    const type = searchParams.get('type')
+    if (paymentId && !booking.paymentId) {
+      startBooking(
+        (type as any) || 'sale',
+        amount ? parseFloat(amount) : 0,
+        bookingId || undefined,
+        paymentId
+      )
+    }
+  }, [searchParams, booking.paymentId, startBooking])
 
   // Fetch booking details when contact is unlocked to show real dealer info
   const fetchBookingDetails = useCallback(async () => {
@@ -234,7 +253,8 @@ export default function PaymentPage() {
     fetchBookingDetails()
   }, [fetchBookingDetails])
 
-  const qrValue = `https://dkvroom.com/pay?ref=${booking.bookingId || 'DEMO'}&amount=${booking.amount}`
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const qrValue = `${appUrl}/pay?ref=${booking.bookingId || 'DEMO'}&amount=${booking.amount}`
   const currentStep = getStatusStep(booking.paymentStatus, uploaded)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -271,11 +291,14 @@ export default function PaymentPage() {
     if (!booking.paymentId) return
 
     setVerifying(true)
+    setUploadError(null)
     try {
       await paymentsApi.verify(booking.paymentId)
       verifyPayment()
-    } catch {
-      // Silently fail — admin can retry
+      toast.success('Payment verified successfully')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to verify payment. Please try again.'
+      setUploadError(msg)
     } finally {
       setVerifying(false)
     }
