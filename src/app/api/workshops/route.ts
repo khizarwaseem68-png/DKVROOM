@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
         workshopAppointmentId: appointment.id,
         amount,
         platformFee,
-        dealerPayout: amount - platformFee,
+        dealerPayout: Math.round((amount - platformFee) * 100) / 100,
         method: 'qr_manual',
         paymentType: 'deposit',
         qrReference: 'QR' + Date.now().toString(36).toUpperCase(),

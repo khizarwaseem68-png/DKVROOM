@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
         dealerId: dealerId || null,
         amount: feeAmount,
         platformFee,
-        dealerPayout: feeAmount - platformFee,
+        dealerPayout: Math.round((feeAmount - platformFee) * 100) / 100,
         method: 'qr_manual',
         paymentType: 'deposit',
         qrReference: 'QR' + Date.now().toString(36).toUpperCase(),
