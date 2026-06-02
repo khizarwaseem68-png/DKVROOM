@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
     payslipUrls,
     bankStatementUrls,
     epfStatementUrl,
+    processingFee,
+    interestRate,
   } = body
 
   if (!type) return apiError('Loan type is required', 400)
@@ -90,24 +92,47 @@ export async function POST(request: NextRequest) {
     dealerId = car.dealerId
   }
 
-  const loan = await db.loanApplication.create({
-    data: {
-      userId: user.id,
-      carId: carId || null,
-      dealerId,
-      type,
-      amount: amount ? parseFloat(String(amount)) : null,
-      tenure: tenure ? parseInt(String(tenure)) : null,
-      monthlyIncome: monthlyIncome ? parseFloat(String(monthlyIncome)) : null,
-      employmentType: employmentType ? sanitizeInput(employmentType) : null,
-      employerName: employerName ? sanitizeInput(employerName) : null,
-      bankName: bankName ? sanitizeInput(String(bankName)) : null,
-      documents: documents ? String(documents) : null,
-      payslipUrls: payslipUrls ? String(payslipUrls) : null,
-      bankStatementUrls: bankStatementUrls ? String(bankStatementUrls) : null,
-      epfStatementUrl: epfStatementUrl ? sanitizeInput(String(epfStatementUrl)) : null,
-      status: 'pending',
-    }
+  const feeAmount = processingFee ? parseFloat(String(processingFee)) : 100
+
+  const result = await db.$transaction(async (tx) => {
+    const loan = await tx.loanApplication.create({
+      data: {
+        userId: user.id,
+        carId: carId || null,
+        dealerId,
+        type,
+        amount: amount ? parseFloat(String(amount)) : null,
+        tenure: tenure ? parseInt(String(tenure)) : null,
+        monthlyIncome: monthlyIncome ? parseFloat(String(monthlyIncome)) : null,
+        employmentType: employmentType ? sanitizeInput(employmentType) : null,
+        employerName: employerName ? sanitizeInput(employerName) : null,
+        bankName: bankName ? sanitizeInput(String(bankName)) : null,
+        documents: documents ? String(documents) : null,
+        payslipUrls: payslipUrls ? String(payslipUrls) : null,
+        bankStatementUrls: bankStatementUrls ? String(bankStatementUrls) : null,
+        epfStatementUrl: epfStatementUrl ? sanitizeInput(String(epfStatementUrl)) : null,
+        interestRate: interestRate ? parseFloat(String(interestRate)) : null,
+        status: 'pending',
+      }
+    })
+
+    const platformFee = Math.round(feeAmount * 0.05 * 100) / 100
+    const payment = await tx.payment.create({
+      data: {
+        userId: user.id,
+        dealerId: dealerId || null,
+        amount: feeAmount,
+        platformFee,
+        dealerPayout: feeAmount - platformFee,
+        method: 'qr_manual',
+        paymentType: 'deposit',
+        qrReference: 'QR' + Date.now().toString(36).toUpperCase(),
+        qrGeneratedAt: new Date(),
+        status: 'pending',
+      }
+    })
+
+    return { loan, payment }
   })
 
   // Notify dealer if applicable
@@ -120,7 +145,7 @@ export async function POST(request: NextRequest) {
           title: 'New Loan Application',
           message: `A customer has submitted a loan application related to your listing.`,
           type: 'info',
-          link: `/loans/${loan.id}`,
+          link: `/loans/${result.loan.id}`,
         }
       })
     }
@@ -132,11 +157,11 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       action: 'loan_application_created',
       resource: 'loanApplication',
-      resourceId: loan.id,
+      resourceId: result.loan.id,
       details: JSON.stringify({ type, amount, carId }),
       severity: 'info',
     }
   })
 
-  return apiResponse({ success: true, data: loan }, 201)
+  return apiResponse({ success: true, data: result }, 201)
 }

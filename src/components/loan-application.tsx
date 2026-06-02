@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { loansApi, uploadApi } from '@/lib/api'
+import { toast } from 'sonner'
 import {
   formatPrice,
   formatDate,
@@ -113,7 +114,7 @@ const STEPS = [
 // ===== COMPONENT =====
 
 export default function LoanApplication() {
-  const { user } = useAppStore()
+  const { user, startBooking } = useAppStore()
   const router = useRouter()
   const [mainTab, setMainTab] = useState('apply')
   const [currentStep, setCurrentStep] = useState(1)
@@ -142,6 +143,7 @@ export default function LoanApplication() {
   const [carPrice, setCarPrice] = useState('')
   const [downPayment, setDownPayment] = useState('')
   const [loanTenure, setLoanTenure] = useState('')
+  const [interestRate, setInterestRate] = useState('3.5')
   const [preferredBank, setPreferredBank] = useState('')
 
   // Step 3: Documents
@@ -243,8 +245,24 @@ export default function LoanApplication() {
             drivingLicense: uploadedDocs.drivingLicense,
           },
         }),
+        processingFee: 100,
+        interestRate,
       })
-      if (result.success) {
+      const d = (result.data ?? result) as Record<string, unknown>
+      const pay = d.payment as Record<string, unknown> | undefined
+      const loanRec = d.loan as Record<string, unknown> | undefined
+      if (pay && loanRec) {
+        const pid = pay.id as string
+        const lid = loanRec.id as string
+        const amt = (pay.amount as number) || 100
+        startBooking('loan', amt, lid, pid)
+        const params = new URLSearchParams()
+        params.set('paymentId', pid)
+        params.set('bookingId', lid)
+        params.set('amount', String(amt))
+        params.set('type', 'loan')
+        router.push(`/payment?${params.toString()}`)
+      } else if (result.success) {
         setShowSuccessDialog(true)
       }
     } catch (err: unknown) {
@@ -320,9 +338,10 @@ export default function LoanApplication() {
   // ===== ESTIMATED MONTHLY PAYMENT =====
 
   const loanAmount = Number(carPrice) - Number(downPayment || 0)
+  const effectiveRate = parseFloat(interestRate || '3.5') / 100
   const estimatedMonthly =
     carPrice && loanTenure
-      ? Math.round((loanAmount * (1 + 0.035 * Number(loanTenure))) / (Number(loanTenure) * 12))
+      ? Math.round((loanAmount * (1 + effectiveRate * Number(loanTenure))) / (Number(loanTenure) * 12))
       : 0
 
   // ===== RENDER: DOCUMENT UPLOAD TILE =====
@@ -643,6 +662,19 @@ export default function LoanApplication() {
                               {t.label}
                             </SelectItem>
                           ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Interest Rate (%)</Label>
+                      <Select value={interestRate} onValueChange={setInterestRate}>
+                        <SelectTrigger className="bg-secondary border-border text-foreground">
+                          <SelectValue placeholder="Select rate" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          <SelectItem value="3.5" className="text-foreground focus:bg-secondary focus:text-gold">3.5% — Best Rate</SelectItem>
+                          <SelectItem value="4.0" className="text-foreground focus:bg-secondary focus:text-gold">4.0% — Standard</SelectItem>
+                          <SelectItem value="4.5" className="text-foreground focus:bg-secondary focus:text-gold">4.5% — Higher Rate</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
