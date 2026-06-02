@@ -133,8 +133,34 @@ export function useMediaQuery(query: string): boolean {
 
 // ===== useCountdown — Auction countdown timer =====
 
+// Shared interval across all countdown instances to reduce re-renders
+let sharedTick = Date.now()
+let sharedInterval: ReturnType<typeof setInterval> | null = null
+const tickListeners = new Set<() => void>()
+
+function ensureSharedInterval() {
+  if (sharedInterval) return
+  sharedInterval = setInterval(() => {
+    sharedTick = Date.now()
+    tickListeners.forEach((fn) => fn())
+  }, 1000)
+}
+
+function subscribeToTicks(fn: () => void) {
+  tickListeners.add(fn)
+  ensureSharedInterval()
+  return () => {
+    tickListeners.delete(fn)
+    if (tickListeners.size === 0 && sharedInterval) {
+      clearInterval(sharedInterval)
+      sharedInterval = null
+    }
+  }
+}
+
 export function useCountdown(targetDate: string | Date) {
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: false })
+  const prevRef = useRef('')
 
   useEffect(() => {
     const target = new Date(targetDate).getTime()
@@ -143,23 +169,29 @@ export function useCountdown(targetDate: string | Date) {
       const now = Date.now()
       const diff = target - now
 
+      let result: { days: number; hours: number; minutes: number; seconds: number; expired: boolean }
       if (diff <= 0) {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0, expired: true })
-        return
+        result = { days: 0, hours: 0, minutes: 0, seconds: 0, expired: true }
+      } else {
+        result = {
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((diff / (1000 * 60)) % 60),
+          seconds: Math.floor((diff / 1000) % 60),
+          expired: false,
+        }
       }
 
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / (1000 * 60)) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-        expired: false,
-      })
+      const key = `${result.days}:${result.hours}:${result.minutes}:${result.seconds}:${result.expired}`
+      if (key !== prevRef.current) {
+        prevRef.current = key
+        setTimeLeft(result)
+      }
     }
 
     calculate()
-    const interval = setInterval(calculate, 1000)
-    return () => clearInterval(interval)
+    const unsubscribe = subscribeToTicks(calculate)
+    return unsubscribe
   }, [targetDate])
 
   return timeLeft

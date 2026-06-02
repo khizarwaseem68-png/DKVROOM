@@ -1,5 +1,6 @@
 'use client'
 
+import { memo } from 'react'
 import { useCountdown } from '@/hooks/use-api'
 
 interface CountdownTimerProps {
@@ -7,7 +8,7 @@ interface CountdownTimerProps {
   className?: string
 }
 
-export function CountdownTimer({ targetDate, className = '' }: CountdownTimerProps) {
+export const CountdownTimer = memo(function CountdownTimer({ targetDate, className = '' }: CountdownTimerProps) {
   const { days, hours, minutes, seconds, expired } = useCountdown(targetDate)
 
   if (expired) {
@@ -37,4 +38,4 @@ export function CountdownTimer({ targetDate, className = '' }: CountdownTimerPro
       ))}
     </div>
   )
-}
+})
