@@ -426,6 +426,10 @@ export default function AdminDashboard() {
   const [selectedCar, setSelectedCar] = useState<CarItem | null>(null)
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
+  const [paymentPage, setPaymentPage] = useState(1)
+  const [paymentPagination, setPaymentPagination] = useState<PaginationState | null>(null)
+  const [bookingPage, setBookingPage] = useState(1)
+  const [bookingPagination, setBookingPagination] = useState<PaginationState | null>(null)
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
   const [selectedLoan, setSelectedLoan] = useState<LoanItem | null>(null)
@@ -510,16 +514,18 @@ export default function AdminDashboard() {
   const fetchPayments = useCallback(async () => {
     setPaymentsLoading(true)
     try {
-      const params: Record<string, string> = {}
+      const params: Record<string, string> = { page: String(paymentPage), limit: '10' }
       if (paymentFilter !== 'all') params.status = paymentFilter
       const result = await adminApi.getPayments(params)
       setPayments((result.data ?? []) as PaymentItem[])
+      setPaymentPagination(result.pagination ?? null)
     } catch {
       setPayments([])
+      setPaymentPagination(null)
     } finally {
       setPaymentsLoading(false)
     }
-  }, [paymentFilter])
+  }, [paymentFilter, paymentPage])
 
   // Fetch loans
   const fetchLoans = useCallback(async () => {
@@ -541,15 +547,17 @@ export default function AdminDashboard() {
   const fetchBookings = useCallback(async () => {
     setBookingsLoading(true)
     try {
-      const result = await bookingsApi.list()
+      const result = await bookingsApi.list({ page: String(bookingPage), limit: '10' })
       const data = result.data as { bookings?: BookingItem[] } | BookingItem[]
       setBookings(Array.isArray(data) ? data : (data?.bookings ?? []))
+      setBookingPagination(result.pagination ?? null)
     } catch {
       // silent
+      setBookingPagination(null)
     } finally {
       setBookingsLoading(false)
     }
-  }, [])
+  }, [bookingPage])
 
   useEffect(() => {
     queueMicrotask(() => { void fetchStats() })
@@ -1796,6 +1804,9 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
               )}
+              {bookingPagination && (
+                <PaginationControls pagination={bookingPagination} onPageChange={setBookingPage} />
+              )}
             </div>
           )}
 
@@ -2061,6 +2072,9 @@ export default function AdminDashboard() {
                       </Card>
                     ))}
                   </div>
+                  {paymentPagination && (
+                    <PaginationControls pagination={paymentPagination} onPageChange={setPaymentPage} />
+                  )}
                 </>
               )}
             </div>
