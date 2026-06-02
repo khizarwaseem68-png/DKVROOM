@@ -530,7 +530,7 @@ function SalePricingCard({ car }: { car: NormalizedCar }) {
         <div className="flex items-center gap-2 rounded-lg bg-gold/10 p-3">
           <Info className="size-4 text-gold shrink-0" />
           <p className="text-body-sm text-gold/80">
-            Send an enquiry with a RM 100 booking fee to unlock dealer contact details and WhatsApp.
+            Send an enquiry with a {formatPrice(car.bookingFee || 100)} booking fee to unlock dealer contact details and WhatsApp.
           </p>
         </div>
       </CardContent>
@@ -1065,7 +1065,7 @@ export default function CarDetail() {
         amount = car.deposit || car.price
       } else if (isSale) {
         bookingType = 'purchase'
-        amount = 100
+        amount = car.bookingFee || car.deposit || car.price
       } else if (isAuction) {
         amount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
       } else if (isContinueLoan) {
@@ -1100,13 +1100,20 @@ export default function CarDetail() {
           ? newBooking.totalAmount
           : amount
 
+      const pid = payment?.id as string | undefined
+      const bid = newBooking?.id as string | undefined
       startBooking(
         bookingType as 'rent' | 'sale' | 'continueLoan' | 'auction',
         paymentAmount,
-        newBooking?.id as string | undefined,
-        payment?.id as string | undefined
+        bid,
+        pid
       )
-      router.push('/payment')
+      const params = new URLSearchParams()
+      if (pid) params.set('paymentId', pid)
+      if (bid) params.set('bookingId', bid)
+      if (paymentAmount) params.set('amount', String(paymentAmount))
+      if (bookingType) params.set('type', bookingType)
+      router.push(`/payment?${params.toString()}`)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create booking. Please try again.'
       toast.error(message)
@@ -1245,18 +1252,41 @@ export default function CarDetail() {
                           ))} day(s)
                         </span>
                       </div>
-                      <div className="flex items-center justify-between text-body-sm mt-1">
-                        <span className="text-muted-foreground">Estimated Total</span>
-                        <span className="font-semibold gold-text">
-                          {formatPrice(
-                            car.price *
-                              Math.max(1, Math.ceil(
-                                (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
-                                  (1000 * 60 * 60 * 24)
-                              ))
-                          )}
-                        </span>
-                      </div>
+                      {(() => {
+                        const totalDays = Math.max(1, Math.ceil(
+                          (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
+                            (1000 * 60 * 60 * 24)
+                        ))
+                        let estimatedTotal = 0
+                        let pricingNote = ''
+                        if (totalDays >= 30 && car.monthlyPrice) {
+                          const months = Math.floor(totalDays / 30)
+                          const remainingDays = totalDays % 30
+                          estimatedTotal = (car.monthlyPrice * months) + (remainingDays > 0 ? car.price * remainingDays : 0)
+                          pricingNote = ` (${months}mo @ ${formatPrice(car.monthlyPrice)}/mo${remainingDays > 0 ? ` + ${remainingDays}d @ ${formatPrice(car.price)}/d` : ''})`
+                        } else if (totalDays >= 7 && car.weeklyPrice) {
+                          const weeks = Math.floor(totalDays / 7)
+                          const remainingDays = totalDays % 7
+                          estimatedTotal = (car.weeklyPrice * weeks) + (remainingDays > 0 ? car.price * remainingDays : 0)
+                          pricingNote = ` (${weeks}wk @ ${formatPrice(car.weeklyPrice)}/wk${remainingDays > 0 ? ` + ${remainingDays}d @ ${formatPrice(car.price)}/d` : ''})`
+                        } else {
+                          estimatedTotal = car.price * totalDays
+                        }
+                        return (
+                          <>
+                            <div className="flex items-center justify-between text-body-sm mt-1">
+                              <span className="text-muted-foreground">Estimated Total</span>
+                              <span className="font-semibold gold-text">{formatPrice(estimatedTotal)}</span>
+                            </div>
+                            {pricingNote && (
+                              <div className="flex items-center justify-between text-caption mt-1">
+                                <span className="text-muted-foreground">Pricing breakdown</span>
+                                <span className="text-muted-foreground/70">{pricingNote}</span>
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   )}
                 </CardContent>
@@ -1386,8 +1416,16 @@ export default function CarDetail() {
             {isSale && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
-                RM 100 enquiry fee required to unlock dealer contact
+                {formatPrice(car.bookingFee || 100)} enquiry fee required to unlock dealer contact
               </p>
+            )}
+            {isSale && (
+              <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                <p className="text-caption text-amber-300/70 text-center">
+                  This transaction will be completed off-platform. DK Vroom acts as a marketplace connecting buyers and sellers.
+                  All negotiations, payments, and transfers are between you and the dealer.
+                </p>
+              </div>
             )}
             {isAuction && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">

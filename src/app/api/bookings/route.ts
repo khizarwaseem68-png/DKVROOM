@@ -220,7 +220,22 @@ export async function POST(request: NextRequest) {
 
       const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
       if (days < 1) return apiError('Minimum rental period is 1 day', 400)
-      totalAmount = car.price * days
+      // Apply weekly/monthly pricing tiers based on rental duration
+      if (days >= 30 && car.monthlyPrice) {
+        const months = Math.floor(days / 30)
+        const remainingDays = days % 30
+        const monthlyAmount = car.monthlyPrice * months
+        const dailyAmount = remainingDays > 0 ? car.price * remainingDays : 0
+        totalAmount = monthlyAmount + dailyAmount
+      } else if (days >= 7 && car.weeklyPrice) {
+        const weeks = Math.floor(days / 7)
+        const remainingDays = days % 7
+        const weeklyAmount = car.weeklyPrice * weeks
+        const dailyAmount = remainingDays > 0 ? car.price * remainingDays : 0
+        totalAmount = weeklyAmount + dailyAmount
+      } else {
+        totalAmount = car.price * days
+      }
     } else if (sanitized.type === 'purchase') {
       totalAmount = car.bookingFee || car.deposit || car.price
     } else if (sanitized.type === 'continueLoan') {
