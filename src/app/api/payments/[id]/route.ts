@@ -3,6 +3,7 @@ import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
 import { saveFile, validateFile } from '@/lib/file-upload'
+import { sendPaymentVerifiedEmail } from '@/lib/email/email-service'
 
 const RECEIPT_CONFIG = { maxSizeMB: 5, allowedMimes: ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] }
 
@@ -109,7 +110,7 @@ export async function PUT(
   // Customer: Upload receipt
   if (user.role === 'customer') {
     if (payment.userId !== user.id) return apiError('Forbidden', 403)
-    if (payment.status !== 'pending') {
+    if (!['pending', 'rejected'].includes(payment.status)) {
       if (payment.status === 'uploaded' && payment.receiptUrl) {
         return apiResponse({ success: true, data: payment })
       }
@@ -151,6 +152,13 @@ export async function PUT(
       },
     })
 
+    if (payment.bookingId) {
+      await db.booking.update({
+        where: { id: payment.bookingId },
+        data: { status: 'payment_uploaded' },
+      })
+    }
+
     try {
       await notifyAdmins({
         title: 'Payment Receipt Uploaded',
@@ -178,6 +186,10 @@ export async function PUT(
     }
 
     if (status === 'verified') {
+      if (payment.status !== 'uploaded') {
+        return apiError('Receipt must be uploaded before payment can be verified', 400)
+      }
+
       // CRITICAL PAYMENT VERIFICATION FLOW
       const updateData: any = {
         status: 'verified',
@@ -212,6 +224,24 @@ export async function PUT(
             link: `/bookings/${payment.bookingId}`,
           }
         })
+
+        const customer = await db.user.findUnique({
+          where: { id: payment.userId },
+          select: { email: true, name: true },
+        })
+
+        if (customer?.email) {
+          const car = payment.booking?.car
+          await sendPaymentVerifiedEmail({
+            email: customer.email,
+            name: customer.name || 'Customer',
+            amount: payment.amount,
+            vehicleName: car ? `${car.brand} ${car.model} ${car.year}` : undefined,
+            bookingType: payment.booking?.type,
+          }).catch((error) => {
+            console.error('Payment verified email failed:', error)
+          })
+        }
 
         // Notification for dealer
         if (payment.dealerId && payment.booking?.car) {
@@ -293,6 +323,16 @@ export async function PUT(
           rejectionReason: sanitizeInput(rejectionReason),
         }
       })
+
+      if (payment.bookingId) {
+        await db.booking.update({
+          where: { id: payment.bookingId },
+          data: {
+            status: 'payment_pending',
+            contactUnlocked: false,
+          },
+        })
+      }
 
       // Notify customer
       await db.notification.create({

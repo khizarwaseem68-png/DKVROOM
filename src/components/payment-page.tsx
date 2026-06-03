@@ -250,8 +250,35 @@ export default function PaymentPage() {
   }, [booking.bookingId, booking.contactUnlocked])
 
   useEffect(() => {
-    fetchBookingDetails()
+    queueMicrotask(() => { void fetchBookingDetails() })
   }, [fetchBookingDetails])
+
+  useEffect(() => {
+    if (!booking.paymentId) return
+
+    let cancelled = false
+
+    async function syncPaymentStatus() {
+      try {
+        const result = await paymentsApi.get(booking.paymentId!)
+        const payment = result.data as Record<string, unknown> | undefined
+        if (cancelled || !payment) return
+
+        if (payment.status === 'uploaded') {
+          setUploaded(true)
+          uploadReceipt()
+        } else if (payment.status === 'verified') {
+          setUploaded(true)
+          verifyPayment()
+        }
+      } catch {
+        // Keep the local payment flow usable if status sync fails.
+      }
+    }
+
+    syncPaymentStatus()
+    return () => { cancelled = true }
+  }, [booking.paymentId, uploadReceipt, verifyPayment])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const qrValue = `${appUrl}/pay?ref=${booking.bookingId || 'DEMO'}&amount=${booking.amount}`
@@ -435,7 +462,7 @@ export default function PaymentPage() {
                   <CheckCircle className="size-8 text-emerald-400 mx-auto mb-2" />
                   <p className="text-body-sm font-medium text-emerald-400">Receipt Uploaded Successfully</p>
                   <p className="text-caption text-muted-foreground mt-1">
-                    Uploaded at {new Date().toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur' })}
+                    Your payment is now under admin verification. You can track this booking from your customer dashboard.
                   </p>
                 </div>
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-background">
@@ -448,6 +475,13 @@ export default function PaymentPage() {
                   </div>
                   <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
                 </div>
+                <Button
+                  variant="outline"
+                  className="w-full border-border text-muted-foreground hover:text-gold"
+                  onClick={() => router.push('/customer-dashboard')}
+                >
+                  Track in Customer Dashboard
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">

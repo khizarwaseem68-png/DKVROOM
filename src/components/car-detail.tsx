@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { carsApi, bookingsApi } from '@/lib/api'
-import { formatPrice, formatMileage, formatDate } from '@/lib/constants'
+import { formatPrice, formatMileage, formatDate, getFeeLabel } from '@/lib/constants'
 import {
   StarRating,
   LoadingState,
@@ -18,8 +18,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -36,7 +34,7 @@ import {
   ShieldCheck,
   Phone,
   MessageCircle,
-  Calendar,
+  Calendar as CalendarIcon,
   Palette,
   Gauge,
   Fuel,
@@ -386,7 +384,7 @@ function ImageGallery({ car }: { car: NormalizedCar }) {
 
 function VehicleSpecsSection({ car }: { car: NormalizedCar }) {
   const specItems = [
-    { icon: Calendar, label: 'Year', value: String(car.year) },
+    { icon: CalendarIcon, label: 'Year', value: String(car.year) },
     { icon: Palette, label: 'Color', value: car.color },
     { icon: Gauge, label: 'Mileage', value: formatMileage(car.mileage) },
     { icon: Fuel, label: 'Fuel', value: capitalize(car.fuelType) },
@@ -530,7 +528,7 @@ function SalePricingCard({ car }: { car: NormalizedCar }) {
         <div className="flex items-center gap-2 rounded-lg bg-gold/10 p-3">
           <Info className="size-4 text-gold shrink-0" />
           <p className="text-body-sm text-gold/80">
-            Send an enquiry with a {formatPrice(car.bookingFee || 100)} booking fee to unlock dealer contact details and WhatsApp.
+            Pay a {formatPrice(car.bookingFee || 100)} {getFeeLabel('sale')} to unlock dealer contact details and WhatsApp.
           </p>
         </div>
       </CardContent>
@@ -623,7 +621,7 @@ function RentalPricingCard({ car }: { car: NormalizedCar }) {
     <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
       <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
         <CardTitle className="text-gold flex items-center gap-2 heading-sm">
-          <Calendar className="size-5" />
+          <CalendarIcon className="size-5" />
           Rental Pricing
         </CardTitle>
       </CardHeader>
@@ -680,7 +678,7 @@ function RentalPricingCard({ car }: { car: NormalizedCar }) {
         {/* Available dates */}
         {(car.availableFrom || car.availableTo) && (
           <div className="flex items-center gap-2 rounded-lg bg-background/60 p-3">
-            <Calendar className="size-4 text-gold shrink-0" />
+            <CalendarIcon className="size-4 text-gold shrink-0" />
             <span className="text-body-sm text-muted-foreground">Available:</span>
             <span className="text-body-sm font-semibold text-foreground">
               {car.availableFrom && car.availableTo
@@ -878,10 +876,10 @@ function UnlockBanner() {
 
 function LockedContactNotice({ carType }: { carType: string }) {
   const noticeText: Record<string, string> = {
-    rent: 'Complete your booking payment to unlock the dealer\'s phone number, WhatsApp, and exact location.',
-    sale: 'Pay the RM 100 enquiry fee to unlock the dealer\'s phone number, WhatsApp, and exact location.',
-    auction: 'Pay the auction deposit to unlock the dealer\'s phone number, WhatsApp, and exact location.',
-    continueLoan: 'Submit your enquiry to start the process. Dealer contact will be unlocked after verification.',
+    rent: 'Pay the Booking Fee to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    sale: 'Pay the Verified Contact Access Fee to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    auction: 'Pay the Bid Deposit to unlock the dealer\'s phone number, WhatsApp, and exact location.',
+    continueLoan: 'Submit your enquiry and pay the Application Fee. Dealer contact will be unlocked after verification.',
   }
 
   return (
@@ -970,8 +968,6 @@ export default function CarDetail() {
   const [loading, setLoading] = useState(true)
   const [bookingLoading, setBookingLoading] = useState(false)
   const [showUnlockBanner, setShowUnlockBanner] = useState(false)
-  const [rentStartDate, setRentStartDate] = useState<string>('')
-  const [rentEndDate, setRentEndDate] = useState<string>('')
 
   // Fetch car data
   useEffect(() => {
@@ -1047,6 +1043,7 @@ export default function CarDetail() {
   const isAuction = car.type === 'auction'
   const isRent = car.type === 'rent'
   const isSale = car.type === 'sale'
+  const rentBookingFee = car.bookingFee || 200
 
   // ─── Booking CTA ─────────────────────────────────────────────────────────
 
@@ -1062,7 +1059,7 @@ export default function CarDetail() {
       let amount = car.price
 
       if (isRent) {
-        amount = car.deposit || car.price
+        amount = rentBookingFee
       } else if (isSale) {
         bookingType = 'purchase'
         amount = car.bookingFee || car.deposit || car.price
@@ -1078,16 +1075,6 @@ export default function CarDetail() {
         carId: car.id,
         type: bookingType,
         totalAmount: amount,
-      }
-
-      if (isRent) {
-        if (!rentStartDate || !rentEndDate) {
-          toast.error('Please select rental start and end dates')
-          setBookingLoading(false)
-          return
-        }
-        bookingData.startDate = new Date(rentStartDate).toISOString()
-        bookingData.endDate = new Date(rentEndDate).toISOString()
       }
 
       const result = await bookingsApi.create(bookingData)
@@ -1139,7 +1126,7 @@ export default function CarDetail() {
     : isContinueLoan
     ? <Send className="size-5" />
     : isRent
-    ? <Calendar className="size-5" />
+    ? <CalendarIcon className="size-5" />
     : isSale
     ? <Send className="size-5" />
     : <Phone className="size-5" />
@@ -1198,97 +1185,30 @@ export default function CarDetail() {
             {/* Auction Condition Section */}
             {isAuction && <AuctionConditionSection car={car} />}
 
-            {/* Rental Date Selection */}
+            {/* Rental booking fee */}
             {isRent && (
               <Card className="border-border bg-card overflow-hidden">
                 <CardHeader className="pb-0 pt-4 px-4 sm:px-6">
                   <CardTitle className="text-foreground flex items-center gap-2 heading-sm">
-                    <Calendar className="size-5 text-gold" />
-                    Select Rental Dates
+                    <Wallet className="size-5 text-gold" />
+                    {getFeeLabel('rent')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 p-4 sm:p-6 pt-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="rent-start" className="text-overline text-muted-foreground">
-                        Pick-up Date
-                      </Label>
-                      <Input
-                        id="rent-start"
-                        type="date"
-                        value={rentStartDate}
-                        min={new Date().toISOString().split('T')[0]}
-                        onChange={(e) => {
-                          setRentStartDate(e.target.value)
-                          if (rentEndDate && e.target.value > rentEndDate) {
-                            setRentEndDate('')
-                          }
-                        }}
-                        className="bg-background border-border"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="rent-end" className="text-overline text-muted-foreground">
-                        Return Date
-                      </Label>
-                      <Input
-                        id="rent-end"
-                        type="date"
-                        value={rentEndDate}
-                        min={rentStartDate || new Date().toISOString().split('T')[0]}
-                        onChange={(e) => setRentEndDate(e.target.value)}
-                        className="bg-background border-border"
-                      />
+                  <div className="rounded-lg bg-gold/5 border border-gold/20 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-overline text-muted-foreground">Pay now to unlock dealer contact</p>
+                        <p className="text-body-sm text-muted-foreground mt-1">
+                          DK Vroom verifies this fee first. Once admin approves your receipt, WhatsApp contact is unlocked so you can arrange rental dates directly with the dealer.
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-caption text-muted-foreground">Fee</p>
+                        <p className="heading-sm gold-text">{formatPrice(rentBookingFee)}</p>
+                      </div>
                     </div>
                   </div>
-                  {rentStartDate && rentEndDate && (
-                    <div className="rounded-lg bg-gold/5 border border-gold/20 p-3">
-                      <div className="flex items-center justify-between text-body-sm">
-                        <span className="text-muted-foreground">Total Days</span>
-                        <span className="font-semibold text-foreground">
-                          {Math.max(1, Math.ceil(
-                            (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
-                              (1000 * 60 * 60 * 24)
-                          ))} day(s)
-                        </span>
-                      </div>
-                      {(() => {
-                        const totalDays = Math.max(1, Math.ceil(
-                          (new Date(rentEndDate).getTime() - new Date(rentStartDate).getTime()) /
-                            (1000 * 60 * 60 * 24)
-                        ))
-                        let estimatedTotal = 0
-                        let pricingNote = ''
-                        if (totalDays >= 30 && car.monthlyPrice) {
-                          const months = Math.floor(totalDays / 30)
-                          const remainingDays = totalDays % 30
-                          estimatedTotal = (car.monthlyPrice * months) + (remainingDays > 0 ? car.price * remainingDays : 0)
-                          pricingNote = ` (${months}mo @ ${formatPrice(car.monthlyPrice)}/mo${remainingDays > 0 ? ` + ${remainingDays}d @ ${formatPrice(car.price)}/d` : ''})`
-                        } else if (totalDays >= 7 && car.weeklyPrice) {
-                          const weeks = Math.floor(totalDays / 7)
-                          const remainingDays = totalDays % 7
-                          estimatedTotal = (car.weeklyPrice * weeks) + (remainingDays > 0 ? car.price * remainingDays : 0)
-                          pricingNote = ` (${weeks}wk @ ${formatPrice(car.weeklyPrice)}/wk${remainingDays > 0 ? ` + ${remainingDays}d @ ${formatPrice(car.price)}/d` : ''})`
-                        } else {
-                          estimatedTotal = car.price * totalDays
-                        }
-                        return (
-                          <>
-                            <div className="flex items-center justify-between text-body-sm mt-1">
-                              <span className="text-muted-foreground">Estimated Total</span>
-                              <span className="font-semibold gold-text">{formatPrice(estimatedTotal)}</span>
-                            </div>
-                            {pricingNote && (
-                              <div className="flex items-center justify-between text-caption mt-1">
-                                <span className="text-muted-foreground">Pricing breakdown</span>
-                                <span className="text-muted-foreground/70">{pricingNote}</span>
-                              </div>
-                            )}
-                          </>
-                        )
-                      })()}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             )}
@@ -1416,7 +1336,7 @@ export default function CarDetail() {
             {isSale && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
-                {formatPrice(car.bookingFee || 100)} enquiry fee required to unlock dealer contact
+                {formatPrice(car.bookingFee || 100)} {getFeeLabel('sale')} required to unlock dealer contact
               </p>
             )}
             {isSale && (
@@ -1430,13 +1350,13 @@ export default function CarDetail() {
             {isAuction && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
-                {formatPrice(Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1))} deposit required to place bid &amp; unlock contact
+                {formatPrice(Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1))} {getFeeLabel('auction')} required to place bid &amp; unlock contact
               </p>
             )}
             {isRent && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
-                {formatPrice(car.deposit || car.price)} booking deposit required to unlock contact
+                {formatPrice(rentBookingFee)} {getFeeLabel('rent')} required to unlock dealer WhatsApp
               </p>
             )}
           </div>

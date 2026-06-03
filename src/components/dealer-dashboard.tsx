@@ -11,6 +11,7 @@ import {
   CONDITION_CATEGORIES,
   RUNNING_STATUS,
   SALVAGE_STATUS,
+  getFeeLabel,
   type VehicleType,
 } from '@/lib/constants'
 import {
@@ -1128,8 +1129,8 @@ export default function DealerDashboard() {
                           <Input type="number" value={carSalePrice} onChange={(e) => setCarSalePrice(e.target.value)} placeholder="e.g. 298000" className={INPUT_CLS} />
                         </div>
                         <div className="space-y-2">
-                          <Label className="text-muted-foreground text-caption">Deposit / Booking Fee (RM)</Label>
-                          <Input type="number" value={carBookingFee} onChange={(e) => setCarBookingFee(e.target.value)} placeholder="e.g. 5000" className={INPUT_CLS} />
+                          <Label className="text-muted-foreground text-caption">{getFeeLabel('sale')} (RM)</Label>
+                          <Input type="number" value={carBookingFee} onChange={(e) => setCarBookingFee(e.target.value)} placeholder="e.g. 10–30" className={INPUT_CLS} />
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

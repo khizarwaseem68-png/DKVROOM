@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { sendCarListingStatusEmail } from '@/lib/email/email-service'
 
 // GET /api/admin/cars - List all cars with filters (admin only)
 export async function GET(request: NextRequest) {
@@ -82,7 +83,7 @@ export async function PUT(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { carId, action, rejectionReason } = body
+  const { carId, action, rejectionReason, bookingFee } = body
 
   if (!carId) return apiError('Car ID is required', 400)
   if (!action || !['approve', 'reject'].includes(action)) {
@@ -104,45 +105,60 @@ export async function PUT(request: NextRequest) {
 
   let updatedCar
 
-  if (action === 'approve') {
-    updatedCar = await db.car.update({
-      where: { id: carId },
-      data: {
-        status: 'approved',
-        approvedAt: new Date(),
-        approvedBy: user.id,
-        rejectedAt: null,
-        rejectionReason: null,
-      }
-    })
+  const carName = `${car.brand} ${car.model} ${car.year}`
+  const dealerEmail = car.dealer?.user?.email
+  const dealerName = car.dealer?.user?.name || car.dealer?.companyName || 'Dealer'
 
-    // Update dealer total listings
+  if (action === 'approve') {
+    const updateData: Record<string, unknown> = {
+      status: 'approved',
+      approvedAt: new Date(),
+      approvedBy: user.id,
+      rejectedAt: null,
+      rejectionReason: null,
+    }
+    if (bookingFee !== undefined && bookingFee !== null) {
+      updateData.bookingFee = Number(bookingFee)
+    }
+
+    updatedCar = await db.car.update({ where: { id: carId }, data: updateData })
+
     await db.dealer.update({
       where: { id: car.dealerId },
       data: { totalListings: { increment: 1 } }
     })
 
-    // Notify dealer
     if (car.dealer?.user) {
       await db.notification.create({
         data: {
           userId: car.dealer.userId,
           title: 'Car Listing Approved',
-          message: `Your listing for ${car.brand} ${car.model} ${car.year} has been approved and is now live!`,
+          message: `Your listing for ${carName} has been approved and is now live!${
+            bookingFee ? ` Booking fee set to RM ${bookingFee}.` : ''
+          }`,
           type: 'success',
           link: `/cars/${carId}`,
         }
       })
     }
 
-    // Audit log
+    if (dealerEmail) {
+      sendCarListingStatusEmail({
+        email: dealerEmail,
+        name: dealerName,
+        carName,
+        status: 'approved',
+        bookingFee: bookingFee ? Number(bookingFee) : null,
+      }).catch(() => {})
+    }
+
     await db.auditLog.create({
       data: {
         userId: user.id,
         action: 'car_approved',
         resource: 'car',
         resourceId: carId,
-        details: JSON.stringify({ brand: car.brand, model: car.model, year: car.year }),
+        details: JSON.stringify({ brand: car.brand, model: car.model, year: car.year, bookingFee }),
         severity: 'info',
       }
     })
@@ -158,20 +174,28 @@ export async function PUT(request: NextRequest) {
       }
     })
 
-    // Notify dealer
     if (car.dealer?.user) {
       await db.notification.create({
         data: {
           userId: car.dealer.userId,
           title: 'Car Listing Rejected',
-          message: `Your listing for ${car.brand} ${car.model} ${car.year} has been rejected. Reason: ${rejectionReason}`,
+          message: `Your listing for ${carName} has been rejected. Reason: ${rejectionReason}`,
           type: 'error',
           link: `/dealer/cars/${carId}`,
         }
       })
     }
 
-    // Audit log
+    if (dealerEmail) {
+      sendCarListingStatusEmail({
+        email: dealerEmail,
+        name: dealerName,
+        carName,
+        status: 'rejected',
+        reason: rejectionReason,
+      }).catch(() => {})
+    }
+
     await db.auditLog.create({
       data: {
         userId: user.id,

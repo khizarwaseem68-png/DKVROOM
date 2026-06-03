@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { getUserFromRequest, requireRole } from '@/lib/auth/auth-utils'
 import { rateLimit, sanitizeInput, apiResponse, apiError, paginatedResponse } from '@/lib/security/middleware'
 import { db } from '@/lib/db'
+import { sendPaymentVerifiedEmail } from '@/lib/email/email-service'
 
 // GET /api/admin/payments - List all payments with filters (admin only)
 export async function GET(request: NextRequest) {
@@ -109,6 +110,10 @@ export async function PUT(request: NextRequest) {
   }
 
   if (action === 'verify') {
+    if (payment.status !== 'uploaded') {
+      return apiError('Receipt must be uploaded before payment can be verified', 400)
+    }
+
     // CRITICAL PAYMENT VERIFICATION FLOW
     const updateData: any = {
       status: 'verified',
@@ -133,14 +138,6 @@ export async function PUT(request: NextRequest) {
         }
       })
 
-      // If this is a rent booking, mark the car as booked
-      if (payment.booking?.type === 'rent' && payment.booking?.car) {
-        await db.car.update({
-          where: { id: payment.booking.car.id },
-          data: { status: 'booked' },
-        })
-      }
-
       // Notification for customer
       await db.notification.create({
         data: {
@@ -151,6 +148,24 @@ export async function PUT(request: NextRequest) {
           link: `/bookings/${payment.bookingId}`,
         }
       })
+
+      const customer = await db.user.findUnique({
+        where: { id: payment.userId },
+        select: { email: true, name: true },
+      })
+
+      if (customer?.email) {
+        const car = payment.booking?.car
+        await sendPaymentVerifiedEmail({
+          email: customer.email,
+          name: customer.name || 'Customer',
+          amount: payment.amount,
+          vehicleName: car ? `${car.brand} ${car.model} ${car.year}` : undefined,
+          bookingType: payment.booking?.type,
+        }).catch((error) => {
+          console.error('Payment verified email failed:', error)
+        })
+      }
 
       // Notification for dealer
       if (payment.dealerId && payment.booking?.car) {
@@ -233,6 +248,16 @@ export async function PUT(request: NextRequest) {
         rejectionReason: sanitizeInput(rejectionReason),
       }
     })
+
+    if (payment.bookingId) {
+      await db.booking.update({
+        where: { id: payment.bookingId },
+        data: {
+          status: 'payment_pending',
+          contactUnlocked: false,
+        },
+      })
+    }
 
     // Notify customer
     await db.notification.create({

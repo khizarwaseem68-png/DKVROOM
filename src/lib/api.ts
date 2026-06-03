@@ -577,10 +577,10 @@ export const adminApi = {
     return apiFetch(`/admin/cars?${searchParams.toString()}`)
   },
 
-  approveCar: async (id: string, action: 'approve' | 'reject', reason?: string): Promise<ApiResponse> => {
+  approveCar: async (id: string, action: 'approve' | 'reject', reason?: string, bookingFee?: number): Promise<ApiResponse> => {
     return apiFetch('/admin/cars', {
       method: 'PUT',
-      body: JSON.stringify({ carId: id, action, rejectionReason: reason }),
+      body: JSON.stringify({ carId: id, action, rejectionReason: reason, bookingFee }),
     })
   },
 

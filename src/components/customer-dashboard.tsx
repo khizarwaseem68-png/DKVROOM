@@ -27,13 +27,15 @@ import {
 interface BookingItem {
   id: string
   car?: { brand: string; model: string; year?: number; photos?: string; type?: string }
+  dealer?: { id: string; companyName: string; phone?: string | null; whatsapp?: string | null }
   type?: string
   status: string
+  contactUnlocked?: boolean
   startDate?: string
   endDate?: string
   totalAmount?: number
   createdAt?: string
-  payments?: { id: string; status: string; receiptUrl?: string }[]
+  payments?: { id: string; status: string; receiptUrl?: string; contactUnlocked?: boolean }[]
 }
 
 interface PaymentItem {
@@ -159,9 +161,11 @@ export default function CustomerDashboard() {
   // Sync profile state with user
   useEffect(() => {
     if (user) {
-      setProfileName(user.name || '')
-      setProfilePhone(user.phone || '')
-      setProfileWhatsapp(user.whatsapp || '')
+      queueMicrotask(() => {
+        setProfileName(user.name || '')
+        setProfilePhone(user.phone || '')
+        setProfileWhatsapp(user.whatsapp || '')
+      })
     }
   }, [user])
 
@@ -229,34 +233,36 @@ export default function CustomerDashboard() {
 
   // Fetch on tab change / filter change
   useEffect(() => {
-    if (activeTab === 'bookings') fetchBookings()
+    if (activeTab === 'bookings') queueMicrotask(() => { void fetchBookings() })
   }, [activeTab, fetchBookings])
 
   useEffect(() => {
-    if (activeTab === 'payments') fetchPayments()
+    if (activeTab === 'payments') queueMicrotask(() => { void fetchPayments() })
   }, [activeTab, fetchPayments])
 
   useEffect(() => {
-    if (activeTab === 'loans') fetchLoans()
+    if (activeTab === 'loans') queueMicrotask(() => { void fetchLoans() })
   }, [activeTab, fetchLoans])
 
   useEffect(() => {
-    if (activeTab === 'wishlist') fetchWishlist()
+    if (activeTab === 'wishlist') queueMicrotask(() => { void fetchWishlist() })
   }, [activeTab, fetchWishlist])
 
   // Fetch all data on mount for overview
   useEffect(() => {
-    fetchBookings()
-    fetchPayments()
-    fetchLoans()
-    fetchWishlist()
+    queueMicrotask(() => {
+      void fetchBookings()
+      void fetchPayments()
+      void fetchLoans()
+      void fetchWishlist()
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // ===== DERIVED DATA =====
 
   const activeBookings = bookings.filter(b => b.status === 'active' || b.status === 'confirmed').length
-  const pendingPayments = payments.filter(p => p.status === 'pending' || p.status === 'payment_pending').length
+  const pendingPayments = payments.filter(p => ['pending', 'uploaded', 'payment_pending', 'rejected'].includes(p.status)).length
   const activeLoans = loans.filter(l => l.status === 'approved' || l.status === 'disbursed' || l.status === 'active').length
   const wishlistCount = wishlistItems.length
   const totalSpent = payments
@@ -728,7 +734,7 @@ export default function CustomerDashboard() {
             <div className="space-y-4">
               {/* Filter Tabs */}
               <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'active', 'completed', 'cancelled'] as const).map((filter) => (
+                {(['all', 'payment_pending', 'payment_uploaded', 'confirmed', 'active', 'completed', 'cancelled'] as const).map((filter) => (
                   <Button
                     key={filter}
                     variant={bookingFilter === filter ? 'default' : 'ghost'}
@@ -739,7 +745,7 @@ export default function CustomerDashboard() {
                       : 'text-muted-foreground hover:text-foreground text-xs'
                     }
                   >
-                    {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    {filter === 'all' ? 'All' : filter.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
                   </Button>
                 ))}
                 <span className="text-caption text-muted-foreground ml-2">
@@ -773,7 +779,11 @@ export default function CustomerDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {bookings.map((booking) => {
                     const carPhoto = booking.car?.photos ? parseJsonField(booking.car.photos)[0] : ''
-                    const isPaymentPending = booking.status === 'payment_pending' || booking.payments?.some(p => p.status === 'pending')
+                    const isPaymentPending = booking.status === 'payment_pending' || booking.payments?.some(p => p.status === 'pending' || p.status === 'rejected')
+                    const isUnderVerification = booking.status === 'payment_uploaded' || booking.payments?.some(p => p.status === 'uploaded')
+                    const isContactUnlocked = booking.contactUnlocked || booking.payments?.some(p => p.contactUnlocked) || booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'completed'
+                    const dealerWhatsapp = booking.dealer?.whatsapp || booking.dealer?.phone
+                    const dealerPhone = booking.dealer?.phone
                     return (
                       <Card key={booking.id} className="bg-card border-border overflow-hidden hover:border-gold/30 transition-all">
                         {/* Card Image */}
@@ -832,7 +842,7 @@ export default function CustomerDashboard() {
                               size="sm"
                               className="w-full bg-gold hover:bg-gold-dark text-primary-foreground font-semibold"
                               onClick={() => {
-                                const paymentId = booking.payments?.find(p => p.status === 'pending')?.id
+                                const paymentId = booking.payments?.find(p => p.status === 'pending' || p.status === 'rejected')?.id
                                 if (paymentId) {
                                   setUploadingPaymentId(paymentId)
                                   receiptFileRef.current?.click()
@@ -842,6 +852,39 @@ export default function CustomerDashboard() {
                               <Upload className="size-4 mr-1" />
                               Upload Receipt
                             </Button>
+                          )}
+
+                          {isUnderVerification && (
+                            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-caption text-blue-300">
+                              Receipt uploaded. Admin is verifying your payment.
+                            </div>
+                          )}
+
+                          {/* Dealer contact — shown once payment is verified */}
+                          {isContactUnlocked && (dealerPhone || dealerWhatsapp) && (
+                            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 space-y-2">
+                              <p className="text-caption font-semibold text-emerald-400 flex items-center gap-1">
+                                <CheckCircle className="size-3" />
+                                Dealer Contact Unlocked
+                              </p>
+                              {dealerPhone && (
+                                <a href={`tel:${dealerPhone}`} className="flex items-center gap-2 text-caption text-foreground hover:text-gold">
+                                  <Phone className="size-3 text-emerald-400" />
+                                  {dealerPhone}
+                                </a>
+                              )}
+                              {dealerWhatsapp && (
+                                <a
+                                  href={`https://wa.me/${dealerWhatsapp.replace(/[^0-9]/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 text-caption text-emerald-400 hover:text-emerald-300"
+                                >
+                                  <MessageCircle className="size-3" />
+                                  Chat on WhatsApp
+                                </a>
+                              )}
+                            </div>
                           )}
 
                           {/* Created date */}
@@ -904,8 +947,9 @@ export default function CustomerDashboard() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {payments.map((payment) => {
-                    const isPending = payment.status === 'pending' || payment.status === 'payment_pending'
-                    const hasReceipt = !!payment.receiptUrl || payment.receiptStatus === 'uploaded'
+                    const isRejected = payment.status === 'rejected'
+                    const isPending = payment.status === 'pending' || payment.status === 'payment_pending' || isRejected
+                    const hasReceipt = !isRejected && (!!payment.receiptUrl || payment.receiptStatus === 'uploaded' || payment.status === 'uploaded')
                     return (
                       <Card key={payment.id} className="bg-card border-border hover:border-gold/30 transition-all">
                         <CardContent className="p-4 space-y-3">
@@ -954,6 +998,18 @@ export default function CustomerDashboard() {
                           </div>
 
                           {/* Upload Receipt Button */}
+                          {payment.status === 'uploaded' && (
+                            <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3 text-caption text-blue-300">
+                              Your receipt is under admin verification.
+                            </div>
+                          )}
+
+                          {isRejected && (
+                            <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-caption text-red-300">
+                              Receipt rejected. Please upload a clearer or correct payment receipt.
+                            </div>
+                          )}
+
                           {isPending && !hasReceipt && (
                             <Button
                               size="sm"

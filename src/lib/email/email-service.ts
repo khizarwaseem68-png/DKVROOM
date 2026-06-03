@@ -114,3 +114,89 @@ export async function sendDealerVerificationEmail({
     `,
   })
 }
+
+export async function sendCarListingStatusEmail({
+  email,
+  name,
+  carName,
+  status,
+  reason,
+  bookingFee,
+}: {
+  email: string
+  name: string
+  carName: string
+  status: 'approved' | 'rejected'
+  reason?: string | null
+  bookingFee?: number | null
+}) {
+  const approved = status === 'approved'
+  const title = approved
+    ? `Your car listing "${carName}" has been approved`
+    : `Your car listing "${carName}" was rejected`
+  const message = approved
+    ? `Hi ${name}, your listing for ${carName} has been approved and is now live on DK Vroom.${
+        bookingFee ? ` The booking fee set by admin is RM ${bookingFee}.` : ''
+      }`
+    : `Hi ${name}, your listing for ${carName} was rejected.${reason ? ` Reason: ${reason}` : ''} Please edit your listing and resubmit.`
+
+  await sendEmail({
+    to: email,
+    subject: title,
+    text: `${message}\n\nSign in to your dealer dashboard to manage your listings.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;background:#0a0a0a;color:#f5f0e8;padding:32px">
+        <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:28px">
+          <h1 style="color:#c9a84c;margin:0 0 12px">DK Vroom</h1>
+          <h2 style="margin:0 0 16px;color:#f5f0e8">${title}</h2>
+          <p style="margin:0 0 20px;color:#d8d2c4;line-height:1.6">${message}</p>
+          ${approved && bookingFee ? `
+          <div style="margin:18px 0;padding:14px;border-radius:10px;background:#191919;border:1px solid #2a2a2a">
+            <p style="margin:0;color:#8a8578;font-size:13px">Admin-set booking fee</p>
+            <p style="margin:4px 0 0;color:#c9a84c;font-size:24px;font-weight:700">RM ${bookingFee}</p>
+          </div>` : ''}
+          <p style="margin:20px 0 0;color:#8a8578;font-size:13px">Sign in to your dealer dashboard to manage your listings.</p>
+        </div>
+      </div>
+    `,
+  })
+}
+
+export async function sendPaymentVerifiedEmail({
+  email,
+  name,
+  amount,
+  vehicleName,
+  bookingType,
+}: {
+  email: string
+  name: string
+  amount: number
+  vehicleName?: string
+  bookingType?: string | null
+}) {
+  const title = 'Your DK Vroom payment has been verified'
+  const readableType = bookingType === 'rent' ? 'rental booking fee' : 'payment'
+  const vehicleText = vehicleName ? ` for ${vehicleName}` : ''
+  const message = `Hi ${name}, your ${readableType}${vehicleText} has been verified. Dealer contact details are now unlocked in your DK Vroom account.`
+
+  await sendEmail({
+    to: email,
+    subject: title,
+    text: `${message}\n\nAmount verified: RM ${amount}. Open your customer dashboard to continue.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;background:#0a0a0a;color:#f5f0e8;padding:32px">
+        <div style="max-width:560px;margin:0 auto;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:28px">
+          <h1 style="color:#c9a84c;margin:0 0 12px">DK Vroom</h1>
+          <h2 style="margin:0 0 16px;color:#f5f0e8">${title}</h2>
+          <p style="margin:0 0 16px;color:#d8d2c4;line-height:1.6">${message}</p>
+          <div style="margin:18px 0;padding:14px;border-radius:10px;background:#191919;border:1px solid #2a2a2a">
+            <p style="margin:0;color:#8a8578;font-size:13px">Verified amount</p>
+            <p style="margin:4px 0 0;color:#c9a84c;font-size:24px;font-weight:700">RM ${amount}</p>
+          </div>
+          <p style="margin:0;color:#8a8578;font-size:13px">Open your customer dashboard to view the unlocked dealer WhatsApp contact.</p>
+        </div>
+      </div>
+    `,
+  })
+}

@@ -7,6 +7,7 @@ import { adminApi, bookingsApi, loansApi } from '@/lib/api'
 import {
   formatPrice,
   formatDate,
+  getFeeLabel,
   type VehicleType,
 } from '@/lib/constants'
 import {
@@ -216,7 +217,14 @@ interface PaymentItem {
   paymentMethod?: string
   method?: string
   status: string
+  receiptUrl?: string | null
   createdAt?: string
+  booking?: {
+    id?: string
+    type?: string
+    status?: string
+    car?: { brand?: string; model?: string; year?: number }
+  } | null
 }
 
 interface LoanItem {
@@ -440,6 +448,8 @@ export default function AdminDashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment' | 'loan'; id: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [approveCarDialog, setApproveCarDialog] = useState<{ id: string; carName: string } | null>(null)
+  const [approveBookingFee, setApproveBookingFee] = useState('')
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -608,18 +618,22 @@ export default function AdminDashboard() {
   const handleApproveCar = async (carId: string, action: 'approve' | 'reject') => {
     setActionLoading(carId)
     try {
-      await adminApi.approveCar(carId, action, action === 'reject' ? rejectReason : undefined)
+      const fee = action === 'approve' && approveBookingFee ? Number(approveBookingFee) : undefined
+      await adminApi.approveCar(carId, action, action === 'reject' ? rejectReason : undefined, fee)
       await fetchCars()
       await fetchStats()
       if (selectedCar?.id === carId) {
         setSelectedCar({
           ...selectedCar,
           status: action === 'approve' ? 'approved' : 'rejected',
+          bookingFee: action === 'approve' && fee ? fee : selectedCar.bookingFee,
           approvedAt: action === 'approve' ? new Date().toISOString() : selectedCar.approvedAt,
           rejectedAt: action === 'reject' ? new Date().toISOString() : null,
           rejectionReason: action === 'reject' ? rejectReason : null,
         })
       }
+      setApproveCarDialog(null)
+      setApproveBookingFee('')
       setRejectDialog(null)
       setRejectReason('')
     } catch {
@@ -825,10 +839,10 @@ export default function AdminDashboard() {
             {car.status !== 'approved' && (
               <Button
                 disabled={actionLoading === car.id}
-                onClick={() => handleApproveCar(car.id, 'approve')}
+                onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}
                 className="bg-emerald-500 hover:bg-emerald-600 text-white"
               >
-                {actionLoading === car.id ? <Loader2 className="size-4 animate-spin mr-1" /> : <CheckCircle className="size-4 mr-1" />}
+                <CheckCircle className="size-4 mr-1" />
                 Approve Car
               </Button>
             )}
@@ -1167,6 +1181,51 @@ export default function AdminDashboard() {
               </Button>
             </div>
           </aside>
+        </div>
+      )}
+
+      {/* Approve Car Dialog */}
+      {approveCarDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <Card className="bg-card border-border w-full max-w-md mx-4">
+            <CardHeader>
+              <CardTitle className="dash-heading-sm flex items-center gap-2">
+                <CheckCircle className="size-5 text-emerald-400" />
+                Approve Car Listing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-body-sm text-muted-foreground">{approveCarDialog.carName}</p>
+              <div className="space-y-2">
+                <label className="text-caption text-muted-foreground">{getFeeLabel(approveCarDialog ? (cars.find(c => c.id === approveCarDialog.id)?.type ?? 'sale') : 'sale')} (RM) <span className="text-muted-foreground/50">— leave blank for none</span></label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={approveBookingFee}
+                  onChange={(e) => setApproveBookingFee(e.target.value)}
+                  placeholder="e.g. 200"
+                  className="bg-secondary border-border text-foreground placeholder:text-muted-foreground/50 focus-visible:border-gold"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={() => handleApproveCar(approveCarDialog.id, 'approve')}
+                  disabled={actionLoading !== null}
+                  className="bg-emerald-500 hover:bg-emerald-600 text-white font-semibold flex-1"
+                >
+                  {actionLoading ? <Loader2 className="size-4 animate-spin mr-1" /> : null}
+                  Approve
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => { setApproveCarDialog(null); setApproveBookingFee('') }}
+                  className="border-border text-muted-foreground hover:text-foreground flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -1667,8 +1726,8 @@ export default function AdminDashboard() {
                                       </Button>
                                       {car.status !== 'approved' && (
                                         <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
-                                          disabled={actionLoading === car.id} onClick={() => handleApproveCar(car.id, 'approve')}>
-                                          {actionLoading === car.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
+                                          disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}>
+                                          <CheckCircle className="size-3.5 mr-1" />
                                           Approve
                                         </Button>
                                       )}
@@ -1727,7 +1786,7 @@ export default function AdminDashboard() {
                                   </Button>
                                   {car.status !== 'approved' && (
                                     <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs h-7"
-                                      disabled={actionLoading === car.id} onClick={() => handleApproveCar(car.id, 'approve')}>
+                                      disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}>
                                       <CheckCircle className="size-3.5 mr-1" />Approve
                                     </Button>
                                   )}
@@ -1946,7 +2005,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <Filter className="size-4 text-muted-foreground" />
                   <TabsList className="bg-secondary">
-                    {['all', 'pending', 'verified', 'rejected'].map((status) => (
+                    {['all', 'pending', 'uploaded', 'verified', 'rejected'].map((status) => (
                       <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
                         {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
                       </TabsTrigger>
@@ -2006,7 +2065,14 @@ export default function AdminDashboard() {
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">{txn.user?.name || txn.userName || 'N/A'}</td>
-                                <td className="py-3 px-4 text-muted-foreground">{txn.dealer?.companyName || txn.dealerName || 'N/A'}</td>
+                                <td className="py-3 px-4 text-muted-foreground">
+                                  <div>{txn.dealer?.companyName || txn.dealerName || 'N/A'}</div>
+                                  {txn.booking?.car && (
+                                    <div className="text-caption text-muted-foreground/70">
+                                      {txn.booking.car.brand} {txn.booking.car.model} {txn.booking.type ? `(${txn.booking.type})` : ''}
+                                    </div>
+                                  )}
+                                </td>
                                 <td className="py-3 px-4 font-medium text-gold">{formatPrice(txn.amount ?? 0)}</td>
                                 <td className="py-3 px-4">
                                   <Badge variant="outline" className="border-border text-muted-foreground text-xs">{txn.paymentMethod || txn.method || 'N/A'}</Badge>
@@ -2014,8 +2080,15 @@ export default function AdminDashboard() {
                                 <td className="py-3 px-4"><StatusBadge status={txn.status} /></td>
                                 <td className="py-3 px-4 text-muted-foreground">{txn.createdAt ? formatDate(txn.createdAt) : 'N/A'}</td>
                                 <td className="py-3 px-4">
-                                  {txn.status === 'pending' || txn.status === 'uploaded' ? (
+                                  {txn.status === 'uploaded' ? (
                                     <div className="flex items-center gap-1">
+                                      {txn.receiptUrl && (
+                                        <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs" asChild>
+                                          <a href={txn.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                            <FileText className="size-3.5 mr-1" />Receipt
+                                          </a>
+                                        </Button>
+                                      )}
                                       <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
                                         disabled={actionLoading === txn.id} onClick={() => handleVerifyPayment(txn.id, 'verify')}>
                                         {actionLoading === txn.id ? <Loader2 className="size-3.5 mr-1 animate-spin" /> : <CheckCircle className="size-3.5 mr-1" />}
@@ -2026,10 +2099,18 @@ export default function AdminDashboard() {
                                         <XCircle className="size-3.5 mr-1" />Reject
                                       </Button>
                                     </div>
+                                  ) : txn.status === 'pending' ? (
+                                    <span className="text-caption text-muted-foreground">Awaiting customer receipt</span>
                                   ) : (
-                                    <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs">
-                                      <Eye className="size-3.5 mr-1" />View
-                                    </Button>
+                                    txn.receiptUrl ? (
+                                      <Button variant="ghost" size="sm" className="h-7 text-muted-foreground hover:text-gold text-xs" asChild>
+                                        <a href={txn.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                          <Eye className="size-3.5 mr-1" />View Receipt
+                                        </a>
+                                      </Button>
+                                    ) : (
+                                      <span className="text-caption text-muted-foreground">No receipt</span>
+                                    )
                                   )}
                                 </td>
                               </tr>
@@ -2056,8 +2137,20 @@ export default function AdminDashboard() {
                               <StatusBadge status={txn.status} />
                             </div>
                           </div>
-                          {(txn.status === 'pending' || txn.status === 'uploaded') && (
+                          {txn.booking?.car && (
+                            <p className="text-caption text-muted-foreground mt-2">
+                              {txn.booking.car.brand} {txn.booking.car.model} {txn.booking.type ? `(${txn.booking.type})` : ''}
+                            </p>
+                          )}
+                          {txn.status === 'uploaded' && (
                             <div className="flex items-center gap-2 mt-3">
+                              {txn.receiptUrl && (
+                                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-gold text-xs h-7" asChild>
+                                  <a href={txn.receiptUrl} target="_blank" rel="noopener noreferrer">
+                                    <FileText className="size-3.5 mr-1" />Receipt
+                                  </a>
+                                </Button>
+                              )}
                               <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs h-7"
                                 disabled={actionLoading === txn.id} onClick={() => handleVerifyPayment(txn.id, 'verify')}>
                                 <CheckCircle className="size-3.5 mr-1" />Verify
@@ -2067,6 +2160,9 @@ export default function AdminDashboard() {
                                 <XCircle className="size-3.5 mr-1" />Reject
                               </Button>
                             </div>
+                          )}
+                          {txn.status === 'pending' && (
+                            <p className="text-caption text-muted-foreground mt-3">Awaiting customer receipt.</p>
                           )}
                         </CardContent>
                       </Card>

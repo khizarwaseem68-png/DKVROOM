@@ -36,6 +36,20 @@ export function formatDateTime(date: string | Date): string {
   })
 }
 
+// ===== FEE LABELS BY MODULE =====
+
+export function getFeeLabel(type: string): string {
+  switch (type) {
+    case 'rent': return 'Booking Fee'
+    case 'sale': case 'purchase': return 'Verified Contact Access Fee'
+    case 'continueLoan': return 'Application Fee'
+    case 'auction': return 'Bid Deposit'
+    case 'workshop': return 'Appointment Fee'
+    case 'insurance': return 'Processing Fee'
+    default: return 'Access Fee'
+  }
+}
+
 // ===== VEHICLE TYPES =====
 
 export type VehicleType = 'rent' | 'sale' | 'auction' | 'continueLoan'

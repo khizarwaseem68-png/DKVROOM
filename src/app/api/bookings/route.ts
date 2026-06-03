@@ -86,6 +86,8 @@ export async function GET(request: NextRequest) {
               status: true,
               method: true,
               qrReference: true,
+              receiptUrl: true,
+              contactUnlocked: true,
               createdAt: true,
             },
           },
@@ -142,12 +144,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Reuse unfinished bookings so repeated clicks continue payment instead of creating conflicts.
+    const reusableBookingWhere: Prisma.BookingWhereInput = {
+      carId: sanitized.carId,
+      userId: user.id,
+      status: { in: ['pending', 'payment_pending', 'payment_uploaded'] },
+    }
+
     const existingPendingBooking = await db.booking.findFirst({
-      where: {
-        carId: sanitized.carId,
-        userId: user.id,
-        status: { in: ['pending', 'payment_pending', 'payment_uploaded'] },
-      },
+      where: reusableBookingWhere,
       include: {
         car: {
           select: {
@@ -198,44 +202,7 @@ export async function POST(request: NextRequest) {
     // Calculate total amount based on type
     let totalAmount: number | null = null
     if (sanitized.type === 'rent') {
-      if (!sanitized.startDate || !sanitized.endDate) {
-        return apiError('Start date and end date are required for rental bookings', 400)
-      }
-      const start = new Date(sanitized.startDate)
-      const end = new Date(sanitized.endDate)
-      if (end <= start) return apiError('End date must be after start date', 400)
-
-      // Check for date conflicts with existing approved/active bookings for the same car
-      const conflictingBooking = await db.booking.findFirst({
-        where: {
-          carId: sanitized.carId,
-          status: { in: ['confirmed', 'active', 'payment_pending'] },
-          startDate: { lte: end },
-          endDate: { gte: start },
-        },
-      })
-      if (conflictingBooking) {
-        return apiError('This car is already booked for the selected dates', 409)
-      }
-
-      const days = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
-      if (days < 1) return apiError('Minimum rental period is 1 day', 400)
-      // Apply weekly/monthly pricing tiers based on rental duration
-      if (days >= 30 && car.monthlyPrice) {
-        const months = Math.floor(days / 30)
-        const remainingDays = days % 30
-        const monthlyAmount = car.monthlyPrice * months
-        const dailyAmount = remainingDays > 0 ? car.price * remainingDays : 0
-        totalAmount = monthlyAmount + dailyAmount
-      } else if (days >= 7 && car.weeklyPrice) {
-        const weeks = Math.floor(days / 7)
-        const remainingDays = days % 7
-        const weeklyAmount = car.weeklyPrice * weeks
-        const dailyAmount = remainingDays > 0 ? car.price * remainingDays : 0
-        totalAmount = weeklyAmount + dailyAmount
-      } else {
-        totalAmount = car.price * days
-      }
+      totalAmount = car.bookingFee || 200
     } else if (sanitized.type === 'purchase') {
       totalAmount = car.bookingFee || car.deposit || car.price
     } else if (sanitized.type === 'continueLoan') {
