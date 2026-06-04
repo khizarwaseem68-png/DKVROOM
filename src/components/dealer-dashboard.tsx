@@ -83,6 +83,7 @@ import {
   Loader2,
   MoreVertical,
   LogOut,
+  Search,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -167,7 +168,9 @@ export default function DealerDashboard() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
   const [listingFilter, setListingFilter] = useState('all')
+  const [listingSearch, setListingSearch] = useState('')
   const [bookingFilter, setBookingFilter] = useState('all')
+  const [bookingSearch, setBookingSearch] = useState('')
 
   // API data state
   const [stats, setStats] = useState<DealerStats | null>(null)
@@ -794,7 +797,7 @@ export default function DealerDashboard() {
           {activeTab === 'listings' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap flex-1">
                   <Filter className="size-4 text-muted-foreground" />
                   {(['all', ...Object.keys(VEHICLE_TYPE_CONFIG)] as const).map((type) => (
                     <Button
@@ -810,6 +813,15 @@ export default function DealerDashboard() {
                       {type === 'all' ? 'All' : VEHICLE_TYPE_CONFIG[type as VehicleType]?.label ?? type}
                     </Button>
                   ))}
+                  <div className="flex items-center gap-2 flex-1 max-w-xs ml-auto">
+                    <Search className="size-4 text-muted-foreground shrink-0" />
+                    <Input
+                      value={listingSearch}
+                      onChange={(e) => setListingSearch(e.target.value)}
+                      placeholder="Search listings..."
+                      className="bg-secondary border-border h-9"
+                    />
+                  </div>
                 </div>
                 <Button onClick={() => handleTabChange('addCar')} className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold">
                   <PlusCircle className="size-4 mr-1" />
@@ -831,13 +843,27 @@ export default function DealerDashboard() {
                     </Card>
                   ))}
                 </div>
-              ) : listings.length === 0 ? (
-                <EmptyState title="No listings found" description="Add your first car listing to get started." action={
-                  <Button onClick={() => handleTabChange('addCar')} className="bg-gold hover:bg-gold-dark text-primary-foreground">Add New Car</Button>
-                } />
-              ) : (
+              ) : (() => {
+                const filteredListings = listingSearch
+                  ? listings.filter(car => {
+                      const q = listingSearch.toLowerCase()
+                      return (
+                        (car.brand || '').toLowerCase().includes(q) ||
+                        (car.model || '').toLowerCase().includes(q) ||
+                        (car.city || '').toLowerCase().includes(q) ||
+                        (car.type || '').toLowerCase().includes(q) ||
+                        (car.id || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : listings
+                if (filteredListings.length === 0) {
+                  return <EmptyState title="No listings found" description={listingSearch ? 'No listings match your search.' : 'Add your first car listing to get started.'} action={
+                    <Button onClick={() => handleTabChange('addCar')} className="bg-gold hover:bg-gold-dark text-primary-foreground">Add New Car</Button>
+                  } />
+                }
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {listings.map((car) => {
+                  {filteredListings.map((car) => {
                     const photos = parseJsonField(car.photos)
                     const photoUrl = photos[0] || ''
                     return (
@@ -887,7 +913,8 @@ export default function DealerDashboard() {
                     )
                   })}
                 </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -1348,24 +1375,49 @@ export default function DealerDashboard() {
           {/* ===== BOOKINGS TAB ===== */}
           {activeTab === 'bookings' && (
             <div className="space-y-4">
-              <Tabs value={bookingFilter} onValueChange={setBookingFilter}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Filter className="size-4 text-muted-foreground" />
-                  <TabsList className="bg-secondary">
-                    {['all', 'pending', 'confirmed', 'completed'].map((status) => (
-                      <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
-                        {status.charAt(0).toUpperCase() + status.slice(1)}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <Tabs value={bookingFilter} onValueChange={setBookingFilter}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Filter className="size-4 text-muted-foreground" />
+                    <TabsList className="bg-secondary">
+                      {['all', 'pending', 'confirmed', 'completed'].map((status) => (
+                        <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+                </Tabs>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={bookingSearch}
+                    onChange={(e) => setBookingSearch(e.target.value)}
+                    placeholder="Search bookings..."
+                    className="bg-secondary border-border h-9"
+                  />
                 </div>
-              </Tabs>
+              </div>
 
               {bookingsLoading ? (
                 <LoadingState message="Loading bookings..." />
-              ) : bookings.length === 0 ? (
-                <EmptyState title="No bookings found" description="Bookings will appear here when customers book your cars." />
-              ) : (
+              ) : (() => {
+                const filteredBookings = bookingSearch
+                  ? bookings.filter(b => {
+                      const q = bookingSearch.toLowerCase()
+                      return (
+                        (b.user?.name || '').toLowerCase().includes(q) ||
+                        (b.car?.brand || '').toLowerCase().includes(q) ||
+                        (b.car?.model || '').toLowerCase().includes(q) ||
+                        (b.id || '').toLowerCase().includes(q) ||
+                        (b.status || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : bookings
+                if (filteredBookings.length === 0) {
+                  return <EmptyState title="No bookings found" description={bookingSearch ? 'No bookings match your search.' : 'Bookings will appear here when customers book your cars.'} />
+                }
+                return (
                 <>
                   {/* Desktop table */}
                   <Card className="bg-card border-border hidden md:block">
@@ -1383,7 +1435,7 @@ export default function DealerDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {bookings.map((booking) => {
+                            {filteredBookings.map((booking) => {
                               const startDate = booking.startDate ? formatDate(booking.startDate) : ''
                               const endDate = booking.endDate ? formatDate(booking.endDate) : ''
                               const dates = startDate && endDate ? `${startDate} - ${endDate}` : 'N/A'
@@ -1431,7 +1483,7 @@ export default function DealerDashboard() {
 
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-3">
-                    {bookings.map((booking) => (
+                    {filteredBookings.map((booking) => (
                       <Card key={booking.id} className="bg-card border-border">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-2">
@@ -1449,7 +1501,8 @@ export default function DealerDashboard() {
                     ))}
                   </div>
                 </>
-              )}
+                )
+              })()}
             </div>
           )}
 

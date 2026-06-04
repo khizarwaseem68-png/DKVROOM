@@ -730,7 +730,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
               /* ===== LOGIN FORM ===== */
               <form onSubmit={loginForm.handleSubmit(handleLogin)} className="space-y-4" noValidate>
                 {/* Role selector */}
-                <FormField label="Sign in as">
+                {/* <FormField label="Sign in as">
                   <Select value={loginRole} onValueChange={(v: 'customer' | 'dealer' | 'admin') => setLoginRole(v)}>
                     <SelectTrigger className="h-11 bg-background border-border text-foreground">
                       <SelectValue />
@@ -747,7 +747,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                </FormField>
+                </FormField> */}
 
                 {/* Email */}
                 <FormField label="Email" required error={loginForm.formState.errors.email?.message}>

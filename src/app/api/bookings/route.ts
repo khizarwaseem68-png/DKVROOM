@@ -193,10 +193,18 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         status: { in: ['confirmed', 'active'] },
       },
+      include: {
+        car: { select: { id: true, brand: true, model: true, photos: true } },
+      },
     })
 
     if (existingActiveBooking) {
-      return apiError('You already have an active booking for this car', 409)
+      return apiResponse({
+        success: false,
+        error: 'You already have an active booking for this car.',
+        code: 'DUPLICATE_ACTIVE_BOOKING',
+        data: existingActiveBooking,
+      }, 409)
     }
 
     // Calculate total amount based on type

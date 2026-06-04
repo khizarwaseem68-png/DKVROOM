@@ -20,7 +20,7 @@ import {
   ChevronLeft, ChevronRight, Car, DollarSign, Clock,
   LogOut, Menu, X, ArrowUpRight, ArrowDownRight,
   Loader2, CreditCard, FileText, Home, PlusCircle, Heart, MapPin,
-  Upload, CheckCircle, AlertCircle, Phone, Mail, MessageCircle, Star,
+  Upload, CheckCircle, AlertCircle, Phone, Mail, MessageCircle, Star, Search,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -134,16 +134,19 @@ export default function CustomerDashboard() {
   const [bookings, setBookings] = useState<BookingItem[]>([])
   const [bookingsLoading, setBookingsLoading] = useState(true)
   const [bookingFilter, setBookingFilter] = useState('all')
+  const [bookingSearch, setBookingSearch] = useState('')
 
   // Payments state
   const [payments, setPayments] = useState<PaymentItem[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
   const [paymentFilter, setPaymentFilter] = useState('all')
+  const [paymentSearch, setPaymentSearch] = useState('')
 
   // Loans state
   const [loans, setLoans] = useState<LoanItem[]>([])
   const [loansLoading, setLoansLoading] = useState(true)
   const [loanFilter, setLoanFilter] = useState('all')
+  const [loanSearch, setLoanSearch] = useState('')
 
   // Wishlist state
   const [wishlistItems, setWishlistItems] = useState<Record<string, unknown>[]>([])
@@ -606,22 +609,41 @@ export default function CustomerDashboard() {
                   },
                 ].map((stat) => {
                   const Icon = stat.icon
-                  return (
-                    <Card key={stat.label} className="bg-card border-border">
-                      <CardContent className="p-4 sm:p-6">
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center">
-                            <Icon className="size-5 text-gold" />
-                          </div>
-                          <span className={`flex items-center text-overline ${stat.up ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                            {stat.change}
-                          </span>
+                  const isClickable = stat.label === 'Active Bookings' || stat.label === 'Pending Payments' || stat.label === 'Active Loans' || stat.label === 'Wishlist'
+                  const content = (
+                    <CardContent className="p-4 sm:p-6">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-lg bg-gold/10 flex items-center justify-center">
+                          <Icon className="size-5 text-gold" />
                         </div>
-                        <div className="dash-heading-md">{stat.value}</div>
-                        <div className="text-overline text-muted-foreground mt-1">{stat.label}</div>
-                      </CardContent>
-                    </Card>
+                        <span className={`flex items-center text-overline ${stat.up ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {stat.up ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+                          {stat.change}
+                        </span>
+                      </div>
+                      <div className="dash-heading-md">{stat.value}</div>
+                      <div className="text-overline text-muted-foreground mt-1">{stat.label}</div>
+                    </CardContent>
+                  )
+                  if (!isClickable) {
+                    return <Card key={stat.label} className="bg-card border-border">{content}</Card>
+                  }
+                  const handleClick = () => {
+                    if (stat.label === 'Active Bookings') {
+                      setActiveTab('bookings')
+                      setBookingFilter('active')
+                    } else if (stat.label === 'Pending Payments') {
+                      setActiveTab('payments')
+                    } else if (stat.label === 'Active Loans') {
+                      setActiveTab('loans')
+                    } else if (stat.label === 'Wishlist') {
+                      setActiveTab('wishlist')
+                    }
+                  }
+                  return (
+                    <button key={stat.label} onClick={handleClick} className="text-left w-full">
+                      <Card className="bg-card border-border hover:border-gold/50 transition-all cursor-pointer">{content}</Card>
+                    </button>
                   )
                 })}
               </div>
@@ -741,25 +763,36 @@ export default function CustomerDashboard() {
           {/* ============================================ */}
           {activeTab === 'bookings' && (
             <div className="space-y-4">
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'payment_pending', 'payment_uploaded', 'confirmed', 'active', 'completed', 'cancelled'] as const).map((filter) => (
-                  <Button
-                    key={filter}
-                    variant={bookingFilter === filter ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setBookingFilter(filter)}
-                    className={bookingFilter === filter
-                      ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
-                      : 'text-muted-foreground hover:text-foreground text-xs'
-                    }
-                  >
-                    {filter === 'all' ? 'All' : filter.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                  </Button>
-                ))}
-                <span className="text-caption text-muted-foreground ml-2">
-                  {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
-                </span>
+              {/* Filter Tabs & Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(['all', 'payment_pending', 'payment_uploaded', 'confirmed', 'active', 'completed', 'cancelled'] as const).map((filter) => (
+                    <Button
+                      key={filter}
+                      variant={bookingFilter === filter ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setBookingFilter(filter)}
+                      className={bookingFilter === filter
+                        ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
+                        : 'text-muted-foreground hover:text-foreground text-xs'
+                      }
+                    >
+                      {filter === 'all' ? 'All' : filter.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </Button>
+                  ))}
+                  <span className="text-caption text-muted-foreground ml-2">
+                    {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={bookingSearch}
+                    onChange={(e) => setBookingSearch(e.target.value)}
+                    placeholder="Search bookings..."
+                    className="bg-secondary border-border h-9"
+                  />
+                </div>
               </div>
 
               {/* Loading State */}
@@ -769,24 +802,41 @@ export default function CustomerDashboard() {
                     <CardSkeleton key={i} />
                   ))}
                 </div>
-              ) : bookings.length === 0 ? (
-                <EmptyState
-                  icon={<CalendarCheck className="size-12" />}
-                  title="No bookings found"
-                  description={bookingFilter !== 'all'
-                    ? `No ${bookingFilter} bookings at the moment.`
-                    : "You haven't made any bookings yet. Browse cars to get started!"
-                  }
-                  action={
-                    <Button onClick={() => router.push('/buy')} className="bg-gold hover:bg-gold-dark text-primary-foreground">
-                      <Car className="size-4 mr-1" />
-                      Browse Cars
-                    </Button>
-                  }
-                />
-              ) : (
+              ) : (() => {
+                const filteredBookings = bookingSearch
+                  ? bookings.filter(b => {
+                      const q = bookingSearch.toLowerCase()
+                      return (
+                        (b.car?.brand || '').toLowerCase().includes(q) ||
+                        (b.car?.model || '').toLowerCase().includes(q) ||
+                        (b.dealer?.companyName || '').toLowerCase().includes(q) ||
+                        (b.type || '').toLowerCase().includes(q) ||
+                        (b.status || '').toLowerCase().includes(q) ||
+                        (b.id || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : bookings
+                if (filteredBookings.length === 0) {
+                  return (
+                    <EmptyState
+                      icon={<CalendarCheck className="size-12" />}
+                      title="No bookings found"
+                      description={bookingSearch ? 'No bookings match your search.' : bookingFilter !== 'all'
+                        ? `No ${bookingFilter} bookings at the moment.`
+                        : "You haven't made any bookings yet. Browse cars to get started!"
+                      }
+                      action={
+                        <Button onClick={() => router.push('/buy')} className="bg-gold hover:bg-gold-dark text-primary-foreground">
+                          <Car className="size-4 mr-1" />
+                          Browse Cars
+                        </Button>
+                      }
+                    />
+                  )
+                }
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {bookings.map((booking) => {
+                  {filteredBookings.map((booking) => {
                     const carPhoto = booking.car?.photos ? parseJsonField(booking.car.photos)[0] : ''
                     const isPaymentPending = booking.status === 'payment_pending' || booking.payments?.some(p => p.status === 'pending' || p.status === 'rejected')
                     const isUnderVerification = booking.status === 'payment_uploaded' || booking.payments?.some(p => p.status === 'uploaded')
@@ -954,7 +1004,8 @@ export default function CustomerDashboard() {
                     )
                   })}
                 </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -963,25 +1014,36 @@ export default function CustomerDashboard() {
           {/* ============================================ */}
           {activeTab === 'payments' && (
             <div className="space-y-4">
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'pending', 'uploaded', 'verified', 'rejected'] as const).map((filter) => (
-                  <Button
-                    key={filter}
-                    variant={paymentFilter === filter ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setPaymentFilter(filter)}
-                    className={paymentFilter === filter
-                      ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
-                      : 'text-muted-foreground hover:text-foreground text-xs'
-                    }
-                  >
-                    {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-                  </Button>
-                ))}
-                <span className="text-caption text-muted-foreground ml-2">
-                  {payments.length} payment{payments.length !== 1 ? 's' : ''}
-                </span>
+              {/* Filter Tabs & Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(['all', 'pending', 'uploaded', 'verified', 'rejected'] as const).map((filter) => (
+                    <Button
+                      key={filter}
+                      variant={paymentFilter === filter ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setPaymentFilter(filter)}
+                      className={paymentFilter === filter
+                        ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
+                        : 'text-muted-foreground hover:text-foreground text-xs'
+                      }
+                    >
+                      {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </Button>
+                  ))}
+                  <span className="text-caption text-muted-foreground ml-2">
+                    {payments.length} payment{payments.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={paymentSearch}
+                    onChange={(e) => setPaymentSearch(e.target.value)}
+                    placeholder="Search payments..."
+                    className="bg-secondary border-border h-9"
+                  />
+                </div>
               </div>
 
               {/* Loading State */}
@@ -991,18 +1053,34 @@ export default function CustomerDashboard() {
                     <CardSkeleton key={i} />
                   ))}
                 </div>
-              ) : payments.length === 0 ? (
-                <EmptyState
-                  icon={<Wallet className="size-12" />}
-                  title="No payments found"
-                  description={paymentFilter !== 'all'
-                    ? `No ${paymentFilter} payments at the moment.`
-                    : "You don't have any payment records yet."
-                  }
-                />
-              ) : (
+              ) : (() => {
+                const filteredPayments = paymentSearch
+                  ? payments.filter(p => {
+                      const q = paymentSearch.toLowerCase()
+                      return (
+                        (p.id || '').toLowerCase().includes(q) ||
+                        (p.status || '').toLowerCase().includes(q) ||
+                        (p.paymentMethod || p.method || '').toLowerCase().includes(q) ||
+                        (p.booking?.car?.brand || '').toLowerCase().includes(q) ||
+                        (p.booking?.car?.model || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : payments
+                if (filteredPayments.length === 0) {
+                  return (
+                    <EmptyState
+                      icon={<Wallet className="size-12" />}
+                      title="No payments found"
+                      description={paymentSearch ? 'No payments match your search.' : paymentFilter !== 'all'
+                        ? `No ${paymentFilter} payments at the moment.`
+                        : "You don't have any payment records yet."
+                      }
+                    />
+                  )
+                }
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {payments.map((payment) => {
+                  {filteredPayments.map((payment) => {
                     const isRejected = payment.status === 'rejected'
                     const isPending = payment.status === 'pending' || payment.status === 'payment_pending' || isRejected
                     const hasReceipt = !isRejected && (!!payment.receiptUrl || payment.receiptStatus === 'uploaded' || payment.status === 'uploaded')
@@ -1096,7 +1174,8 @@ export default function CustomerDashboard() {
                     )
                   })}
                 </div>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -1105,25 +1184,36 @@ export default function CustomerDashboard() {
           {/* ============================================ */}
           {activeTab === 'loans' && (
             <div className="space-y-4">
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-2 flex-wrap">
-                {(['all', 'pending', 'approved', 'rejected'] as const).map((filter) => (
-                  <Button
-                    key={filter}
-                    variant={loanFilter === filter ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setLoanFilter(filter)}
-                    className={loanFilter === filter
-                      ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
-                      : 'text-muted-foreground hover:text-foreground text-xs'
-                    }
-                  >
-                    {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
-                  </Button>
-                ))}
-                <span className="text-caption text-muted-foreground ml-2">
-                  {loans.length} loan{loans.length !== 1 ? 's' : ''}
-                </span>
+              {/* Filter Tabs & Search */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(['all', 'pending', 'approved', 'rejected'] as const).map((filter) => (
+                    <Button
+                      key={filter}
+                      variant={loanFilter === filter ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setLoanFilter(filter)}
+                      className={loanFilter === filter
+                        ? 'bg-gold text-primary-foreground hover:bg-gold-dark text-xs'
+                        : 'text-muted-foreground hover:text-foreground text-xs'
+                      }
+                    >
+                      {filter === 'all' ? 'All' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    </Button>
+                  ))}
+                  <span className="text-caption text-muted-foreground ml-2">
+                    {loans.length} loan{loans.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={loanSearch}
+                    onChange={(e) => setLoanSearch(e.target.value)}
+                    placeholder="Search loans..."
+                    className="bg-secondary border-border h-9"
+                  />
+                </div>
               </div>
 
               {/* Loading State */}
@@ -1133,24 +1223,41 @@ export default function CustomerDashboard() {
                     <CardSkeleton key={i} />
                   ))}
                 </div>
-              ) : loans.length === 0 ? (
-                <EmptyState
-                  icon={<Banknote className="size-12" />}
-                  title="No loans found"
-                  description={loanFilter !== 'all'
-                    ? `No ${loanFilter} loans at the moment.`
-                    : "You haven't applied for any loans yet."
-                  }
-                  action={
-                    <Button onClick={() => router.push('/apply-loan')} className="bg-gold hover:bg-gold-dark text-primary-foreground">
-                      <PlusCircle className="size-4 mr-1" />
-                      Apply for Loan
-                    </Button>
-                  }
-                />
-              ) : (
+              ) : (() => {
+                const filteredLoans = loanSearch
+                  ? loans.filter(l => {
+                      const q = loanSearch.toLowerCase()
+                      return (
+                        (l.id || '').toLowerCase().includes(q) ||
+                        (l.status || '').toLowerCase().includes(q) ||
+                        (l.car?.brand || '').toLowerCase().includes(q) ||
+                        (l.car?.model || '').toLowerCase().includes(q) ||
+                        (l.bankName || '').toLowerCase().includes(q) ||
+                        (l.type || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : loans
+                if (filteredLoans.length === 0) {
+                  return (
+                    <EmptyState
+                      icon={<Banknote className="size-12" />}
+                      title="No loans found"
+                      description={loanSearch ? 'No loans match your search.' : loanFilter !== 'all'
+                        ? `No ${loanFilter} loans at the moment.`
+                        : "You haven't applied for any loans yet."
+                      }
+                      action={
+                        <Button onClick={() => router.push('/apply-loan')} className="bg-gold hover:bg-gold-dark text-primary-foreground">
+                          <PlusCircle className="size-4 mr-1" />
+                          Apply for Loan
+                        </Button>
+                      }
+                    />
+                  )
+                }
+                return (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {loans.map((loan) => (
+                  {filteredLoans.map((loan) => (
                     <Card key={loan.id} className="bg-card border-border hover:border-gold/30 transition-all">
                       <CardContent className="p-4 space-y-3">
                         {/* Status & Loan ID */}
@@ -1210,7 +1317,8 @@ export default function CustomerDashboard() {
                     </Card>
                   ))}
                 </div>
-              )}
+                )
+              })()}
             </div>
           )}
 

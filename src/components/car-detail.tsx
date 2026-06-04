@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
-import { carsApi, bookingsApi } from '@/lib/api'
+import { carsApi, bookingsApi, ApiError } from '@/lib/api'
 import { formatPrice, formatMileage, formatDate, getFeeLabel } from '@/lib/constants'
 import {
   StarRating,
@@ -25,7 +25,10 @@ import { Progress } from '@/components/ui/progress'
 import {
   Dialog,
   DialogContent,
+  DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
@@ -969,6 +972,7 @@ export default function CarDetail() {
   const [loading, setLoading] = useState(true)
   const [bookingLoading, setBookingLoading] = useState(false)
   const [showUnlockBanner, setShowUnlockBanner] = useState(false)
+  const [bookingConflict, setBookingConflict] = useState<{ message: string; existingBookingId?: string } | null>(null)
 
   // Fetch car data
   useEffect(() => {
@@ -1103,8 +1107,12 @@ export default function CarDetail() {
       if (bookingType) params.set('type', bookingType)
       router.push(`/payment?${params.toString()}`)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create booking. Please try again.'
-      toast.error(message)
+      if (err instanceof ApiError && err.status === 409) {
+        setBookingConflict({ message: err.message })
+      } else {
+        const message = err instanceof Error ? err.message : 'Failed to create booking. Please try again.'
+        toast.error(message)
+      }
     } finally {
       setBookingLoading(false)
     }
@@ -1363,6 +1371,26 @@ export default function CarDetail() {
           </div>
         </div>
       </div>
+
+      {/* Booking Conflict Dialog */}
+      <Dialog open={!!bookingConflict} onOpenChange={(open) => { if (!open) setBookingConflict(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Active Booking Exists</DialogTitle>
+            <DialogDescription>
+              {bookingConflict?.message} Please check your existing booking in your dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBookingConflict(null)}>
+              Stay Here
+            </Button>
+            <Button onClick={() => { setBookingConflict(null); router.push('/customer-dashboard') }}>
+              Go to Dashboard
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

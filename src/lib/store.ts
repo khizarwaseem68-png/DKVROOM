@@ -215,15 +215,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const exists = wishlistIds.includes(carId)
+    // Optimistic: update UI immediately
+    const newWishlist = exists
+      ? wishlistIds.filter((id) => id !== carId)
+      : [...wishlistIds, carId]
+    set({ wishlistIds: newWishlist })
+
     try {
       if (exists) {
         await wishlistApi.remove(carId)
-        set({ wishlistIds: wishlistIds.filter((id) => id !== carId) })
       } else {
         await wishlistApi.add(carId)
-        set({ wishlistIds: [...wishlistIds, carId] })
       }
     } catch (err) {
+      // Revert on failure
+      set({ wishlistIds: wishlistIds })
       const msg = err instanceof Error ? err.message : 'Failed to update wishlist'
       toast.error(msg)
     }

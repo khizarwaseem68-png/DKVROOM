@@ -422,7 +422,9 @@ export default function AdminDashboard() {
   const [dealerSearch, setDealerSearch] = useState('')
   const [debouncedDealerSearch, setDebouncedDealerSearch] = useState('')
   const [loanFilter, setLoanFilter] = useState('all')
+  const [loanSearch, setLoanSearch] = useState('')
   const [paymentFilter, setPaymentFilter] = useState('all')
+  const [paymentSearch, setPaymentSearch] = useState('')
   const [carStatusFilter, setCarStatusFilter] = useState('all')
   const [carSearch, setCarSearch] = useState('')
   const [debouncedCarSearch, setDebouncedCarSearch] = useState('')
@@ -1880,18 +1882,29 @@ export default function AdminDashboard() {
           {/* ===== LOANS ===== */}
           {activeTab === 'loans' && (
             <div className="space-y-4">
-              <Tabs value={loanFilter} onValueChange={setLoanFilter}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Filter className="size-4 text-muted-foreground" />
-                  <TabsList className="bg-secondary">
-                    {['all', 'pending', 'reviewing', 'approved', 'rejected'].map((status) => (
-                      <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
-                        {status === 'all' ? 'All' : status === 'underReview' ? 'Under Review' : status.charAt(0).toUpperCase() + status.slice(1)}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <Tabs value={loanFilter} onValueChange={setLoanFilter}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Filter className="size-4 text-muted-foreground" />
+                    <TabsList className="bg-secondary">
+                      {['all', 'pending', 'reviewing', 'approved', 'rejected'].map((status) => (
+                        <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
+                          {status === 'all' ? 'All' : status === 'underReview' ? 'Under Review' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+                </Tabs>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={loanSearch}
+                    onChange={(e) => setLoanSearch(e.target.value)}
+                    placeholder="Search loans..."
+                    className="bg-secondary border-border h-9"
+                  />
                 </div>
-              </Tabs>
+              </div>
 
               {loansLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1905,9 +1918,23 @@ export default function AdminDashboard() {
                     </Card>
                   ))}
                 </div>
-              ) : loans.length === 0 ? (
-                <EmptyState title="No loans found" description="Loan applications will appear here." />
-              ) : (
+              ) : (() => {
+                const filteredLoans = loanSearch
+                  ? loans.filter(loan => {
+                      const q = loanSearch.toLowerCase()
+                      return (
+                        (loan.user?.name || loan.applicantName || '').toLowerCase().includes(q) ||
+                        (loan.car?.brand || '').toLowerCase().includes(q) ||
+                        (loan.car?.model || loan.carName || '').toLowerCase().includes(q) ||
+                        (loan.bankName || loan.bank || '').toLowerCase().includes(q) ||
+                        (loan.id || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : loans
+                if (filteredLoans.length === 0) {
+                  return <EmptyState title="No loans found" description={loanSearch ? 'No loans match your search.' : 'Loan applications will appear here.'} />
+                }
+                return (
                 <>
                   {/* Desktop */}
                   <Card className="bg-card border-border hidden md:block">
@@ -1927,7 +1954,7 @@ export default function AdminDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {loans.map((loan) => (
+                            {filteredLoans.map((loan) => (
                               <tr key={loan.id} className="border-b border-border/50 hover:bg-secondary/50">
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-1.5">
@@ -1935,12 +1962,12 @@ export default function AdminDashboard() {
                                       {loan.id.slice(0, 8)}
                                     </code>
                                      <button
-                                       onClick={() => { navigator.clipboard.writeText(loan.id); toast.success('ID copied!') }}
-                                       className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
-                                       title="Copy full ID"
-                                     >
-                                       <Copy className="size-3" />
-                                     </button>
+                                        onClick={() => { navigator.clipboard.writeText(loan.id); toast.success('ID copied!') }}
+                                        className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                        title="Copy full ID"
+                                      >
+                                        <Copy className="size-3" />
+                                      </button>
                                   </div>
                                 </td>
                                 <td className="py-3 px-4 font-medium">{loan.user?.name || loan.applicantName || 'N/A'}</td>
@@ -1964,7 +1991,7 @@ export default function AdminDashboard() {
 
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-3">
-                    {loans.map((loan) => (
+                    {filteredLoans.map((loan) => (
                       <Card key={loan.id} className="bg-card border-border">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-2">
@@ -1986,7 +2013,8 @@ export default function AdminDashboard() {
                     ))}
                   </div>
                 </>
-              )}
+                )
+              })()}
             </div>
           )}
 
@@ -2009,18 +2037,29 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              <Tabs value={paymentFilter} onValueChange={setPaymentFilter}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Filter className="size-4 text-muted-foreground" />
-                  <TabsList className="bg-secondary">
-                    {['all', 'pending', 'uploaded', 'verified', 'rejected'].map((status) => (
-                      <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
-                        {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
-                      </TabsTrigger>
-                    ))}
-                  </TabsList>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <Tabs value={paymentFilter} onValueChange={setPaymentFilter}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Filter className="size-4 text-muted-foreground" />
+                    <TabsList className="bg-secondary">
+                      {['all', 'pending', 'uploaded', 'verified', 'rejected'].map((status) => (
+                        <TabsTrigger key={status} value={status} className="text-xs data-[state=active]:bg-gold data-[state=active]:text-primary-foreground">
+                          {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </div>
+                </Tabs>
+                <div className="flex items-center gap-2 flex-1 max-w-md">
+                  <Search className="size-4 text-muted-foreground shrink-0" />
+                  <Input
+                    value={paymentSearch}
+                    onChange={(e) => setPaymentSearch(e.target.value)}
+                    placeholder="Search payments..."
+                    className="bg-secondary border-border h-9"
+                  />
                 </div>
-              </Tabs>
+              </div>
 
               {paymentsLoading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -2034,9 +2073,25 @@ export default function AdminDashboard() {
                     </Card>
                   ))}
                 </div>
-              ) : payments.length === 0 ? (
-                <EmptyState title="No payments found" description="Payment transactions will appear here." />
-              ) : (
+              ) : (() => {
+                const filteredPayments = paymentSearch
+                  ? payments.filter(txn => {
+                      const q = paymentSearch.toLowerCase()
+                      return (
+                        (txn.id || '').toLowerCase().includes(q) ||
+                        (txn.user?.name || txn.userName || '').toLowerCase().includes(q) ||
+                        (txn.dealer?.companyName || txn.dealerName || '').toLowerCase().includes(q) ||
+                        (txn.booking?.car?.brand || '').toLowerCase().includes(q) ||
+                        (txn.booking?.car?.model || '').toLowerCase().includes(q) ||
+                        (txn.paymentMethod || txn.method || '').toLowerCase().includes(q) ||
+                        (txn.status || '').toLowerCase().includes(q)
+                      )
+                    })
+                  : payments
+                if (filteredPayments.length === 0) {
+                  return <EmptyState title="No payments found" description={paymentSearch ? 'No payments match your search.' : 'Payment transactions will appear here.'} />
+                }
+                return (
                 <>
                   {/* Desktop */}
                   <Card className="bg-card border-border hidden md:block">
@@ -2056,7 +2111,7 @@ export default function AdminDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {payments.map((txn) => (
+                            {filteredPayments.map((txn) => (
                               <tr key={txn.id} className="border-b border-border/50 hover:bg-secondary/50">
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-1.5">
@@ -2064,12 +2119,12 @@ export default function AdminDashboard() {
                                       {txn.id.slice(0, 8)}
                                     </code>
                                      <button
-                                       onClick={() => { navigator.clipboard.writeText(txn.id); toast.success('ID copied!') }}
-                                       className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
-                                       title="Copy full ID"
-                                     >
-                                       <Copy className="size-3" />
-                                     </button>
+                                        onClick={() => { navigator.clipboard.writeText(txn.id); toast.success('ID copied!') }}
+                                        className="text-muted-foreground hover:text-gold transition-colors cursor-pointer"
+                                        title="Copy full ID"
+                                      >
+                                        <Copy className="size-3" />
+                                      </button>
                                   </div>
                                 </td>
                                 <td className="py-3 px-4">{txn.user?.name || txn.userName || 'N/A'}</td>
@@ -2131,7 +2186,7 @@ export default function AdminDashboard() {
 
                   {/* Mobile cards */}
                   <div className="md:hidden space-y-3">
-                    {payments.map((txn) => (
+                    {filteredPayments.map((txn) => (
                       <Card key={txn.id} className="bg-card border-border">
                         <CardContent className="p-4">
                           <div className="flex items-start justify-between gap-2">
@@ -2180,7 +2235,8 @@ export default function AdminDashboard() {
                     <PaginationControls pagination={paymentPagination} onPageChange={setPaymentPage} />
                   )}
                 </>
-              )}
+                )
+              })()}
             </div>
           )}
 

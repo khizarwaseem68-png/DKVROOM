@@ -31,20 +31,20 @@ export async function GET(request: NextRequest) {
 
   if (status) where.status = status
   if (type) where.type = type
-  if (brand) where.brand = { contains: brand }
-  if (city) where.city = { contains: city }
+  if (brand) where.brand = { contains: brand, mode: 'insensitive' }
+  if (city) where.city = { contains: city, mode: 'insensitive' }
   if (dealerId) where.dealerId = dealerId
   if (featured !== null && featured !== undefined) {
     where.featured = featured === 'true'
   }
   if (search) {
     where.OR = [
-      { brand: { contains: search } },
-      { model: { contains: search } },
-      { description: { contains: search } },
-      { city: { contains: search } },
-      { dealer: { companyName: { contains: search } } },
-      { dealerUser: { name: { contains: search } } },
+      { brand: { contains: search, mode: 'insensitive' } },
+      { model: { contains: search, mode: 'insensitive' } },
+      { description: { contains: search, mode: 'insensitive' } },
+      { city: { contains: search, mode: 'insensitive' } },
+      { dealer: { companyName: { contains: search, mode: 'insensitive' } } },
+      { dealerUser: { name: { contains: search, mode: 'insensitive' } } },
     ]
   }
 

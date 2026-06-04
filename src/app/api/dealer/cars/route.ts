@@ -43,9 +43,9 @@ export async function GET(request: NextRequest) {
     if (type) where.type = type
     if (search) {
       where.OR = [
-        { brand: { contains: search } },
-        { model: { contains: search } },
-        { description: { contains: search } },
+        { brand: { contains: search, mode: 'insensitive' } },
+        { model: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
       ]
     }
 

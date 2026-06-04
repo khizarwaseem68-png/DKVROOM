@@ -99,8 +99,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (type) where.type = type
-    if (brand) where.brand = { contains: brand }
-    if (city) where.city = { contains: city }
+    if (brand) where.brand = { contains: brand, mode: 'insensitive' }
+    if (city) where.city = { contains: city, mode: 'insensitive' }
     if (featured !== undefined) where.featured = featured
     if (conditionCategory) where.conditionCategory = conditionCategory
     if (runningStatus) where.runningStatus = runningStatus
@@ -114,11 +114,11 @@ export async function GET(request: NextRequest) {
     // Text search across brand, model, description
     if (search) {
       where.OR = [
-        { brand: { contains: search } },
-        { model: { contains: search } },
-        { description: { contains: search } },
-        { city: { contains: search } },
-        { state: { contains: search } },
+        { brand: { contains: search, mode: 'insensitive' } },
+        { model: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } },
+        { city: { contains: search, mode: 'insensitive' } },
+        { state: { contains: search, mode: 'insensitive' } },
       ]
     }
 
