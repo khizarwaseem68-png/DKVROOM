@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { dealerApi, carsApi, bookingsApi, uploadApi } from '@/lib/api'
+import { FEATURES } from '@/lib/config'
 import {
   formatPrice,
   formatDate,
@@ -20,6 +21,8 @@ import {
   StatusBadge,
   VehicleTypeBadge,
   NotificationDropdown,
+  StarRating,
+  ReviewsSection,
 } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -136,7 +139,7 @@ const INPUT_CLS = 'bg-secondary border-border text-foreground placeholder:text-m
 
 // ===== SIDEBAR CONFIG =====
 
-const sidebarItems = [
+const allSidebarItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'listings', label: 'My Listings', icon: Car },
   { id: 'addCar', label: 'Add Car', icon: PlusCircle },
@@ -144,10 +147,15 @@ const sidebarItems = [
   { id: 'enquiries', label: 'Enquiries', icon: MessageSquare },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'payments', label: 'Payments', icon: Wallet },
+  { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'settings', label: 'Settings', icon: Settings },
 ] as const
 
-type DealerTab = (typeof sidebarItems)[number]['id']
+type DealerTab = (typeof allSidebarItems)[number]['id']
+
+const sidebarItems = FEATURES.showReviewModule
+  ? allSidebarItems
+  : allSidebarItems.filter(item => item.id !== 'reviews')
 
 // ===== COMPONENT =====
 
@@ -684,7 +692,7 @@ export default function DealerDashboard() {
                   { label: 'Total Listings', value: statsLoading ? '...' : String(totalListings), icon: Car, change: `+${stats?.listings?.pending ?? 0} pending`, up: true },
                   { label: 'Active Bookings', value: statsLoading ? '...' : String(activeBookings), icon: CalendarCheck, change: `${stats?.bookings?.total ?? 0} total`, up: true },
                   { label: 'Revenue This Month', value: statsLoading ? '...' : formatPrice(monthlyRevenue), icon: DollarSign, change: `${formatPrice(stats?.revenue?.total ?? 0)} total`, up: true },
-                  { label: 'Rating', value: statsLoading ? '...' : rating.toFixed(1), icon: Star, change: `${stats?.engagement?.totalReviews ?? 0} reviews`, up: true },
+                  ...(FEATURES.showReviewModule ? [{ label: 'Rating', value: statsLoading ? '...' : rating.toFixed(1), icon: Star, change: `${stats?.engagement?.totalReviews ?? 0} reviews`, up: true }] : []),
                 ].map((stat) => {
                   const Icon = stat.icon
                   return (
@@ -1486,7 +1494,7 @@ export default function DealerDashboard() {
                 {[
                   { label: 'Total Views', value: statsLoading ? '...' : (stats?.engagement?.totalViews ?? 0).toLocaleString(), change: 'All time' },
                   { label: 'Total Enquiries', value: statsLoading ? '...' : (stats?.engagement?.totalEnquiries ?? 0).toLocaleString(), change: 'All time' },
-                  { label: 'Avg. Rating', value: statsLoading ? '...' : rating.toFixed(1), change: `${stats?.engagement?.totalReviews ?? 0} reviews` },
+                  ...(FEATURES.showReviewModule ? [{ label: 'Avg. Rating', value: statsLoading ? '...' : rating.toFixed(1), change: `${stats?.engagement?.totalReviews ?? 0} reviews` }] : []),
                   { label: 'Total Sales', value: statsLoading ? '...' : String(stats?.profile?.totalSales ?? 0), change: 'All time' },
                 ].map((stat) => (
                   <Card key={stat.label} className="bg-card border-border">
@@ -1633,6 +1641,11 @@ export default function DealerDashboard() {
                 </>
               )}
             </div>
+          )}
+
+          {/* ===== REVIEWS TAB ===== */}
+          {FEATURES.showReviewModule && activeTab === 'reviews' && (
+            <ReviewsSection />
           )}
 
           {/* ===== SETTINGS TAB ===== */}

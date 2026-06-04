@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
+import { FEATURES } from '@/lib/config'
 import { adminApi, bookingsApi, loansApi } from '@/lib/api'
 import {
   formatPrice,
@@ -15,6 +16,7 @@ import {
   StatusBadge,
   VehicleTypeBadge,
   NotificationDropdown,
+  ReviewsSection,
 } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -63,6 +65,7 @@ import {
   LogOut,
   Copy,
   FileText,
+  Star,
 } from 'lucide-react'
 
 // ===== TYPES =====
@@ -385,7 +388,7 @@ function PaginationControls({
 
 // ===== SIDEBAR CONFIG =====
 
-const sidebarItems = [
+const allSidebarItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'dealers', label: 'Dealers', icon: Users },
   { id: 'cars', label: 'Cars', icon: Car },
@@ -395,10 +398,15 @@ const sidebarItems = [
   { id: 'disputes', label: 'Disputes', icon: AlertTriangle },
   { id: 'fraud', label: 'Fraud', icon: ShieldAlert },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'settings', label: 'Settings', icon: Settings },
 ] as const
 
-type AdminTab = (typeof sidebarItems)[number]['id']
+type AdminTab = (typeof allSidebarItems)[number]['id']
+
+const sidebarItems = FEATURES.showReviewModule
+  ? allSidebarItems
+  : allSidebarItems.filter(item => item.id !== 'reviews')
 
 // ===== COMPONENT =====
 
@@ -764,7 +772,7 @@ export default function AdminDashboard() {
             <CardTitle className="dash-heading-sm">Platform Signals</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <DetailItem label="Rating" value={dealer.rating?.toFixed(1) || 'N/A'} />
+            {FEATURES.showReviewModule && <DetailItem label="Rating" value={dealer.rating?.toFixed(1) || 'N/A'} />}
             <DetailItem label="Listings" value={dealer.totalListings ?? 0} />
             <DetailItem label="Bookings" value={dealer._count?.bookings ?? 0} />
             <DetailItem label="Joined" value={dealer.createdAt ? formatDate(dealer.createdAt) : 'N/A'} />
@@ -879,7 +887,7 @@ export default function AdminDashboard() {
                   <DetailItem label="Views" value={car.views ?? 0} />
                   <DetailItem label="Enquiries" value={car.enquiries ?? 0} />
                   <DetailItem label="Bookings" value={car._count?.bookings ?? 0} />
-                  <DetailItem label="Reviews" value={car._count?.reviews ?? 0} />
+                  {FEATURES.showReviewModule && <DetailItem label="Reviews" value={car._count?.reviews ?? 0} />}
                 </div>
               </div>
             </div>
@@ -1507,7 +1515,7 @@ export default function AdminDashboard() {
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">City</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Verification</th>
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Listings</th>
-                              <th className="text-left py-3 px-4 text-muted-foreground font-medium">Rating</th>
+                              {FEATURES.showReviewModule && <th className="text-left py-3 px-4 text-muted-foreground font-medium">Rating</th>}
                               <th className="text-left py-3 px-4 text-muted-foreground font-medium">Actions</th>
                             </tr>
                           </thead>
@@ -1532,7 +1540,7 @@ export default function AdminDashboard() {
                                 <td className="py-3 px-4 text-muted-foreground">{dealer.city}</td>
                                 <td className="py-3 px-4"><StatusBadge status={dealer.verified ? 'verified' : dealer.status || 'pending'} /></td>
                                 <td className="py-3 px-4">{dealer.totalListings || dealer.listings || 0}</td>
-                                <td className="py-3 px-4 text-gold font-medium">{dealer.rating?.toFixed(1) || 'N/A'}</td>
+                                {FEATURES.showReviewModule && <td className="py-3 px-4 text-gold font-medium">{dealer.rating?.toFixed(1) || 'N/A'}</td>}
                                 <td className="py-3 px-4">
                                   <div className="flex items-center gap-1">
                                     <Button
@@ -1578,7 +1586,7 @@ export default function AdminDashboard() {
                               <div className="mt-1"><StatusBadge status={dealer.verified ? 'verified' : dealer.status || 'pending'} /></div>
                             </div>
                             <div className="text-right">
-                              <p className="text-body-sm font-medium text-gold">{dealer.rating?.toFixed(1) || 'N/A'}</p>
+                              {FEATURES.showReviewModule && <p className="text-body-sm font-medium text-gold">{dealer.rating?.toFixed(1) || 'N/A'}</p>}
                               <p className="text-caption text-muted-foreground">{dealer.totalListings || dealer.listings || 0} listings</p>
                             </div>
                           </div>
@@ -2252,7 +2260,7 @@ export default function AdminDashboard() {
                             <span className="text-body-sm font-bold text-gold w-6">#{idx + 1}</span>
                             <div>
                               <p className="text-body-sm font-medium">{dealer.companyName || dealer.company}</p>
-                              <p className="text-caption text-muted-foreground">Rating: {dealer.rating?.toFixed(1) || 'N/A'} · {dealer.totalListings || 0} listings</p>
+                              <p className="text-caption text-muted-foreground">{FEATURES.showReviewModule ? `Rating: ${dealer.rating?.toFixed(1) || 'N/A'} · ` : ''}{dealer.totalListings || 0} listings</p>
                             </div>
                           </div>
                           <span className="text-body-sm text-muted-foreground">{dealer.city}</span>
@@ -2262,6 +2270,11 @@ export default function AdminDashboard() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {/* ===== REVIEWS ===== */}
+          {FEATURES.showReviewModule && activeTab === 'reviews' && (
+            <ReviewsSection />
           )}
 
           {/* ===== SETTINGS ===== */}

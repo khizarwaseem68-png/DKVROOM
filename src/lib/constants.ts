@@ -231,6 +231,11 @@ export const STATUS_COLORS: Record<string, string> = {
 
   // General
   none: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+
+  // Review statuses
+  published: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  hidden: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  flagged: 'bg-red-500/20 text-red-400 border-red-500/30',
 }
 
 export function getStatusColor(status: string): string {

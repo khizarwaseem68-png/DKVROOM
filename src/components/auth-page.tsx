@@ -670,9 +670,9 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
 
   // ===== DEMO CREDS =====
   const demoCredentials = [
-    { role: 'customer' as const, label: 'Customer', email: 'ahmad@dkvroom.com', password: 'Customer@123', color: 'bg-gold/10 text-gold border-gold/30 hover:bg-gold/20' },
-    { role: 'dealer' as const, label: 'Dealer', email: 'prestige@dkvroom.com', password: 'Dealer@123', color: 'bg-info/10 text-info border-info/30 hover:bg-info/20' },
-    { role: 'admin' as const, label: 'Admin', email: 'admin@dkvroom.com', password: 'Admin@123', color: 'bg-error/10 text-error border-error/30 hover:bg-error/20' },
+    { role: 'customer' as const, label: 'Customer', email: 'ahmad@dkvroom.com', password: '12345678', color: 'bg-gold/10 text-gold border-gold/30 hover:bg-gold/20' },
+    { role: 'dealer' as const, label: 'Dealer', email: 'prestige@dkvroom.com', password: '12345678', color: 'bg-info/10 text-info border-info/30 hover:bg-info/20' },
+    { role: 'admin' as const, label: 'Admin', email: 'admin@dkvroom.com', password: '12345678', color: 'bg-error/10 text-error border-error/30 hover:bg-error/20' },
   ]
 
   // Helper to get dealer type label

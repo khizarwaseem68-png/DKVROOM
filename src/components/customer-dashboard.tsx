@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { useAppStore } from '@/lib/store'
 import { bookingsApi, paymentsApi, loansApi, wishlistApi } from '@/lib/api'
 import { formatPrice, formatDate } from '@/lib/constants'
-import { NotificationDropdown, StatusBadge, EmptyState, VehicleTypeBadge } from '@/components/shared'
+import { FEATURES } from '@/lib/config'
+import { NotificationDropdown, StatusBadge, EmptyState, VehicleTypeBadge, ReviewModal } from '@/components/shared'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,14 +20,15 @@ import {
   ChevronLeft, ChevronRight, Car, DollarSign, Clock,
   LogOut, Menu, X, ArrowUpRight, ArrowDownRight,
   Loader2, CreditCard, FileText, Home, PlusCircle, Heart, MapPin,
-  Upload, CheckCircle, AlertCircle, Phone, Mail, MessageCircle,
+  Upload, CheckCircle, AlertCircle, Phone, Mail, MessageCircle, Star,
 } from 'lucide-react'
 
 // ===== TYPES =====
 
 interface BookingItem {
   id: string
-  car?: { brand: string; model: string; year?: number; photos?: string; type?: string }
+  carId?: string
+  car?: { id: string; brand: string; model: string; year?: number; photos?: string; type?: string }
   dealer?: { id: string; companyName: string; phone?: string | null; whatsapp?: string | null }
   type?: string
   status: string
@@ -157,6 +159,14 @@ export default function CustomerDashboard() {
   // Receipt upload
   const receiptFileRef = useRef<HTMLInputElement>(null)
   const [uploadingPaymentId, setUploadingPaymentId] = useState<string | null>(null)
+
+  // Review modal state
+  const [reviewTarget, setReviewTarget] = useState<{
+    targetType: 'car' | 'dealer'
+    targetId: string
+    targetName: string
+    bookingId: string
+  } | null>(null)
 
   // Sync profile state with user
   useEffect(() => {
@@ -887,6 +897,48 @@ export default function CustomerDashboard() {
                             </div>
                           )}
 
+                          {/* Review button — only for completed bookings */}
+                          {FEATURES.showReviewModule && booking.status === 'completed' && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 border-gold/30 text-gold hover:bg-gold/10 hover:text-gold-light text-xs"
+                                onClick={() => {
+                                  if (booking.car) {
+                                    setReviewTarget({
+                                      targetType: 'car',
+                                      targetId: booking.carId || booking.car?.id || '',
+                                      targetName: `${booking.car.brand} ${booking.car.model}`,
+                                      bookingId: booking.id,
+                                    })
+                                  }
+                                }}
+                              >
+                                <Star className="size-3 mr-1" />
+                                Review Car
+                              </Button>
+                              {booking.dealer && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 border-gold/30 text-gold hover:bg-gold/10 hover:text-gold-light text-xs"
+                                  onClick={() => {
+                                    setReviewTarget({
+                                      targetType: 'dealer',
+                                      targetId: booking.dealer?.id || '',
+                                      targetName: booking.dealer?.companyName || 'Dealer',
+                                      bookingId: booking.id,
+                                    })
+                                  }}
+                                >
+                                  <Star className="size-3 mr-1" />
+                                  Review Dealer
+                                </Button>
+                              )}
+                            </div>
+                          )}
+
                           {/* Created date */}
                           {booking.createdAt && (
                             <p className="text-caption text-muted-foreground/60">
@@ -1428,6 +1480,19 @@ export default function CustomerDashboard() {
           }
         }}
       />
+
+      {/* Review Modal */}
+      {reviewTarget && (
+        <ReviewModal
+          open={true}
+          onClose={() => setReviewTarget(null)}
+          onSuccess={() => fetchBookings()}
+          targetType={reviewTarget.targetType}
+          targetId={reviewTarget.targetId}
+          targetName={reviewTarget.targetName}
+          bookingId={reviewTarget.bookingId}
+        />
+      )}
     </div>
   )
 }
