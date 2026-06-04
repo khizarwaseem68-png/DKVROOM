@@ -30,10 +30,12 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status') || undefined
     const type = searchParams.get('type') || undefined
 
-    // Build where clause — customer sees own bookings, dealer sees bookings for their cars
+    // Build where clause — admin sees all, dealer sees their cars', customer sees own
     const where: Prisma.BookingWhereInput = {}
 
-    if (user.role === 'dealer' && user.dealer) {
+    if (user.role === 'admin') {
+      // no filter — admin sees all bookings
+    } else if (user.role === 'dealer' && user.dealer) {
       where.dealerId = user.dealer.id
     } else {
       where.userId = user.id

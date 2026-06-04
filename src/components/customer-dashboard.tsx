@@ -1060,7 +1060,7 @@ export default function CustomerDashboard() {
                       return (
                         (p.id || '').toLowerCase().includes(q) ||
                         (p.status || '').toLowerCase().includes(q) ||
-                        (p.paymentMethod || p.method || '').toLowerCase().includes(q) ||
+                        (p.method || '').toLowerCase().includes(q) ||
                         (p.booking?.car?.brand || '').toLowerCase().includes(q) ||
                         (p.booking?.car?.model || '').toLowerCase().includes(q)
                       )
@@ -1232,8 +1232,7 @@ export default function CustomerDashboard() {
                         (l.status || '').toLowerCase().includes(q) ||
                         (l.car?.brand || '').toLowerCase().includes(q) ||
                         (l.car?.model || '').toLowerCase().includes(q) ||
-                        (l.bankName || '').toLowerCase().includes(q) ||
-                        (l.type || '').toLowerCase().includes(q)
+                        (l.bankName || '').toLowerCase().includes(q)
                       )
                     })
                   : loans

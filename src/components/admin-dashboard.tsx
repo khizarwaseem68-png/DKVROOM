@@ -2241,7 +2241,7 @@ export default function AdminDashboard() {
           )}
 
           {/* ===== DISPUTES ===== */}
-          {activeTab === 'disputes' && (
+          {/* {activeTab === 'disputes' && (
             <Card className="bg-card border-border">
               <CardContent className="p-8 text-center">
                 <AlertTriangle className="size-8 text-muted-foreground mx-auto mb-3" />
@@ -2249,10 +2249,10 @@ export default function AdminDashboard() {
                 <p className="text-overline text-muted-foreground/60 mt-1">This feature is under development</p>
               </CardContent>
             </Card>
-          )}
+          )} */}
 
           {/* ===== FRAUD ===== */}
-          {activeTab === 'fraud' && (
+          {/* {activeTab === 'fraud' && (
             <Card className="bg-card border-border">
               <CardContent className="p-8 text-center">
                 <ShieldAlert className="size-8 text-muted-foreground mx-auto mb-3" />
@@ -2260,7 +2260,7 @@ export default function AdminDashboard() {
                 <p className="text-overline text-muted-foreground/60 mt-1">This feature is under development</p>
               </CardContent>
             </Card>
-          )}
+          )} */}
 
           {/* ===== ANALYTICS ===== */}
           {activeTab === 'analytics' && (
