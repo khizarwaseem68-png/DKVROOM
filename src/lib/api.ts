@@ -633,6 +633,49 @@ export const wishlistApi = {
   },
 }
 
+// ===== REVIEWS API =====
+
+export const reviewApi = {
+  list: async (params: Record<string, string | number | boolean | undefined> = {}): Promise<ApiResponse> => {
+    const searchParams = new URLSearchParams()
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.set(key, String(value))
+      }
+    })
+    return apiFetch(`/reviews?${searchParams.toString()}`)
+  },
+
+  get: async (id: string): Promise<ApiResponse> => {
+    return apiFetch(`/reviews/${id}`)
+  },
+
+  create: async (data: {
+    carId?: string
+    dealerId?: string
+    targetType: 'car' | 'dealer'
+    rating: number
+    comment?: string
+    bookingId?: string
+  }): Promise<ApiResponse> => {
+    return apiFetch('/reviews', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  update: async (id: string, data: Record<string, unknown>): Promise<ApiResponse> => {
+    return apiFetch(`/reviews/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  delete: async (id: string): Promise<ApiResponse> => {
+    return apiFetch(`/reviews/${id}`, { method: 'DELETE' })
+  },
+}
+
 // ===== UPLOAD API =====
 
 export const uploadApi = {

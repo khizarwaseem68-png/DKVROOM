@@ -1,6 +1,7 @@
 'use client'
 
 import { Star } from 'lucide-react'
+import { FEATURES } from '@/lib/config'
 
 interface StarRatingProps {
   rating: number
@@ -15,6 +16,7 @@ const sizeMap = {
 }
 
 export function StarRating({ rating, size = 'md', showValue = true }: StarRatingProps) {
+  if (!FEATURES.showReviewModule) return null
   const config = sizeMap[size]
   return (
     <div className={`flex items-center ${config.gap}`}>

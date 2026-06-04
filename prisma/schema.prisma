@@ -114,6 +114,7 @@ model Dealer {
   continueLoanEnquiries ContinueLoanEnquiry[] @relation("DealerEnquiries")
   workshopAppointments WorkshopAppointment[] @relation("DealerWorkshopAppointments")
   insuranceEnquiries InsuranceEnquiry[] @relation("DealerInsuranceEnquiries")
+  reviews           Review[]
 
   @@index([verified])
   @@index([city])
@@ -191,6 +192,8 @@ model Car {
   views             Int      @default(0)
   enquiries         Int      @default(0)
   active            Boolean  @default(true)
+  // Rating
+  rating            Float    @default(0)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -506,10 +509,14 @@ model InsuranceEnquiry {
 
 model Review {
   id              String   @id @default(cuid())
-  carId           String
-  car             Car      @relation(fields: [carId], references: [id], onDelete: Cascade)
+  carId           String?
+  car             Car?     @relation(fields: [carId], references: [id], onDelete: Cascade)
+  dealerId        String?
+  dealer          Dealer?  @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  bookingId       String?
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType      String   @default("car") // car, dealer
   rating          Int      // 1-5
   comment         String?
   status          String   @default("published") // published, hidden, flagged
@@ -517,7 +524,10 @@ model Review {
   updatedAt       DateTime @updatedAt
 
   @@index([carId])
+  @@index([dealerId])
   @@index([userId])
+  @@index([targetType])
+  @@index([bookingId])
 }
 
 // ============================================================
