@@ -689,11 +689,15 @@ async function main() {
   console.log('✅ Created unverified dealer and pending car listing for testing')
 
   console.log('\n🎉 Seed completed successfully!')
-  console.log('\n📋 Test Accounts:')
-  console.log('  Admin:    admin@dkvroom.com / Admin@123')
-  console.log('  Dealer:   prestige@dkvroom.com / Dealer@123')
-  console.log('  Customer: ahmad@dkvroom.com / Customer@123')
-  console.log('  Unverified Dealer: newdealer@dkvroom.com / Dealer@123')
+  console.log('\n📋 Test Accounts (password for all: 12345678):')
+  console.log('  Admin:              admin@dkvroom.com')
+  console.log('  Customer:           ahmad@dkvroom.com')
+  console.log('  Rental Dealer:      prestige@dkvroom.com')
+  console.log('  Used Car Dealer:    mercgallery@dkvroom.com')
+  console.log('  Auction Dealer:     supercars@dkvroom.com')
+  console.log('  Workshop Dealer:    autofix@dkvroom.com')
+  console.log('  Insurance Dealer:   shieldins@dkvroom.com')
+  console.log('  Unverified Dealer:  newdealer@dkvroom.com')
 }
 
 main()

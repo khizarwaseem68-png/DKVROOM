@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
     } else if (sanitized.type === 'auction') {
       totalAmount = sanitized.totalAmount
         ? parseFloat(sanitized.totalAmount)
-        : Math.round((car.currentBid || car.auctionStartBid || car.price || 0) * 0.1)
+        : car.bookingFee ?? Math.round((car.currentBid || car.auctionStartBid || car.price || 0) * 0.1)
     } else {
       totalAmount = sanitized.totalAmount ? parseFloat(sanitized.totalAmount) : car.bookingFee || 0
     }

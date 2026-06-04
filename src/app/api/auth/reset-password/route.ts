@@ -4,7 +4,7 @@ import { hashPassword } from '@/lib/auth/auth-utils'
 import { verifyOtpVerificationToken } from '@/lib/auth/otp-service'
 import { authRateLimit, sanitizeInput, isValidEmail, apiResponse, apiError } from '@/lib/security/middleware'
 
-const passwordPattern = /(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}/
+const passwordPattern = /.{8,}/
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     if (!email || !isValidEmail(email)) return apiError('Valid email is required', 400)
     if (!passwordPattern.test(password)) {
-      return apiError('Password must contain at least one uppercase letter, one lowercase letter, and one number', 400)
+      return apiError('Password must be at least 8 characters', 400)
     }
 
     const verified = await verifyOtpVerificationToken(verificationToken, 'forgot_password', email)
