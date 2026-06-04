@@ -395,8 +395,8 @@ const allSidebarItems = [
   { id: 'bookings', label: 'Bookings', icon: CalendarCheck },
   { id: 'loans', label: 'Loans', icon: Banknote },
   { id: 'payments', label: 'Payments', icon: Wallet },
-  { id: 'disputes', label: 'Disputes', icon: AlertTriangle },
-  { id: 'fraud', label: 'Fraud', icon: ShieldAlert },
+  // { id: 'disputes', label: 'Disputes', icon: AlertTriangle },
+  // { id: 'fraud', label: 'Fraud', icon: ShieldAlert },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
   { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -456,7 +456,7 @@ export default function AdminDashboard() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment' | 'loan'; id: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
-  const [approveCarDialog, setApproveCarDialog] = useState<{ id: string; carName: string } | null>(null)
+  const [approveCarDialog, setApproveCarDialog] = useState<{ id: string; carName: string; carType?: string } | null>(null)
   const [approveBookingFee, setApproveBookingFee] = useState('')
 
   useEffect(() => {
@@ -847,7 +847,7 @@ export default function AdminDashboard() {
             {car.status !== 'approved' && (
               <Button
                 disabled={actionLoading === car.id}
-                onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}
+                onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim(), carType: car.type })}
                 className="bg-emerald-500 hover:bg-emerald-600 text-white"
               >
                 <CheckCircle className="size-4 mr-1" />
@@ -1205,7 +1205,7 @@ export default function AdminDashboard() {
             <CardContent className="space-y-4">
               <p className="text-body-sm text-muted-foreground">{approveCarDialog.carName}</p>
               <div className="space-y-2">
-                <label className="text-caption text-muted-foreground">{getFeeLabel(approveCarDialog ? (cars.find(c => c.id === approveCarDialog.id)?.type ?? 'sale') : 'sale')} (RM) <span className="text-muted-foreground/50">— leave blank for none</span></label>
+                <label className="text-caption text-muted-foreground">{getFeeLabel(approveCarDialog.carType ?? 'sale')} (RM) <span className="text-muted-foreground/50">— leave blank for none</span></label>
                 <Input
                   type="number"
                   min="0"
@@ -1734,7 +1734,7 @@ export default function AdminDashboard() {
                                       </Button>
                                       {car.status !== 'approved' && (
                                         <Button variant="ghost" size="sm" className="h-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs"
-                                          disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}>
+                                          disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim(), carType: car.type })}>
                                           <CheckCircle className="size-3.5 mr-1" />
                                           Approve
                                         </Button>
@@ -1794,7 +1794,7 @@ export default function AdminDashboard() {
                                   </Button>
                                   {car.status !== 'approved' && (
                                     <Button variant="ghost" size="sm" className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 text-xs h-7"
-                                      disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim() })}>
+                                      disabled={actionLoading === car.id} onClick={() => setApproveCarDialog({ id: car.id, carName: `${car.brand} ${car.model} ${car.year ?? ''}`.trim(), carType: car.type })}>
                                       <CheckCircle className="size-3.5 mr-1" />Approve
                                     </Button>
                                   )}

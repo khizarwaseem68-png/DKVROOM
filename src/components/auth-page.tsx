@@ -65,16 +65,14 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>
 
 const phoneRegex = /^[+()\-\s0-9]{7,20}$/
-const passwordMessage = 'Password must contain at least 8 characters, 1 uppercase letter, 1 lowercase letter, and 1 number'
+const passwordMessage = 'Password must be at least 8 characters'
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Full name is required'),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   phone: z.string().min(1, 'Phone number is required').regex(phoneRegex, 'Please enter a valid phone number'),
   whatsapp: z.string().optional(),
-  password: z
-    .string()
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, passwordMessage),
+  password: z.string().min(8, passwordMessage),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   address: z.string().optional(),
   icNumber: z.string().optional(),
@@ -92,9 +90,7 @@ const dealerSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   phone: z.string().min(1, 'Phone number is required').regex(phoneRegex, 'Please enter a valid phone number'),
   whatsapp: z.string().optional(),
-  password: z
-    .string()
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/, passwordMessage),
+  password: z.string().min(8, passwordMessage),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
   companyName: z.string().min(1, 'Business name is required'),
   dealerType: z.string().min(1, 'Dealer type is required'),
@@ -533,7 +529,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
     try {
       if (!resetVerificationToken) throw new Error('Please verify your email OTP first.')
       if (resetPassword !== resetConfirmPassword) throw new Error('Passwords do not match.')
-      if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/.test(resetPassword)) throw new Error(passwordMessage)
+      if (resetPassword.length < 8) throw new Error(passwordMessage)
       await authApi.resetPassword(resetEmail || otpEmail, resetPassword, resetVerificationToken)
       setResetPassword('')
       setResetConfirmPassword('')
@@ -814,26 +810,6 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                 >
                   {loading ? 'Signing In...' : <>Sign In <ArrowRight className="size-4 ml-1" /></>}
                 </Button>
-
-                {/* Demo access */}
-                <div className="p-3 rounded-lg bg-background border border-border">
-                  <p className="text-caption text-muted-foreground mb-2">Quick demo access:</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {demoCredentials.map((demo) => (
-                      <Badge
-                        key={demo.role}
-                        className={`cursor-pointer ${demo.color}`}
-                        onClick={() => {
-                          setLoginRole(demo.role)
-                          loginForm.setValue('email', demo.email)
-                          loginForm.setValue('password', demo.password)
-                        }}
-                      >
-                        {demo.label}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
               </form>
             ) : (
               /* ===== REGISTER FORM ===== */
@@ -941,7 +917,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                               <Input
                                 type={showPassword ? 'text' : 'password'}
-                                placeholder="Min 8 chars, 1 uppercase, 1 number"
+                                placeholder="Min 8 characters"
                                 {...customerForm.register('password')}
                                 className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
                               />
@@ -1267,7 +1243,7 @@ export default function AuthPage({ initialMode }: { initialMode?: 'login' | 'reg
                               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                               <Input
                                 type={showPassword ? 'text' : 'password'}
-                                placeholder="Min 8 chars, 1 uppercase, 1 number"
+                                placeholder="Min 8 characters"
                                 {...dealerForm.register('password')}
                                 className="h-10 pl-10 pr-10 bg-background border-border text-foreground text-body-sm placeholder:text-muted-foreground/60 focus-visible:border-gold"
                               />

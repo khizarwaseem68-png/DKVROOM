@@ -1,4 +1,14 @@
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
+
+function getResend() {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) throw new Error('RESEND_API_KEY is required to send email')
+  return new Resend(apiKey)
+}
+
+function getFromAddress() {
+  return process.env.EMAIL_FROM || 'DK Vroom <noreply@dkvroom.com>'
+}
 
 interface SendEmailOptions {
   to: string
@@ -7,35 +17,20 @@ interface SendEmailOptions {
   text: string
 }
 
-function getTransporter() {
-  const host = process.env.SMTP_HOST
-  const port = Number(process.env.SMTP_PORT || 587)
-  const user = process.env.SMTP_USER
-  const pass = process.env.SMTP_PASS
-
-  if (!host || !user || !pass) {
-    throw new Error('SMTP_HOST, SMTP_USER, and SMTP_PASS are required to send email')
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: { user, pass },
-  })
-}
-
 export async function sendEmail({ to, subject, html, text }: SendEmailOptions) {
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER
-  if (!from) throw new Error('EMAIL_FROM or SMTP_USER is required to send email')
-
-  await getTransporter().sendMail({
-    from,
+  const resend = getResend()
+  const { data, error } = await resend.emails.send({
+    from: getFromAddress(),
     to,
     subject,
     html,
     text,
   })
+  if (error) {
+    console.error('[Resend] Email send failed:', JSON.stringify(error))
+    throw new Error(`Resend error: ${error.message}`)
+  }
+  return data
 }
 
 export async function sendOtpEmail({

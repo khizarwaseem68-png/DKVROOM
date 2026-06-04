@@ -470,7 +470,8 @@ function AuctionConditionSection({ car }: { car: NormalizedCar }) {
 // ─── Auction Details Card ──────────────────────────────────────────────────────
 
 function AuctionDetailsCard({ car }: { car: NormalizedCar }) {
-  const depositAmount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
+  const depositAmount = car.bookingFee ?? Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
+  const depositLabel = car.bookingFee != null ? 'Admin-set Bid Deposit' : 'Required Deposit (10%)'
 
   return (
     <Card className="border-gold/40 gold-glow bg-gold/5 overflow-hidden">
@@ -500,7 +501,7 @@ function AuctionDetailsCard({ car }: { car: NormalizedCar }) {
         <div className="flex items-center justify-between rounded-lg bg-background/60 p-3">
           <div className="flex items-center gap-2">
             <Wallet className="size-4 text-gold" />
-            <span className="text-body-sm text-muted-foreground">Required Deposit (10%)</span>
+            <span className="text-body-sm text-muted-foreground">{depositLabel}</span>
           </div>
           <span className="text-body-sm font-bold text-gold">{formatPrice(depositAmount)}</span>
         </div>
@@ -1064,7 +1065,7 @@ export default function CarDetail() {
         bookingType = 'purchase'
         amount = car.bookingFee || car.deposit || car.price
       } else if (isAuction) {
-        amount = Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
+        amount = car.bookingFee ?? Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1)
       } else if (isContinueLoan) {
         router.push('/continue-loan-enquiry')
         setBookingLoading(false)
@@ -1350,7 +1351,7 @@ export default function CarDetail() {
             {isAuction && !contactUnlocked && (
               <p className="text-center text-caption text-muted-foreground">
                 <Lock className="size-3 inline mr-1" />
-                {formatPrice(Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1))} {getFeeLabel('auction')} required to place bid &amp; unlock contact
+                {formatPrice(car.bookingFee ?? Math.round((car.currentBid || car.auctionStartBid || 0) * 0.1))} {getFeeLabel('auction')} required to place bid &amp; unlock contact
               </p>
             )}
             {isRent && !contactUnlocked && (

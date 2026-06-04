@@ -72,9 +72,6 @@ export async function POST(request: NextRequest) {
     if (password.length < 8) {
       return apiError('Password must be at least 8 characters', 400)
     }
-    if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(password)) {
-      return apiError('Password must contain at least one uppercase letter, one lowercase letter, and one number', 400)
-    }
 
     const phonePattern = /^[+()\-\s0-9]{7,20}$/
     if (phone && !phonePattern.test(phone)) {

@@ -312,8 +312,7 @@ export default function CustomerDashboard() {
     setUploadingPaymentId(paymentId)
     try {
       await paymentsApi.uploadReceipt(paymentId, file)
-      fetchPayments()
-      fetchBookings()
+      await Promise.all([fetchPayments(), fetchBookings()])
     } catch {
       // silent
     } finally {
@@ -851,16 +850,21 @@ export default function CustomerDashboard() {
                             <Button
                               size="sm"
                               className="w-full bg-gold hover:bg-gold-dark text-primary-foreground font-semibold"
+                              disabled={uploadingPaymentId !== null}
                               onClick={() => {
                                 const paymentId = booking.payments?.find(p => p.status === 'pending' || p.status === 'rejected')?.id
                                 if (paymentId) {
-                                  setUploadingPaymentId(paymentId)
+                                  receiptFileRef.current?.setAttribute('data-payment-id', paymentId)
                                   receiptFileRef.current?.click()
                                 }
                               }}
                             >
-                              <Upload className="size-4 mr-1" />
-                              Upload Receipt
+                              {uploadingPaymentId !== null ? (
+                                <Loader2 className="size-4 mr-1 animate-spin" />
+                              ) : (
+                                <Upload className="size-4 mr-1" />
+                              )}
+                              {uploadingPaymentId !== null ? 'Uploading...' : 'Upload Receipt'}
                             </Button>
                           )}
 
@@ -1068,7 +1072,7 @@ export default function CustomerDashboard() {
                               className="w-full bg-gold hover:bg-gold-dark text-primary-foreground font-semibold"
                               disabled={uploadingPaymentId === payment.id}
                               onClick={() => {
-                                setUploadingPaymentId(payment.id)
+                                receiptFileRef.current?.setAttribute('data-payment-id', payment.id)
                                 receiptFileRef.current?.click()
                               }}
                             >
@@ -1077,7 +1081,7 @@ export default function CustomerDashboard() {
                               ) : (
                                 <Upload className="size-4 mr-1" />
                               )}
-                              Upload Receipt
+                              {uploadingPaymentId === payment.id ? 'Uploading...' : 'Upload Receipt'}
                             </Button>
                           )}
 
@@ -1474,10 +1478,13 @@ export default function CustomerDashboard() {
         accept="image/jpeg,image/png,image/webp,application/pdf"
         className="hidden"
         onChange={(e) => {
-          if (e.target.files && e.target.files[0] && uploadingPaymentId) {
-            handleUploadReceipt(uploadingPaymentId, e.target.files[0])
-            e.target.value = ''
+          const file = e.target.files?.[0]
+          const paymentId = receiptFileRef.current?.getAttribute('data-payment-id')
+          if (file && paymentId) {
+            setUploadingPaymentId(paymentId)
+            handleUploadReceipt(paymentId, file)
           }
+          e.target.value = ''
         }}
       />
 
