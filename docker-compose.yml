@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: dkvroom
+      POSTGRES_PASSWORD: dkvroom_secret
+      POSTGRES_DB: dkvroom
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dkvroom"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://dkvroom:dkvroom_secret@db:5432/dkvroom?sslmode=disable
+      JWT_SECRET: dk-vroom-prod-jwt-secret-2024-change-me-b4f2a8c9e1
+      OTP_SECRET: dk-vroom-prod-otp-secret-2024-change-me
+      RESEND_API_KEY: re_WzmCG8kq_63Tcnd5qnFZZxSsyNi1snBdZ
+      EMAIL_FROM: "DK Vroom <onboarding@resend.dev>"
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_NAME: DK Vroom
+      MAX_FILE_SIZE_MB: 10
+      UPLOAD_DIR: ./uploads
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX_REQUESTS: 60
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  uploads:

@@ -56,3 +56,5 @@ server.log
 # SQLite databases (no longer used — migrated to PostgreSQL)
 /prisma/db/
 /db/custom.db
+
+dvtroom-app.tar
