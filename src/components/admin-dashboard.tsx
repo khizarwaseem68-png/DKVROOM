@@ -22,6 +22,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -456,6 +458,8 @@ export default function AdminDashboard() {
 
   // Action states
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [uploadProvider, setUploadProvider] = useState<'cloudinary' | 'filesystem'>('cloudinary')
+  const [settingsLoading, setSettingsLoading] = useState(false)
   const [rejectDialog, setRejectDialog] = useState<{ type: 'dealer' | 'car' | 'payment' | 'loan'; id: string } | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [approveCarDialog, setApproveCarDialog] = useState<{ id: string; carName: string; carType?: string } | null>(null)
@@ -476,6 +480,18 @@ export default function AdminDashboard() {
 
     return () => clearTimeout(timer)
   }, [carSearch])
+
+  // Fetch upload provider setting
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.uploadProvider === 'cloudinary' || data.uploadProvider === 'filesystem') {
+          setUploadProvider(data.uploadProvider)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -2359,6 +2375,46 @@ export default function AdminDashboard() {
                       <Input defaultValue="MYR (RM)" disabled className="bg-secondary border-border text-muted-foreground" />
                     </div>
                   </div>
+
+                  <Separator className="bg-border/50" />
+
+                  <div className="space-y-3">
+                    <h3 className="dash-subheading-sm">File Storage</h3>
+                    <div className="flex items-center justify-between rounded-lg border border-border/50 bg-secondary/30 p-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="upload-provider" className="text-sm font-medium">Cloudinary Uploads</Label>
+                        <p className="text-xs text-muted-foreground">
+                          {uploadProvider === 'cloudinary'
+                            ? 'Files are uploaded to Cloudinary cloud storage'
+                            : 'Files are stored on the local filesystem'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="upload-provider"
+                        checked={uploadProvider === 'cloudinary'}
+                        disabled={settingsLoading}
+                        onCheckedChange={async (checked) => {
+                          setSettingsLoading(true)
+                          const newProvider = checked ? 'cloudinary' : 'filesystem'
+                          try {
+                            const res = await fetch('/api/admin/settings', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ uploadProvider: newProvider }),
+                            })
+                            if (!res.ok) throw new Error()
+                            setUploadProvider(newProvider)
+                            toast.success(`Upload provider switched to ${newProvider}`)
+                          } catch {
+                            toast.error('Failed to update upload provider')
+                          } finally {
+                            setSettingsLoading(false)
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   <Button className="bg-gold hover:bg-gold-dark text-primary-foreground font-semibold">
                     Save Settings
                   </Button>

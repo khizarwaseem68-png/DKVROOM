@@ -1,26 +1,8 @@
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
-
-const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf']
+import { getProvider } from './upload/registry'
 
 export async function saveFile(file: File, category: string, ownerId: string): Promise<string> {
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-  if (!allowedExtensions.includes(ext)) throw new Error('Invalid file extension')
-
-  const filename = `${category}/${ownerId}/${randomUUID()}.${ext}`
-  const uploadDir = join(process.cwd(), 'uploads', category, ownerId)
-
-  if (!existsSync(uploadDir)) {
-    await mkdir(uploadDir, { recursive: true })
-  }
-
-  const bytes = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  await writeFile(join(process.cwd(), 'uploads', filename), buffer)
-
-  return `/uploads/${filename}`
+  const result = await (await getProvider()).upload(file, category, ownerId)
+  return result.url
 }
 
 export function validateFile(file: File, maxSizeMB: number, allowedMimes: string[]): string | null {

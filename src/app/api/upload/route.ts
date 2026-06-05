@@ -1,28 +1,20 @@
 import { NextRequest } from 'next/server'
 import { getUserFromRequest } from '@/lib/auth/auth-utils'
 import { rateLimit, validateFileUpload, apiResponse, apiError } from '@/lib/security/middleware'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
-import { randomUUID } from 'crypto'
+import { getProvider } from '@/lib/upload/registry'
 
-// POST /api/upload - Upload a file to local file system
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
     const rateCheck = rateLimit(request, { windowMs: 60_000, maxRequests: 20, keyPrefix: 'upload' })
     if (!rateCheck.allowed) {
       return apiError('Too many upload requests. Please try again later.', 429)
     }
 
-    // Get the form data
     const formData = await request.formData()
     const file = formData.get('file') as File | null
-    const category = formData.get('category') as string | null // receipts, documents, photos, ic, license, agreements, vehicle_photos
+    const category = formData.get('category') as string | null
     const cat = category || 'default'
 
-    // Registration documents are uploaded before an account exists. Other upload
-    // categories still require authentication.
     const user = await getUserFromRequest(request)
     const publicRegistrationCategories = new Set(['documents', 'ic', 'license'])
     if (!user && !publicRegistrationCategories.has(cat)) {
@@ -33,7 +25,6 @@ export async function POST(request: NextRequest) {
       return apiError('No file provided', 400)
     }
 
-    // Validate file type and size based on category
     const maxSizes: Record<string, number> = {
       receipts: 5,
       documents: 10,
@@ -59,38 +50,14 @@ export async function POST(request: NextRequest) {
     const maxSizeMB = maxSizes[cat] || maxSizes.default
     const allowedMimes = allowedTypes[cat] || allowedTypes.default
 
-    // Validate file
     const validation = validateFileUpload(file, { maxSizeMB, allowedTypes: allowedMimes })
     if (!validation.valid) {
       return apiError(validation.error || 'Invalid file', 400)
     }
 
-    // Generate unique filename
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-    const allowedExtensions = ['jpg', 'jpeg', 'png', 'webp', 'pdf']
-    if (!allowedExtensions.includes(ext)) {
-      return apiError('Invalid file extension', 400)
-    }
-
     const ownerFolder = user?.id || 'registration'
-    const filename = `${cat}/${ownerFolder}/${randomUUID()}.${ext}`
-    const uploadDir = join(process.cwd(), 'uploads', cat, ownerFolder)
+    const result = await (await getProvider()).upload(file, cat, ownerFolder)
 
-    // Ensure directory exists
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true })
-    }
-
-    // Write file to disk
-    const filePath = join(process.cwd(), 'uploads', filename)
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    await writeFile(filePath, buffer)
-
-    // Return the URL path (relative to server)
-    const url = `/uploads/${filename}`
-
-    // Audit log
     const { db } = await import('@/lib/db')
     await db.auditLog.create({
       data: {
@@ -102,17 +69,17 @@ export async function POST(request: NextRequest) {
           category: cat,
           size: file.size,
           type: file.type,
-          url,
+          url: result.url,
         }),
         ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown',
         userAgent: request.headers.get('user-agent') || 'unknown',
         severity: 'info',
       },
-    }).catch(() => {}) // Don't fail upload if audit log fails
+    }).catch(() => {})
 
     return apiResponse({
       success: true,
-      url,
+      url: result.url,
       filename: file.name,
       size: file.size,
       type: file.type,
